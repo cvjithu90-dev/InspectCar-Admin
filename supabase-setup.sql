@@ -144,14 +144,14 @@ INSERT INTO public.bookings (
 (
   'IC-2026-1001', 'Rahul Sharma', '+91 98765 43210',
   'Maruti Suzuki', 'Swift ZXi', '2021', 'Petrol',
-  'Luxury Expert', 3599, 3599,
+  'Lux-Drive', 3999, 3999,
   CURRENT_DATE + 1, '10:30 AM',
   'Seller Yard', 'HSR Layout', 'pending', 'website'
 ),
 (
   'IC-2026-1002', 'Arjun Nair', '+91 87654 32109',
   'Hyundai', 'Creta SX', '2022', 'Diesel',
-  'Luxury Expert', 3599, 3599,
+  'Lux-Drive', 3999, 3999,
   CURRENT_DATE, '9:00 AM',
   'Used Car Dealership', 'Koramangala', 'pending', 'website'
 );

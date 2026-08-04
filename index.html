@@ -791,9 +791,9 @@
                     <div class="form-group">
                         <label>Package</label>
                         <select id="nb-package" class="form-control" required>
-                            <option value="Super Value">Super Value (₹2500)</option>
-                            <option value="Luxury Expert">Luxury Expert (₹3599)</option>
-                            <option value="Quick Delivery">Quick Delivery (₹2000)</option>
+                            <option value="Expert-Drive">Expert-Drive (Used car) (₹2,699)</option>
+                            <option value="Lux-Drive">Lux-Drive (Premium Used Car) (₹3,999)</option>
+                            <option value="Pre-Drive">Pre-Drive (New Car PDI) (₹1,999)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -938,9 +938,9 @@
                 <h3 class="mb-4">Packages Distribution</h3>
                 <div class="pie-chart"></div>
                 <div class="pie-legend">
-                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-primary);"></div> Super Value</div>
-                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-secondary);"></div> Luxury</div>
-                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-light);"></div> Quick</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-primary);"></div> Expert-Drive</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-secondary);"></div> Lux-Drive</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-light);"></div> Pre-Drive</div>
                 </div>
             </div>
         </div>
@@ -975,9 +975,9 @@
         <div class="card mb-4" style="padding:12px 16px;">
             <div class="flex gap-4" style="flex-wrap:wrap;align-items:center;font-size:12px;">
                 <strong class="text-secondary">Package Availability:</strong>
-                <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:3px 10px;border-radius:20px;">✓ Super Value</span>
-                <span style="background:rgba(99,102,241,0.2);border:1px solid #818cf8;color:#a78bfa;padding:3px 10px;border-radius:20px;">✓ Luxury Expert</span>
-                <span style="background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fbbf24;padding:3px 10px;border-radius:20px;">✓ Quick Delivery</span>
+                <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:3px 10px;border-radius:20px;">✓ Expert-Drive</span>
+                <span style="background:rgba(99,102,241,0.2);border:1px solid #818cf8;color:#a78bfa;padding:3px 10px;border-radius:20px;">✓ Lux-Drive</span>
+                <span style="background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fbbf24;padding:3px 10px;border-radius:20px;">✓ Pre-Drive</span>
                 <span class="text-secondary">Click any badge to toggle ON/OFF</span>
             </div>
         </div>
@@ -995,9 +995,9 @@
                     <label class="text-secondary text-sm">Filter by Package</label>
                     <select id="db-filter-pkg" style="width:100%;padding:6px 10px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);margin-top:4px;" onchange="loadDbModels()">
                         <option value="">— All Packages —</option>
-                        <option value="super_value">Super Value</option>
-                        <option value="luxury_expert">Luxury Expert</option>
-                        <option value="quick_delivery">Quick Delivery</option>
+                        <option value="super_value">Expert-Drive</option>
+                        <option value="luxury_expert">Lux-Drive</option>
+                        <option value="quick_delivery">Pre-Drive</option>
                     </select>
                 </div>
                 <div style="margin-top:20px;">
@@ -1014,9 +1014,9 @@
                         <tr>
                             <th>Make</th>
                             <th>Model</th>
-                            <th style="text-align:center;">Super Value<br><span style="font-size:10px;color:#10b981;">≤₹40L mainstream</span></th>
-                            <th style="text-align:center;">Luxury Expert<br><span style="font-size:10px;color:#a78bfa;">All premium cars</span></th>
-                            <th style="text-align:center;">Quick Delivery<br><span style="font-size:10px;color:#fbbf24;">New car check</span></th>
+                            <th style="text-align:center;">Expert-Drive<br><span style="font-size:10px;color:#10b981;">Used car (₹2,699)</span></th>
+                            <th style="text-align:center;">Lux-Drive<br><span style="font-size:10px;color:#a78bfa;">Premium Used Car (₹3,999)</span></th>
+                            <th style="text-align:center;">Pre-Drive<br><span style="font-size:10px;color:#fbbf24;">New Car PDI (₹1,999)</span></th>
                             <th></th>
                         </tr>
                     </thead>
@@ -1074,9 +1074,9 @@
                     <div class="mb-4">
                         <label class="text-sm text-secondary mb-2" style="display:block;">Available on Packages</label>
                         <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-sv" style="accent-color:#10b981;"> <span style="color:#10b981;">Super Value</span></label>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-lx" checked style="accent-color:#818cf8;"> <span style="color:#a78bfa;">Luxury Expert</span></label>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-qd" checked style="accent-color:#f59e0b;"> <span style="color:#fbbf24;">Quick Delivery</span></label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-sv" style="accent-color:#10b981;"> <span style="color:#10b981;">Expert-Drive</span></label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-lx" checked style="accent-color:#818cf8;"> <span style="color:#a78bfa;">Lux-Drive</span></label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-qd" checked style="accent-color:#f59e0b;"> <span style="color:#fbbf24;">Pre-Drive</span></label>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -1823,9 +1823,9 @@
                 if (!client) return;
                 
                 const pkg = $('#nb-package').value;
-                let price = 2500;
-                if(pkg.includes('Luxury')) price = 3599;
-                if(pkg.includes('Quick')) price = 2000;
+                let price = 2699;
+                if(pkg.includes('Lux')) price = 3999;
+                if(pkg.includes('Pre') || pkg.includes('PDI') || pkg.includes('Quick')) price = 1999;
 
                 const inspector_id = $('#nb-inspector').value || null;
                 const status = inspector_id ? 'assigned' : 'pending';
