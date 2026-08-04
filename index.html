@@ -2500,8 +2500,12 @@ async function openReportWizard(bookingId) {
 
     wz = { bookingId, currentStep:1, booking:null, answers:[], photos:[], draft:{} };
 
-    showWzLoader('Loading inspection data...');
-    await Promise.all([loadWzBooking(), loadWzAnswers(), loadWzDraft()]);
+    showWzLoader('Loading inspection data & photos...');
+    // Step 1: Load booking and draft first
+    await loadWzBooking();
+    await loadWzDraft();
+    // Step 2: Merge fresh DB answers & photos over draft
+    await loadWzAnswers();
     hideWzLoader();
 
     if (!wz.draft.categories || wz.draft.categories.length === 0) autoPopulateCategories();
@@ -2578,24 +2582,96 @@ async function loadWzAnswers() {
     const client = dbClient || window.supabase;
     if (!client || !wz) return;
     try {
-        const { data: answers } = await client.from('inspection_answers').select('*').eq('booking_id', wz.bookingId).order('category');
-        const { data: photos }  = await client.from('inspection_photos').select('*').eq('booking_id', wz.bookingId);
+        const { data: answers, error: ansErr } = await client.from('inspection_answers').select('*').eq('booking_id', wz.bookingId).order('category');
+        const { data: photos, error: photoErr }  = await client.from('inspection_photos').select('*').eq('booking_id', wz.bookingId);
+        
+        if (ansErr) console.warn("Error loading inspection_answers:", ansErr);
+        if (photoErr) console.warn("Error loading inspection_photos:", photoErr);
+
         wz.answers = answers || [];
         wz.photos  = photos  || [];
+
         if (!wz.draft.checklist) wz.draft.checklist = {};
+
+        // Merge DB answers into checklist
         (answers || []).forEach(ans => {
             if (!wz.draft.checklist[ans.category]) wz.draft.checklist[ans.category] = [];
-            if (!wz.draft.checklist[ans.category].find(i => i.item_name === ans.item_name)) {
-                const itemPhotos = (photos||[]).filter(p => p.item_name === ans.item_name).map(p => p.photo_url);
+            
+            // Flexible matching on item_name
+            let item = wz.draft.checklist[ans.category].find(i => 
+                i.item_name && i.item_name.trim().toLowerCase() === ans.item_name.trim().toLowerCase()
+            );
+
+            // Match photos for this item
+            const itemPhotos = (photos || []).filter(p => 
+                p.item_name && p.item_name.trim().toLowerCase() === ans.item_name.trim().toLowerCase()
+            ).map(p => p.photo_url);
+
+            if (item) {
+                // Update item with DB data from inspector
+                if (ans.answer) item.answer = ans.answer;
+                if (ans.severity) item.severity = ans.severity;
+                if (ans.remarks) item.note = ans.remarks;
+                if (ans.paint_thickness) item.paint_thickness = ans.paint_thickness;
+                if (ans.obd_value) item.obd_value = ans.obd_value;
+                if (itemPhotos.length > 0) {
+                    item.photos = Array.from(new Set([...(item.photos || []), ...itemPhotos]));
+                }
+            } else {
                 wz.draft.checklist[ans.category].push({
-                    item_name: ans.item_name, answer: ans.answer,
-                    severity: ans.severity || 'low', note: ans.remarks || '',
-                    paint_thickness: ans.paint_thickness || '', obd_value: ans.obd_value || '',
+                    item_name: ans.item_name,
+                    answer: ans.answer || 'Pass',
+                    severity: ans.severity || 'low',
+                    note: ans.remarks || '',
+                    paint_thickness: ans.paint_thickness || '',
+                    obd_value: ans.obd_value || '',
                     photos: itemPhotos
                 });
             }
         });
+
+        // Ensure photos matched by category are also assigned if item match missed
+        (photos || []).forEach(p => {
+            if (p.category && wz.draft.checklist[p.category]) {
+                const targetItem = wz.draft.checklist[p.category].find(i => 
+                    i.item_name && p.item_name && i.item_name.trim().toLowerCase() === p.item_name.trim().toLowerCase()
+                ) || wz.draft.checklist[p.category][0];
+
+                if (targetItem) {
+                    if (!targetItem.photos) targetItem.photos = [];
+                    if (!targetItem.photos.includes(p.photo_url)) {
+                        targetItem.photos.push(p.photo_url);
+                    }
+                }
+            }
+        });
+
+        // Auto-populate hero exterior photos if missing
+        if (!wz.draft.hero_photos || Object.keys(wz.draft.hero_photos).length === 0) {
+            autoPopulateHeroPhotos(photos || []);
+        }
+
+        // Auto-calculate score if not set
+        if (!wz.draft.ai_score && answers && answers.length > 0) {
+            wzAutoCalcScore();
+        }
     } catch(e) { console.warn('loadWzAnswers:', e); }
+}
+
+function autoPopulateHeroPhotos(photos) {
+    if (!wz.draft.hero_photos) wz.draft.hero_photos = {};
+    (photos || []).forEach(p => {
+        const str = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+        if (str.includes('front') && !wz.draft.hero_photos.front) {
+            wz.draft.hero_photos.front = p.photo_url;
+        } else if (str.includes('rear') && !wz.draft.hero_photos.rear) {
+            wz.draft.hero_photos.rear = p.photo_url;
+        } else if ((str.includes('driver') || str.includes('left')) && !wz.draft.hero_photos.side_driver) {
+            wz.draft.hero_photos.side_driver = p.photo_url;
+        } else if ((str.includes('passenger') || str.includes('right')) && !wz.draft.hero_photos.side_passenger) {
+            wz.draft.hero_photos.side_passenger = p.photo_url;
+        }
+    });
 }
 
 async function loadWzDraft() {
