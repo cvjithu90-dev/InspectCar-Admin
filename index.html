@@ -1,0 +1,3177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InspectCar Admin Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0E0E1C;
+            --surface-color: #161625;
+            --surface-color-hover: #1f1f33;
+            --accent-primary: #6366F1;
+            --accent-secondary: #8B5CF6;
+            --accent-light: #A78BFA;
+            --text-primary: #F4F4F6;
+            --text-secondary: #9CA3AF;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --border-color: #2D2D3F;
+            --sidebar-width: 240px;
+            --header-height: 64px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        a {
+            color: var(--accent-light);
+            text-decoration: none;
+        }
+
+        button {
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        input, select, textarea {
+            font-family: inherit;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        select option {
+            background-color: #161625 !important;
+            color: #F4F4F6 !important;
+            padding: 6px 10px;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        /* Layout */
+        #app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--surface-color);
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 1rem 0;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: rgba(99, 102, 241, 0.1);
+            color: var(--accent-primary);
+            border-right: 3px solid var(--accent-primary);
+        }
+
+        .nav-item span {
+            margin-right: 0.75rem;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            height: var(--header-height);
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .page-content {
+            padding: 2rem;
+            flex: 1;
+        }
+
+        /* Cards */
+        .card {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+        
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-title {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: bold;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        .badge-pending { background-color: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        .badge-assigned { background-color: rgba(99, 102, 241, 0.2); color: var(--accent-light); }
+        .badge-in_progress { background-color: rgba(245, 158, 11, 0.2); color: #F97316; }
+        .badge-completed { background-color: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .badge-cancelled { background-color: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        tbody tr:hover {
+            background-color: rgba(255,255,255,0.02);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: none;
+            font-weight: 500;
+            text-align: center;
+            display: inline-block;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover { opacity: 0.9; }
+        
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .form-control {
+            width: 100%;
+        }
+
+        /* Login Screen */
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            width: 100vw;
+            background: radial-gradient(circle at center, #1f1f33 0%, #0E0E1C 100%);
+        }
+        .login-card {
+            background: rgba(22, 22, 37, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            width: 400px;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .login-card h1 {
+            margin-bottom: 2rem;
+            color: white;
+            font-size: 1.5rem;
+        }
+        
+        /* Toast */
+        #toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .toast {
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+        }
+        .toast.success { background-color: var(--success); }
+        .toast.error { background-color: var(--danger); }
+        .toast.info { background-color: var(--accent-primary); }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Utilities */
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-4 { margin-top: 1rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .flex { display: flex; }
+        .justify-between { justify-content: space-between; }
+        .items-center { align-items: center; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-4 { gap: 1rem; }
+        .text-right { text-align: right; }
+        .text-sm { font-size: 0.875rem; }
+        .text-danger { color: var(--danger); }
+        
+        /* Analytics Charts (CSS only) */
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            height: 200px;
+            gap: 10px;
+            padding-top: 20px;
+            border-bottom: 1px solid var(--border-color);
+            border-left: 1px solid var(--border-color);
+            padding-left: 10px;
+        }
+        .bar {
+            flex: 1;
+            background-color: var(--accent-primary);
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            min-height: 5px;
+            transition: height 0.5s;
+        }
+        .bar span {
+            position: absolute;
+            top: -20px;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        
+        .pie-chart {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: conic-gradient(
+                var(--accent-primary) 0% 45%,
+                var(--accent-secondary) 45% 75%,
+                var(--accent-light) 75% 100%
+            );
+            margin: 0 auto;
+        }
+        .pie-legend {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 4px;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: var(--surface-color);
+            padding: 2rem;
+            border-radius: 8px;
+            width: 400px;
+            border: 1px solid var(--border-color);
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="toast-container"></div>
+    <div id="app">
+        <div class="login-container">
+            <div class="login-card">
+                <h1><i class="fas fa-shield-alt" style="color:var(--accent-primary);"></i> InspectCar Admin</h1>
+                <form id="login-form" onsubmit="event.preventDefault(); handleSignIn(event);">
+                    <div class="form-group">
+                        <input type="email" id="login-email" class="form-control" placeholder="Email Address" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="login-password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <div id="login-error" class="text-danger text-sm mb-4"></div>
+                    <button type="button" id="btn-login-submit" onclick="handleSignIn(event)" class="btn btn-primary form-control">Sign In</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login View Template -->
+    <template id="view-login">
+        <div class="login-container">
+            <div class="login-card">
+                <h1><i class="fas fa-shield-alt" style="color:var(--accent-primary);"></i> InspectCar Admin</h1>
+                <form id="login-form">
+                    <div class="form-group mb-3">
+                        <input type="email" id="login-email" class="form-control" placeholder="Email Address" required value="cvjithu90@gmail.com">
+                    </div>
+                    <div class="form-group mb-3">
+                        <input type="password" id="login-password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <div id="login-error" class="text-danger text-sm mb-3" style="min-height:20px;"></div>
+                    <button type="submit" id="btn-login-submit" class="btn btn-primary form-control" style="font-weight:700;padding:12px;cursor:pointer;">Sign In</button>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <!-- Shell for authenticated routes -->
+    <template id="app-shell">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-shield-alt" style="color:var(--accent-primary);margin-right:6px;"></i> InspectCar
+            </div>
+            <div class="sidebar-nav">
+                <a href="#/dashboard" class="nav-item" data-path="/dashboard"><span><i class="fas fa-chart-line"></i></span> Dashboard</a>
+                <a href="#/bookings" class="nav-item" data-path="/bookings"><span><i class="fas fa-clipboard-list"></i></span> Bookings</a>
+                <a href="#/new-booking" class="nav-item" data-path="/new-booking"><span><i class="fas fa-plus-circle"></i></span> New Booking</a>
+                <a href="#/inspectors" class="nav-item" data-path="/inspectors"><span><i class="fas fa-user-shield"></i></span> Inspectors</a>
+                <a href="#/analytics" class="nav-item" data-path="/analytics"><span><i class="fas fa-chart-pie"></i></span> Analytics</a>
+                <a href="#/database" class="nav-item" data-path="/database"><span><i class="fas fa-database"></i></span> Car Database</a>
+                <a href="#" id="logout-btn" class="nav-item mt-4" style="border-top: 1px solid var(--border-color);"><span><i class="fas fa-sign-out-alt"></i></span> Logout</a>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <div id="header-greeting" class="font-bold">Good Morning, Admin</div>
+                <div id="header-date" class="text-sm text-secondary"></div>
+            </div>
+            <div id="page-container" class="page-content">
+                <!-- Page specific content goes here -->
+            </div>
+        </div>
+    </template>
+
+    <!-- Dashboard View -->
+    <template id="view-dashboard">
+        <div class="flex justify-between items-center mb-4">
+            <h2>Dashboard Overview</h2>
+            <div class="gap-2 flex">
+                <a href="#/new-booking" class="btn btn-primary">New Booking</a>
+                <a href="#/bookings" class="btn btn-secondary">View All</a>
+            </div>
+        </div>
+        
+        <div class="grid-4 mb-4">
+            <div class="card stat-card">
+                <span class="stat-title">Total Bookings</span>
+                <span class="stat-value" id="dash-total-bookings">-</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-title">Today's Bookings</span>
+                <span class="stat-value" id="dash-today-bookings">-</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-title">Pending Assignment</span>
+                <span class="stat-value text-warning" id="dash-pending-bookings">-</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-title">Revenue This Month</span>
+                <span class="stat-value text-success" id="dash-revenue">-</span>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h3 class="mb-4">Live Booking Feed</h3>
+                <div class="brand-logo text-center mb-4">
+                    <h1><i class="fas fa-shield-alt" style="color:var(--accent-primary);"></i> InspectCar Admin</h1>
+                    <p class="text-secondary text-sm">Control Panel</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3 class="mb-4">Pipeline Status</h3>
+                <div class="flex flex-col gap-4">
+                    <div class="flex justify-between items-center p-2" style="background: rgba(245, 158, 11, 0.1); border-radius: 4px;">
+                        <span>Pending</span> <span class="badge badge-pending" id="pipe-pending">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-2" style="background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        <span>Assigned</span> <span class="badge badge-assigned" id="pipe-assigned">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-2" style="background: rgba(245, 158, 11, 0.1); border-radius: 4px;">
+                        <span>In Progress</span> <span class="badge badge-in_progress" id="pipe-inprogress">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-2" style="background: rgba(16, 185, 129, 0.1); border-radius: 4px;">
+                        <span>Completed</span> <span class="badge badge-completed" id="pipe-completed">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Bookings List View -->
+    <template id="view-bookings">
+        <div class="flex justify-between items-center mb-4">
+            <h2>All Bookings</h2>
+            <div class="flex gap-2">
+                <input type="text" id="bookings-search" class="form-control" placeholder="Search ref, name, phone..." style="width: 250px;">
+                <select id="bookings-status-filter" class="form-control">
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ref</th>
+                        <th>Customer</th>
+                        <th>Vehicle</th>
+                        <th>Date & Time</th>
+                        <th>Package</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="bookings-table-body">
+                    <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </template>
+
+    <!-- Booking Detail View -->
+    <template id="view-booking-detail">
+        <div class="mb-4">
+            <a href="#/bookings" class="text-secondary">← Back to Bookings</a>
+        </div>
+        
+        <div class="flex justify-between items-center mb-4">
+            <h2 id="detail-ref">Booking Ref</h2>
+            <div id="detail-status-badge"></div>
+        </div>
+
+        <div class="grid-2 mb-4">
+            <div class="card">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 style="margin:0;">Customer &amp; Location</h3>
+                    <button id="btn-edit-customer" class="btn btn-secondary text-xs" style="padding: 4px 10px; cursor: pointer;">
+                        <i class="fas fa-user-edit"></i> Edit Customer
+                    </button>
+                </div>
+                <div class="grid-2 gap-2 text-sm" id="customer-view-mode">
+                    <div class="text-secondary">Name:</div><div id="detail-customer-name"></div>
+                    <div class="text-secondary">Phone:</div><div id="detail-customer-phone"></div>
+                    <div class="text-secondary">Email:</div><div id="detail-customer-email"></div>
+                    <div class="text-secondary">Area:</div><div id="detail-area"></div>
+                    <div class="text-secondary">Address:</div><div id="detail-address"></div>
+                </div>
+
+                <!-- Customer Edit Form -->
+                <div id="customer-edit-mode" class="hidden">
+                    <div class="grid-2 gap-3 text-sm mb-3">
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Customer Name *</label>
+                            <input type="text" id="edit-customer-name" class="form-control text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Phone Number *</label>
+                            <input type="text" id="edit-customer-phone" class="form-control text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Email Address</label>
+                            <input type="email" id="edit-customer-email" class="form-control text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Area / Suburb</label>
+                            <input type="text" id="edit-area" class="form-control text-sm" />
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <label class="text-secondary text-xs block mb-1">Inspection Address</label>
+                            <textarea id="edit-address" class="form-control text-sm" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 justify-end">
+                        <button id="btn-cancel-edit-customer" class="btn btn-secondary text-xs">Cancel</button>
+                        <button id="btn-save-customer" class="btn btn-primary text-xs"><i class="fas fa-save"></i> Save Customer</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 style="margin:0;">Vehicle &amp; Package</h3>
+                    <button id="btn-edit-vehicle" class="btn btn-secondary text-xs" style="padding: 4px 10px; cursor: pointer;">
+                        <i class="fas fa-car-side"></i> Edit Vehicle
+                    </button>
+                </div>
+                <div class="grid-2 gap-2 text-sm" id="vehicle-view-mode">
+                    <div class="text-secondary">Vehicle:</div><div id="detail-vehicle"></div>
+                    <div class="text-secondary">Reg No:</div><div id="detail-reg"></div>
+                    <div class="text-secondary">Package:</div><div id="detail-package"></div>
+                    <div class="text-secondary">Amount:</div><div id="detail-price"></div>
+                    <div class="text-secondary">Date:</div><div id="detail-datetime"></div>
+                </div>
+
+                <!-- Vehicle Edit Form -->
+                <div id="vehicle-edit-mode" class="hidden">
+                    <div class="grid-2 gap-3 text-sm mb-3">
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Brand Make</label>
+                            <input type="text" id="edit-vehicle-brand" class="form-control text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Model Name</label>
+                            <input type="text" id="edit-vehicle-model" class="form-control text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Year</label>
+                            <input type="number" id="edit-vehicle-year" class="form-control text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Reg Number</label>
+                            <input type="text" id="edit-vehicle-reg" class="form-control text-sm" />
+                        </div>
+                    </div>
+                    <div class="flex gap-2 justify-end">
+                        <button id="btn-cancel-edit-vehicle" class="btn btn-secondary text-xs">Cancel</button>
+                        <button id="btn-save-vehicle" class="btn btn-primary text-xs"><i class="fas fa-save"></i> Save Vehicle</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment & Balance Breakdown Card -->
+        <div class="card mb-4" id="payment-details-card" style="border: 1px solid rgba(99, 102, 241, 0.3); background: rgba(22, 22, 37, 0.6);">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h3 style="margin: 0;">Payment Details &amp; Balance Breakdown</h3>
+                <div id="detail-payment-badge"></div>
+            </div>
+
+            <div class="grid-3 gap-4 mb-4 text-sm">
+                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div class="text-secondary text-xs mb-1">Total Package Price</div>
+                    <div class="text-xl font-bold text-white" id="pay-total-amt">₹0</div>
+                </div>
+                <div style="background: rgba(16, 185, 129, 0.08); padding: 12px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.25);">
+                    <div class="text-xs mb-1" style="color: #34d399; font-weight: 600;">Advance Paid</div>
+                    <div class="text-xl font-bold" style="color: #34d399;" id="pay-advance-amt">₹0</div>
+                    <div class="text-xs text-secondary mt-1" id="pay-razorpay-ref"></div>
+                </div>
+                <div style="background: rgba(245, 158, 11, 0.08); padding: 12px; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.25);">
+                    <div class="text-xs mb-1" style="color: #fbbf24; font-weight: 600;">Balance Due</div>
+                    <div class="text-xl font-bold" style="color: #fbbf24;" id="pay-balance-amt">₹0</div>
+                    <div class="text-xs text-secondary mt-1" id="pay-balance-status">Collect before inspection</div>
+                </div>
+            </div>
+
+            <!-- Balance Payment Link Actions -->
+            <div id="balance-link-container" class="flex flex-wrap gap-2 items-center p-3" style="background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
+                <span class="text-sm font-bold text-accent-light"><i class="fas fa-credit-card"></i> Payment Actions:</span>
+                <button id="btn-admin-pay-now" class="btn btn-primary text-xs" style="padding: 6px 12px; font-weight: 700; cursor: pointer;">
+                    <i class="fas fa-lock"></i> Collect Balance Now (Razorpay)
+                </button>
+                <button id="btn-whatsapp-payment-link" class="btn" style="background: #25D366; color: #fff; font-size: 12px; font-weight: 700; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;">
+                    <i class="fab fa-whatsapp"></i> Send Payment Link on WhatsApp
+                </button>
+                <button id="btn-copy-payment-link" class="btn btn-secondary text-xs" style="padding: 6px 12px; cursor: pointer;">
+                    <i class="fas fa-copy"></i> Copy Payment Link
+                </button>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <h3 class="mb-4">Management</h3>
+            <div class="grid-3 items-center">
+                <div>
+                    <label class="text-secondary text-sm block mb-2">Assign Inspector</label>
+                    <div class="flex gap-2">
+                        <select id="detail-inspector-select" class="form-control">
+                            <option value="">Select Inspector...</option>
+                        </select>
+                        <button id="btn-assign" class="btn btn-primary">Assign</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-secondary text-sm block mb-2">Update Status</label>
+                    <select id="detail-status-select" class="form-control" onchange="updateBookingStatus(this.value)">
+                        <option value="pending">Pending</option>
+                        <option value="assigned">Assigned</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-secondary text-sm block mb-2">Payment Status</label>
+                    <select id="detail-payment-select" class="form-control" onchange="updatePaymentStatus(this.value)">
+                        <option value="unpaid">Unpaid (₹0)</option>
+                        <option value="token_paid">Token Paid (Advance)</option>
+                        <option value="paid">Paid in Full</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <label class="text-secondary text-sm block mb-2">Notes</label>
+                <textarea id="detail-notes" class="form-control" rows="3"></textarea>
+                <button id="btn-save-notes" class="btn btn-secondary mt-2 text-sm">Save Notes</button>
+            </div>
+        </div>
+        
+        <!-- Inspection Report & PDF Generator Wizard Card -->
+        <div class="card mb-4" style="background: linear-gradient(135deg, rgba(22, 16, 45, 0.95), rgba(45, 20, 85, 0.95)); border: 1px solid var(--accent-primary); border-radius: 12px; padding: 20px;">
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3 style="margin: 0; color: #fff; font-size: 1.15rem;"><i class="fas fa-file-pdf text-accent-light" style="margin-right: 8px;"></i> Inspection Report &amp; PDF Generator Wizard</h3>
+                    <p class="text-xs text-secondary mt-1">Review checklist from inspector, edit all parameters, attach service history/files, fetch VAHAN info &amp; generate PDF report with live tab preview.</p>
+                </div>
+                <div id="report-wizard-status-badge">
+                    <span class="badge badge-assigned">Draft Ready</span>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mt-4">
+                <button id="btn-open-pdf-wizard" class="btn btn-primary text-sm" style="padding: 10px 18px; font-weight: 700;">
+                    <i class="fas fa-magic"></i> Open PDF Generator Wizard
+                </button>
+                <button id="btn-live-preview-tab" class="btn btn-secondary text-sm" style="padding: 10px 16px;">
+                    <i class="fas fa-external-link-alt"></i> Live Preview in New Tab
+                </button>
+                <button id="btn-quick-download-pdf" class="btn" style="background: #10B981; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 700; cursor: pointer;">
+                    <i class="fas fa-download"></i> Print / Download PDF
+                </button>
+            </div>
+        </div>
+
+        <div class="text-right mb-4">
+            <button id="btn-delete" class="btn btn-danger text-sm">Delete Booking</button>
+        </div>
+    </template>
+
+    <!-- New Booking View -->
+    <template id="view-new-booking">
+        <h2 class="mb-4">Create Manual Booking</h2>
+        <div class="card" style="max-width: 800px;">
+            <form id="new-booking-form">
+                <div class="grid-2">
+                    <!-- Customer Details -->
+                    <div>
+                        <h4 class="mb-4 text-accent-light border-b pb-2">Customer Details</h4>
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" id="nb-name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone Number</label>
+                            <input type="tel" id="nb-phone" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Address / Area</label>
+                            <textarea id="nb-address" class="form-control" rows="2" required></textarea>
+                        </div>
+                    </div>
+                    <!-- Vehicle Details -->
+                    <div>
+                        <h4 class="mb-4 text-accent-light border-b pb-2">Vehicle Details</h4>
+                        <div class="form-group">
+                            <label>Brand & Model</label>
+                            <input type="text" id="nb-vehicle" class="form-control" placeholder="e.g. Hyundai i20" required>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Year</label>
+                                <input type="number" id="nb-year" class="form-control" min="2000" max="2025" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Reg Number</label>
+                                <input type="text" id="nb-reg" class="form-control" placeholder="KA-01-AB-1234" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h4 class="mb-4 mt-4 text-accent-light border-b pb-2">Inspection Details</h4>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Package</label>
+                        <select id="nb-package" class="form-control" required>
+                            <option value="Super Value">Super Value (₹2500)</option>
+                            <option value="Luxury Expert">Luxury Expert (₹3599)</option>
+                            <option value="Quick Delivery">Quick Delivery (₹2000)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="nb-date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Time</label>
+                        <select id="nb-time" class="form-control" required>
+                            <option value="9:00 AM - 11:00 AM">9:00 AM - 11:00 AM</option>
+                            <option value="11:00 AM - 1:00 PM">11:00 AM - 1:00 PM</option>
+                            <option value="1:00 PM - 3:00 PM">1:00 PM - 3:00 PM</option>
+                            <option value="3:00 PM - 5:00 PM">3:00 PM - 5:00 PM</option>
+                            <option value="5:00 PM - 7:00 PM">5:00 PM - 7:00 PM</option>
+                            <option value="7:00 PM - 10:00 PM">7:00 PM - 10:00 PM (On Demand Night)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group mt-2">
+                    <label>Assign Inspector (Optional)</label>
+                    <select id="nb-inspector" class="form-control">
+                        <option value="">-- Leave Pending --</option>
+                    </select>
+                </div>
+
+                <div class="text-right mt-4 pt-4 border-t" style="border-top: 1px solid var(--border-color);">
+                    <button type="submit" class="btn btn-primary">Create Booking</button>
+                </div>
+            </form>
+        </div>
+    </template>
+
+    <!-- Inspectors View -->
+    <template id="view-inspectors">
+        <div class="flex justify-between items-center mb-4">
+            <h2>Inspectors Management</h2>
+            <button class="btn btn-primary" onclick="document.getElementById('modal-add-inspector').classList.remove('hidden')">Add Inspector</button>
+        </div>
+        
+        <div class="grid-3" id="inspectors-grid">
+            <p>Loading...</p>
+        </div>
+
+        <!-- Add Inspector Modal -->
+        <div id="modal-add-inspector" class="modal-overlay hidden">
+            <div class="modal">
+                <h3 class="mb-4">Add New Inspector</h3>
+                <form id="add-inspector-form">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="ai-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email (for login)</label>
+                        <input type="email" id="ai-email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="text" id="ai-phone" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Temporary Password</label>
+                        <input type="password" id="ai-password" class="form-control" required minlength="6">
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-add-inspector').classList.add('hidden')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Edit Inspector Modal -->
+        <div id="modal-edit-inspector" class="modal-overlay hidden">
+            <div class="modal">
+                <h3 class="mb-4">Edit Inspector & Change Password</h3>
+                <form id="edit-inspector-form">
+                    <input type="hidden" id="ei-id">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="ei-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="text" id="ei-phone" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>New Password (Optional)</label>
+                        <input type="password" id="ei-password" class="form-control" placeholder="Leave blank to keep existing password" minlength="6">
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-edit-inspector').classList.add('hidden')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <!-- Analytics View -->
+    <template id="view-analytics">
+        <div class="flex justify-between items-center mb-4">
+            <h2>Analytics & Reports</h2>
+            <select id="analytics-range" class="form-control" style="width: 200px;">
+                <option value="month">This Month</option>
+                <option value="week">This Week</option>
+                <option value="all">All Time</option>
+            </select>
+        </div>
+
+        <div class="grid-3 mb-4">
+            <div class="card stat-card">
+                <span class="stat-title">Total Revenue</span>
+                <span class="stat-value text-success" id="stat-rev">₹0</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-title">Avg Booking Value</span>
+                <span class="stat-value" id="stat-avg">₹0</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-title">Completion Rate</span>
+                <span class="stat-value text-accent-light" id="stat-rate">0%</span>
+            </div>
+        </div>
+
+        <div class="grid-2 gap-4">
+            <div class="card">
+                <h3 class="mb-4">Revenue (Last 7 Days)</h3>
+                <div class="bar-chart" id="chart-revenue">
+                    <!-- Dummy bars, normally generated by JS -->
+                    <div class="bar" style="height: 30%;"><span>M</span></div>
+                    <div class="bar" style="height: 50%;"><span>T</span></div>
+                    <div class="bar" style="height: 20%;"><span>W</span></div>
+                    <div class="bar" style="height: 80%;"><span>T</span></div>
+                    <div class="bar" style="height: 60%;"><span>F</span></div>
+                    <div class="bar" style="height: 90%;"><span>S</span></div>
+                    <div class="bar" style="height: 40%;"><span>S</span></div>
+                </div>
+            </div>
+            <div class="card">
+                <h3 class="mb-4">Packages Distribution</h3>
+                <div class="pie-chart"></div>
+                <div class="pie-legend">
+                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-primary);"></div> Super Value</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-secondary);"></div> Luxury</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-light);"></div> Quick</div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Database View -->
+    <template id="view-database">
+        <style>
+            .db-pkg-toggle { display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;padding:3px 8px;border-radius:20px;border:1px solid;transition:all .2s; }
+            .db-pkg-toggle.sv-on  { background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981; }
+            .db-pkg-toggle.sv-off { background:rgba(100,100,100,0.1);border-color:#555;color:#666; }
+            .db-pkg-toggle.lx-on  { background:rgba(99,102,241,0.2);border-color:#818cf8;color:#a78bfa; }
+            .db-pkg-toggle.lx-off { background:rgba(100,100,100,0.1);border-color:#555;color:#666; }
+            .db-pkg-toggle.qd-on  { background:rgba(245,158,11,0.15);border-color:#f59e0b;color:#fbbf24; }
+            .db-pkg-toggle.qd-off { background:rgba(100,100,100,0.1);border-color:#555;color:#666; }
+            select option { background-color: #161625 !important; color: #F4F4F6 !important; }
+            .db-table { width:100%;border-collapse:collapse;font-size:13px; }
+            .db-table th { padding:10px 12px;text-align:left;border-bottom:2px solid var(--border-color);color:var(--text-secondary);font-size:11px;text-transform:uppercase;letter-spacing:.05em; }
+            .db-table td { padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.05); }
+            .db-table tr:hover td { background:rgba(255,255,255,0.03); }
+        </style>
+
+        <div class="flex justify-between items-center mb-4">
+            <h2><i class="fas fa-database" style="color:var(--accent-light);margin-right:8px;"></i> Car Database</h2>
+            <div class="flex gap-2">
+                <button class="btn btn-secondary text-sm" onclick="openAddMakeModal()">+ Add Make</button>
+                <button class="btn btn-primary text-sm" onclick="openAddModelModal()">+ Add Model</button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="card mb-4" style="padding:12px 16px;">
+            <div class="flex gap-4" style="flex-wrap:wrap;align-items:center;font-size:12px;">
+                <strong class="text-secondary">Package Availability:</strong>
+                <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:3px 10px;border-radius:20px;">✓ Super Value</span>
+                <span style="background:rgba(99,102,241,0.2);border:1px solid #818cf8;color:#a78bfa;padding:3px 10px;border-radius:20px;">✓ Luxury Expert</span>
+                <span style="background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fbbf24;padding:3px 10px;border-radius:20px;">✓ Quick Delivery</span>
+                <span class="text-secondary">Click any badge to toggle ON/OFF</span>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-4" style="padding:12px 16px;">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                <div style="flex:1;min-width:180px;">
+                    <label class="text-secondary text-sm">Filter by Make</label>
+                    <select id="db-filter-make" style="width:100%;padding:6px 10px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);margin-top:4px;" onchange="loadDbModels()">
+                        <option value="">— All Makes —</option>
+                    </select>
+                </div>
+                <div style="flex:1;min-width:180px;">
+                    <label class="text-secondary text-sm">Filter by Package</label>
+                    <select id="db-filter-pkg" style="width:100%;padding:6px 10px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);margin-top:4px;" onchange="loadDbModels()">
+                        <option value="">— All Packages —</option>
+                        <option value="super_value">Super Value</option>
+                        <option value="luxury_expert">Luxury Expert</option>
+                        <option value="quick_delivery">Quick Delivery</option>
+                    </select>
+                </div>
+                <div style="margin-top:20px;">
+                    <button class="btn btn-secondary text-sm" onclick="loadDbModels()">🔄 Refresh</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Models Table -->
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div style="overflow-x:auto;">
+                <table class="db-table">
+                    <thead>
+                        <tr>
+                            <th>Make</th>
+                            <th>Model</th>
+                            <th style="text-align:center;">Super Value<br><span style="font-size:10px;color:#10b981;">≤₹40L mainstream</span></th>
+                            <th style="text-align:center;">Luxury Expert<br><span style="font-size:10px;color:#a78bfa;">All premium cars</span></th>
+                            <th style="text-align:center;">Quick Delivery<br><span style="font-size:10px;color:#fbbf24;">New car check</span></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="db-models-list">
+                        <tr><td colspan="6" class="text-secondary" style="text-align:center;padding:30px;">Loading models...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="db-pagination" style="padding:12px 16px;border-top:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+                <span id="db-count" class="text-secondary text-sm"></span>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary text-sm" id="db-prev-btn" onclick="dbChangePage(-1)" disabled>← Prev</button>
+                    <span id="db-page-info" class="text-secondary text-sm" style="padding:4px 8px;"></span>
+                    <button class="btn btn-secondary text-sm" id="db-next-btn" onclick="dbChangePage(1)">Next →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Make Modal -->
+        <div id="modal-add-make" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;">
+            <div class="card" style="width:420px;max-width:90vw;">
+                <div class="flex justify-between items-center mb-4">
+                    <h3>Add Vehicle Make</h3>
+                    <button onclick="document.getElementById('modal-add-make').classList.add('hidden')" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;">✕</button>
+                </div>
+                <form id="add-make-form">
+                    <div class="form-group mb-4">
+                        <label>Make Name *</label>
+                        <input id="am-name" type="text" class="form-input" placeholder="e.g. BYD" style="width:100%;padding:8px 12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);">
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn btn-primary" style="flex:1;">Add Make</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-add-make').classList.add('hidden')">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add Model Modal -->
+        <div id="modal-add-model" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;">
+            <div class="card" style="width:420px;max-width:90vw;">
+                <div class="flex justify-between items-center mb-4">
+                    <h3>Add Vehicle Model</h3>
+                    <button onclick="document.getElementById('modal-add-model').classList.add('hidden')" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;">✕</button>
+                </div>
+                <form id="add-model-form">
+                    <div class="form-group mb-3">
+                        <label>Vehicle Make *</label>
+                        <select id="amd-make" style="width:100%;padding:8px 12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);"></select>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label>Model Name *</label>
+                        <input id="amd-name" type="text" class="form-input" placeholder="e.g. Creta" style="width:100%;padding:8px 12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);">
+                    </div>
+                    <div class="mb-4">
+                        <label class="text-sm text-secondary mb-2" style="display:block;">Available on Packages</label>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-sv" style="accent-color:#10b981;"> <span style="color:#10b981;">Super Value</span></label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-lx" checked style="accent-color:#818cf8;"> <span style="color:#a78bfa;">Luxury Expert</span></label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="amd-qd" checked style="accent-color:#f59e0b;"> <span style="color:#fbbf24;">Quick Delivery</span></label>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn btn-primary" style="flex:1;">Add Model</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-add-model').classList.add('hidden')">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    <!-- PDF Generator Wizard Modal -->
+    <div id="modal-pdf-wizard" class="hidden" style="position:fixed;inset:0;background:rgba(8,8,16,0.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;">
+        <div class="card" style="width:1250px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;padding:0;overflow:hidden;box-shadow:0 25px 60px rgba(0,0,0,0.6);">
+            
+            <!-- Modal Header -->
+            <div style="padding:16px 24px;background:rgba(99,102,241,0.08);border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div>
+                    <h3 style="margin:0;font-size:1.2rem;display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-file-pdf text-accent-light"></i> 
+                        <span id="pw-title-ref">PDF Generator Wizard</span>
+                    </h3>
+                    <div class="text-xs text-secondary mt-1" id="pw-title-sub">Configure and edit all parameters for report &amp; live preview</div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button class="btn btn-secondary text-xs" onclick="window.fetchVahanApiData()" style="padding:6px 12px;background:rgba(59,130,246,0.15);border-color:#3b82f6;color:#60a5fa;">
+                        <i class="fas fa-cloud-download-alt"></i> ⚡ Auto-Fetch VAHAN (API)
+                    </button>
+                    <button class="btn btn-secondary text-xs" onclick="window.autoCalculateAiScore()" style="padding:6px 12px;background:rgba(168,85,247,0.15);border-color:#a855f7;color:#c084fc;">
+                        <i class="fas fa-robot"></i> 🤖 Auto-Calculate Score
+                    </button>
+                    <button class="btn btn-secondary text-xs" onclick="window.openReportLivePreview()" style="padding:6px 12px;">
+                        <i class="fas fa-external-link-alt"></i> 👁️ Live Preview in Tab
+                    </button>
+                    <button class="btn text-xs" onclick="window.exportReportPDF()" style="background:#10B981;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-weight:700;">
+                        <i class="fas fa-print"></i> Print / Download PDF
+                    </button>
+                    <button class="btn btn-primary text-xs" onclick="window.saveReportToSupabase()" style="padding:6px 14px;font-weight:700;">
+                        <i class="fas fa-save"></i> Save to Supabase
+                    </button>
+                    <button onclick="document.getElementById('modal-pdf-wizard').classList.add('hidden')" style="background:none;border:none;color:var(--text-secondary);font-size:22px;cursor:pointer;margin-left:8px;">✕</button>
+                </div>
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div style="display:flex;border-bottom:1px solid var(--border-color);background:rgba(0,0,0,0.2);overflow-x:auto;">
+                <button class="pw-tab-btn active" onclick="switchPwTab('tab-pw-overview', this)"><i class="fas fa-car"></i> Overview &amp; AI Score</button>
+                <button class="pw-tab-btn" onclick="switchPwTab('tab-pw-categories', this)"><i class="fas fa-layer-group"></i> 12 Category Health</button>
+                <button class="pw-tab-btn" onclick="switchPwTab('tab-pw-negotiation', this)"><i class="fas fa-tags"></i> Price Negotiation Cuts</button>
+                <button class="pw-tab-btn" onclick="switchPwTab('tab-pw-repairs', this)"><i class="fas fa-wrench"></i> Repairs &amp; Service History / Files</button>
+                <button class="pw-tab-btn" onclick="switchPwTab('tab-pw-photos', this)"><i class="fas fa-camera"></i> Photos &amp; Checkpoints</button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div style="flex:1;overflow-y:auto;padding:20px;">
+
+                <!-- TAB 1: OVERVIEW & AI SCORE -->
+                <div id="tab-pw-overview" class="pw-tab-content">
+                    <div class="grid-3 gap-4 mb-4">
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Booking Ref</label>
+                            <input type="text" id="pw-bref" class="form-control text-sm" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Customer Name</label>
+                            <input type="text" id="pw-cname" class="form-control text-sm" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Package Name</label>
+                            <input type="text" id="pw-pkg" class="form-control text-sm" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Vehicle Make &amp; Model</label>
+                            <input type="text" id="pw-vehicle" class="form-control text-sm" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Manufacture Year</label>
+                            <input type="text" id="pw-year" class="form-control text-sm" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Fuel Type</label>
+                            <select id="pw-fuel" class="form-control text-sm" onchange="wizardOnFieldChange()">
+                                <option value="Petrol">Petrol</option>
+                                <option value="Diesel">Diesel</option>
+                                <option value="CNG">CNG</option>
+                                <option value="EV / Electric">EV / Electric</option>
+                                <option value="Hybrid">Hybrid</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Reg Number</label>
+                            <input type="text" id="pw-reg" class="form-control text-sm" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Odometer KM</label>
+                            <input type="text" id="pw-odo" class="form-control text-sm" placeholder="e.g. 45,200 km" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Owner Count</label>
+                            <input type="text" id="pw-owner" class="form-control text-sm" placeholder="e.g. 1 (First Owner)" oninput="wizardOnFieldChange()">
+                        </div>
+                    </div>
+
+                    <div class="card mb-4" style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.3);">
+                        <h4 class="text-accent-light mb-3"><i class="fas fa-star"></i> AI Vehicle Score &amp; Verdict Rating</h4>
+                        <div class="grid-3 gap-4">
+                            <div>
+                                <label class="text-xs text-secondary block mb-1">Overall AI Score (0 - 100)</label>
+                                <input type="number" step="0.5" id="pw-score" class="form-control text-lg font-bold" min="0" max="100" oninput="wizardOnFieldChange()">
+                            </div>
+                            <div>
+                                <label class="text-xs text-secondary block mb-1">Verdict Badge</label>
+                                <select id="pw-verdict" class="form-control text-sm" onchange="wizardOnFieldChange()">
+                                    <option value="Excellent • Buy">Excellent • Buy</option>
+                                    <option value="Good • Minor Repairs">Good • Minor Repairs</option>
+                                    <option value="Fair • Price Cut Needed">Fair • Price Cut Needed</option>
+                                    <option value="Poor • Avoid">Poor • Avoid</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-secondary block mb-1">Inspector Recommendation</label>
+                                <input type="text" id="pw-recom" class="form-control text-sm" placeholder="e.g. Go ahead and buy it" oninput="wizardOnFieldChange()">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <label class="text-xs text-secondary block mb-1">Cover &amp; Report Executive Summary</label>
+                            <textarea id="pw-summary" class="form-control text-sm" rows="3" oninput="wizardOnFieldChange()"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: CATEGORY SUMMARIES -->
+                <div id="tab-pw-categories" class="pw-tab-content hidden">
+                    <p class="text-xs text-secondary mb-3">Edit health status &amp; summary descriptions for all 12 inspection categories shown on Page 2 of the PDF report.</p>
+                    <div class="grid-2 gap-4" id="pw-category-cards-container">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: PRICE NEGOTIATION -->
+                <div id="tab-pw-negotiation" class="pw-tab-content hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <div>
+                            <h4 class="text-accent-light">AI Price Negotiation Suggestions</h4>
+                            <p class="text-xs text-secondary">Defects found during inspection converted into recommended room for price negotiation.</p>
+                        </div>
+                        <button class="btn btn-secondary text-xs" onclick="addNegotiationRow()">+ Add Negotiation Cut</button>
+                    </div>
+
+                    <table class="db-table mb-3">
+                        <thead>
+                            <tr>
+                                <th>Issue / Defect</th>
+                                <th>Description / Impact</th>
+                                <th style="width:160px;">Suggested Cut (₹)</th>
+                                <th style="width:60px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pw-neg-table-body">
+                            <!-- Rendered by JS -->
+                        </tbody>
+                    </table>
+
+                    <div style="background:rgba(99,102,241,0.15);padding:12px 18px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+                        <span class="font-bold text-sm text-white">Total Suggested Negotiation Cut:</span>
+                        <span class="text-xl font-bold text-accent-light" id="pw-neg-total-display">₹0</span>
+                    </div>
+                </div>
+
+                <!-- TAB 4: REPAIRS & SERVICE HISTORY & FILE UPLOADER -->
+                <div id="tab-pw-repairs" class="pw-tab-content hidden">
+                    <!-- Repair Estimate Table -->
+                    <div class="mb-5">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-accent-light"><i class="fas fa-wrench"></i> Estimated Repair &amp; Refurbishment Costs</h4>
+                            <button class="btn btn-secondary text-xs" onclick="addRepairRow()">+ Add Repair Item</button>
+                        </div>
+                        <table class="db-table mb-2">
+                            <thead>
+                                <tr>
+                                    <th>Repair Task / Part Item</th>
+                                    <th style="width:180px;">Category</th>
+                                    <th style="width:150px;">Estimated Cost (₹)</th>
+                                    <th style="width:60px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pw-repair-table-body">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                        <div style="background:rgba(16,185,129,0.15);padding:10px 16px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+                            <span class="font-bold text-xs text-white">Grand Total Estimated Repair Cost:</span>
+                            <span class="text-lg font-bold text-success" id="pw-repair-total-display">₹0</span>
+                        </div>
+                    </div>
+
+                    <!-- Service History Table -->
+                    <div class="mb-5">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-accent-light"><i class="fas fa-history"></i> Full Service History Log</h4>
+                            <button class="btn btn-secondary text-xs" onclick="addServiceRow()">+ Add Service Record</button>
+                        </div>
+                        <table class="db-table mb-3">
+                            <thead>
+                                <tr>
+                                    <th style="width:130px;">Date</th>
+                                    <th>Authorized Dealer / Service Center</th>
+                                    <th style="width:140px;">Odometer</th>
+                                    <th style="width:130px;">Amount Paid</th>
+                                    <th style="width:60px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pw-service-table-body">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Supporting Documents & File Upload -->
+                    <div class="card" style="background:rgba(255,255,255,0.02);border:1px dashed var(--border-color);">
+                        <h4 class="text-accent-light mb-2"><i class="fas fa-file-upload"></i> Upload Supporting Documents &amp; Files</h4>
+                        <p class="text-xs text-secondary mb-3">Upload Service History PDFs/Images, RC Copy, VAHAN reports or invoice attachments to include in the PDF report.</p>
+                        
+                        <div class="flex gap-3 items-center mb-3">
+                            <input type="file" id="pw-file-input" class="hidden" multiple accept="image/*,.pdf" onchange="handleWizardFileUpload(this.files)">
+                            <button class="btn btn-secondary text-xs" onclick="document.getElementById('pw-file-input').click()"><i class="fas fa-paperclip"></i> Select Files from Device</button>
+                            <span class="text-xs text-secondary">Images (JPG/PNG) &amp; PDF files supported</span>
+                        </div>
+
+                        <div id="pw-attached-files-list" class="flex flex-wrap gap-2">
+                            <!-- Rendered by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: PHOTOS & CHECKPOINTS -->
+                <div id="tab-pw-photos" class="pw-tab-content hidden">
+                    <h4 class="text-accent-light mb-3">Baseline Hero Photos</h4>
+                    <div class="grid-4 gap-3 mb-4">
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Front View Image URL</label>
+                            <input type="text" id="pw-photo-front" class="form-control text-xs" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Side Profile Image URL</label>
+                            <input type="text" id="pw-photo-side" class="form-control text-xs" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Rear Profile Image URL</label>
+                            <input type="text" id="pw-photo-rear" class="form-control text-xs" oninput="wizardOnFieldChange()">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Interior Cabin Image URL</label>
+                            <input type="text" id="pw-photo-interior" class="form-control text-xs" oninput="wizardOnFieldChange()">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-accent-light">Inspector Checklist Items (<span id="pw-checklist-count">0</span>)</h4>
+                        <button class="btn btn-secondary text-xs" onclick="addChecklistItemRow()">+ Add Custom Checkpoint</button>
+                    </div>
+
+                    <div style="max-height:350px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;">
+                        <table class="db-table">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Checkpoint Item Name</th>
+                                    <th style="width:130px;">Status</th>
+                                    <th>Inspector Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pw-checklist-table-body">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .pw-tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            padding: 12px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .pw-tab-btn:hover, .pw-tab-btn.active {
+            color: var(--accent-light);
+            border-bottom-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+    </style>
+
+    <script>
+        // ==========================================
+        // Supabase Configuration
+        // ==========================================
+        const SUPABASE_URL = 'https://fklauiwughygdpvfylwg.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrbGF1aXd1Z2h5Z2RwdmZ5bHdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMjA0MjIsImV4cCI6MjEwMDc5NjQyMn0.t4KEH1g9TZTW8DgG1rpAU0fFVHXvmcEv86s0w7_jHdA';
+        
+        var dbClient = null;
+        try {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.error("Supabase client initialization failed:", e);
+        }
+
+        // ==========================================
+        // App State
+        // ==========================================
+        let state = {
+            user: null,
+            profile: null,
+            currentBookingId: null,
+            inspectors: []
+        };
+        
+        let realtimeSubscription = null;
+
+        // ==========================================
+        // Utility Functions
+        // ==========================================
+        const $ = (selector) => document.querySelector(selector);
+        
+        function showToast(message, type = 'info') {
+            const container = $('#toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+        }
+
+        function formatDate(dateStr) {
+            if(!dateStr) return '';
+            return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        // ==========================================
+        // Routing & View Management
+        // ==========================================
+        // ==========================================
+        // Routing & View Management
+        // ==========================================
+        async function router() {
+            try {
+                let rawHash = window.location.hash || '#/login';
+                if (rawHash === '' || rawHash === '#') rawHash = '#/login';
+                let path = rawHash.split('?')[0];
+                
+                let session = null;
+                if (dbClient && dbClient.auth) {
+                    try {
+                        const { data } = await dbClient.auth.getSession();
+                        session = data ? data.session : null;
+                    } catch (e) {
+                        console.warn("Auth getSession error:", e);
+                    }
+                }
+                
+                const isAuthenticated = Boolean(session || state.user);
+                
+                if (!isAuthenticated) {
+                    if (window.location.hash !== '#/login') {
+                        window.location.hash = '#/login';
+                    }
+                    const appEl = $('#app');
+                    const loginTpl = $('#view-login');
+                    if (appEl && loginTpl && !document.getElementById('login-form')) {
+                        appEl.innerHTML = loginTpl.innerHTML;
+                    }
+                    setupLoginForm();
+                    return;
+                }
+
+                if (session) {
+                    state.user = session.user;
+                    state.profile = { id: session.user.id, full_name: session.user.user_metadata?.full_name || 'Admin', role: 'admin' };
+                }
+
+                if (isAuthenticated && (path === '#/login' || path === '' || path === '#')) {
+                    window.location.hash = '#/dashboard';
+                    path = '#/dashboard';
+                }
+
+                if (isAuthenticated && !document.querySelector('.sidebar')) {
+                    const appEl = $('#app');
+                    const shellTpl = $('#app-shell');
+                    if (appEl && shellTpl) {
+                        appEl.innerHTML = shellTpl.innerHTML;
+                        updateHeader();
+                        setupShellEvents();
+                        setupRealtime();
+                    }
+                }
+
+                let viewTemplateId = 'view-dashboard';
+                let renderLogic = renderDashboard;
+
+                if (path === '#/dashboard') {
+                    viewTemplateId = 'view-dashboard';
+                    renderLogic = renderDashboard;
+                } else if (path === '#/bookings') {
+                    viewTemplateId = 'view-bookings';
+                    renderLogic = renderBookings;
+                } else if (path.startsWith('#/booking/')) {
+                    state.currentBookingId = path.split('/')[2];
+                    viewTemplateId = 'view-booking-detail';
+                    renderLogic = renderBookingDetail;
+                } else if (path === '#/new-booking') {
+                    viewTemplateId = 'view-new-booking';
+                    renderLogic = renderNewBooking;
+                } else if (path === '#/inspectors') {
+                    viewTemplateId = 'view-inspectors';
+                    renderLogic = renderInspectors;
+                } else if (path === '#/analytics') {
+                    viewTemplateId = 'view-analytics';
+                    renderLogic = renderAnalytics;
+                } else if (path === '#/database') {
+                    viewTemplateId = 'view-database';
+                    renderLogic = renderDatabase;
+                }
+
+                const pageContainer = $('#page-container');
+                const viewTpl = $(`#${viewTemplateId}`);
+                if (pageContainer && viewTpl) {
+                    pageContainer.innerHTML = viewTpl.innerHTML;
+                    updateNavActiveState(path);
+                    if (typeof renderLogic === 'function') {
+                        try {
+                            await renderLogic();
+                        } catch(renderErr) {
+                            console.error("Render error in view:", renderErr);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Router error:", err);
+            }
+        }
+
+        window.addEventListener('hashchange', router);
+        window.addEventListener('load', router);
+
+        // ==========================================
+        // Core Setup
+        // ==========================================
+        function updateHeader() {
+            const today = new Date();
+            const dateString = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            if($('#header-date')) $('#header-date').textContent = dateString;
+            if($('#header-greeting') && state.profile) $('#header-greeting').textContent = `Good Morning, ${state.profile.full_name.split(' ')[0]}`;
+        }
+
+        function updateNavActiveState(currentPath) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            const activeEl = document.querySelector(`.nav-item[data-path="${currentPath.replace('#', '')}"]`);
+            if (activeEl) activeEl.classList.add('active');
+        }
+
+        function setupShellEvents() {
+            $('#logout-btn')?.addEventListener('click', async (e) => {
+                e.preventDefault();
+                if (dbClient && dbClient.auth) await dbClient.auth.signOut();
+                state = { user: null, profile: null };
+                if (realtimeSubscription && dbClient) dbClient.removeChannel(realtimeSubscription);
+                window.location.hash = '#/login';
+                router();
+            });
+        }
+
+        function setupRealtime() {
+            if (realtimeSubscription || !dbClient) return;
+            realtimeSubscription = dbClient.channel('public:bookings')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings' }, payload => {
+                    showToast(`New booking received: ${payload.new.booking_ref}`, 'success');
+                    if (window.location.hash === '#/dashboard') renderDashboard();
+                    if (window.location.hash === '#/bookings') renderBookings();
+                })
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings' }, payload => {
+                    if (window.location.hash === '#/dashboard') renderDashboard();
+                    if (window.location.hash === '#/bookings') renderBookings();
+                })
+                .subscribe();
+        }
+
+        // ==========================================
+        // View Renderers & Logic
+        // ==========================================
+
+        // --- LOGIN ---
+        window.handleSignIn = async function(e) {
+            if (e) e.preventDefault();
+            
+            const emailInput = document.getElementById('login-email');
+            const passwordInput = document.getElementById('login-password');
+            const errDiv = document.getElementById('login-error');
+            const submitBtn = document.getElementById('btn-login-submit');
+
+            const email = emailInput ? emailInput.value.trim() : '';
+            const password = passwordInput ? passwordInput.value : '';
+
+            if (!email || !password) {
+                if (errDiv) errDiv.textContent = 'Please enter both email and password';
+                return;
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Signing in...';
+            }
+            if (errDiv) errDiv.textContent = 'Authenticating...';
+
+            try {
+                if (!dbClient && window.supabase && window.supabase.createClient) {
+                    dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                }
+
+                const { data, error } = await dbClient.auth.signInWithPassword({ email, password });
+                if (error) {
+                    console.error("Sign in error:", error);
+                    if (errDiv) errDiv.textContent = error.message;
+                    showToast(error.message, 'error');
+                } else if (data && data.session) {
+                    state.user = data.session.user;
+                    state.profile = { id: data.session.user.id, full_name: 'Admin', role: 'admin' };
+
+                    if (errDiv) errDiv.textContent = 'Success! Opening dashboard...';
+                    showToast('Sign in successful!', 'success');
+                    window.location.hash = '#/dashboard';
+                    await router();
+                }
+            } catch(err) {
+                console.error("Sign in catch:", err);
+                if (errDiv) errDiv.textContent = err.message || 'Error signing in.';
+                showToast(err.message || 'Sign in error', 'error');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Sign In';
+                }
+            }
+        };
+
+        function setupLoginForm() {
+            const form = document.getElementById('login-form');
+            if (form && !form._bound) {
+                form._bound = true;
+                form.onsubmit = function(e) {
+                    e.preventDefault();
+                    window.handleSignIn(e);
+                };
+            }
+        }
+
+        // --- DASHBOARD ---
+        async function renderDashboard() {
+            const client = dbClient || window.supabase;
+            if(!client) return;
+
+            // Fetch Stats
+            const { count: totalBookings } = await client.from('bookings').select('*', { count: 'exact', head: true });
+            
+            const today = new Date().toISOString().split('T')[0];
+            const { count: todayBookings } = await client.from('bookings').select('*', { count: 'exact', head: true }).gte('created_at', today);
+            
+            const { count: pendingBookings } = await client.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+            
+            // Monthly revenue
+            const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+            const { data: revData } = await client.from('bookings').select('total_price').gte('created_at', firstDay).neq('status', 'cancelled');
+            const totalRev = revData ? revData.reduce((sum, b) => sum + (Number(b.total_price) || 0), 0) : 0;
+
+            if($('#dash-total-bookings')) $('#dash-total-bookings').textContent = totalBookings || 0;
+            if($('#dash-today-bookings')) $('#dash-today-bookings').textContent = todayBookings || 0;
+            if($('#dash-pending-bookings')) $('#dash-pending-bookings').textContent = pendingBookings || 0;
+            if($('#dash-revenue')) $('#dash-revenue').textContent = formatCurrency(totalRev);
+
+            // Live Feed
+            const { data: recent } = await client.from('bookings').select('*').order('created_at', { ascending: false }).limit(5);
+            const feedContainer = $('#live-feed');
+            if(feedContainer) {
+                feedContainer.innerHTML = '';
+                if(recent && recent.length > 0) {
+                    recent.forEach(b => {
+                        feedContainer.innerHTML += `
+                            <div class="flex justify-between items-center py-3 border-b" style="border-color: var(--border-color);">
+                                <div>
+                                    <div class="font-bold">${b.customer_name}</div>
+                                    <div class="text-xs text-secondary">${b.vehicle_brand} ${b.vehicle_model} • ${formatDate(b.inspection_date)}</div>
+                                </div>
+                                <span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span>
+                            </div>
+                        `;
+                    });
+                } else {
+                    feedContainer.innerHTML = '<p class="text-secondary text-sm">No recent bookings</p>';
+                }
+            }
+
+            // Pipeline
+            const { data: statusCounts } = await client.from('bookings').select('status');
+            const counts = { pending: 0, assigned: 0, in_progress: 0, completed: 0, cancelled: 0 };
+            if(statusCounts) statusCounts.forEach(b => counts[b.status]++);
+            
+            if($('#pipe-pending')) $('#pipe-pending').textContent = counts.pending;
+            if($('#pipe-assigned')) $('#pipe-assigned').textContent = counts.assigned;
+            if($('#pipe-inprogress')) $('#pipe-inprogress').textContent = counts.in_progress;
+            if($('#pipe-completed')) $('#pipe-completed').textContent = counts.completed;
+        }
+
+        // --- BOOKINGS LIST ---
+        async function renderBookings() {
+             const tbody = $('#bookings-table-body');
+             const statusFilter = $('#bookings-status-filter');
+             const searchInput = $('#bookings-search');
+
+             async function loadData() {
+                 const client = dbClient || window.supabase;
+                 if(!client) return;
+                 let query = client.from('bookings').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(50);
+                 
+                 if(statusFilter.value) query = query.eq('status', statusFilter.value);
+                 if(searchInput.value) {
+                     const term = searchInput.value;
+                     query = query.or(`booking_ref.ilike.%${term}%,customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%`);
+                 }
+
+                 const { data, error } = await query;
+                 tbody.innerHTML = '';
+                 
+                 if(error) {
+                     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error loading data</td></tr>`;
+                     return;
+                 }
+
+                 if(data.length === 0) {
+                     tbody.innerHTML = `<tr><td colspan="7" class="text-center">No bookings found</td></tr>`;
+                     return;
+                 }
+
+                 data.forEach(b => {
+                     const inspectorName = b.profiles ? b.profiles.full_name : 'Unassigned';
+                     tbody.innerHTML += `
+                        <tr>
+                            <td class="font-bold text-accent-light">${b.booking_ref}</td>
+                            <td>
+                                <div>${b.customer_name}</div>
+                                <div class="text-xs text-secondary">${b.customer_phone}</div>
+                            </td>
+                            <td>${b.vehicle_brand} ${b.vehicle_model}</td>
+                            <td>
+                                <div>${formatDate(b.inspection_date)}</div>
+                                <div class="text-xs text-secondary">${b.inspection_time}</div>
+                            </td>
+                            <td>${b.package_name}</td>
+                            <td><span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span></td>
+                             <td>
+                                 <a href="#/booking/${b.id}" class="btn btn-secondary text-xs" style="margin-right: 4px;">View</a>
+                                 <button class="btn btn-primary text-xs" onclick="window.openPdfWizardForBooking('${b.id}')"><i class="fas fa-file-pdf"></i> PDF Wizard</button>
+                             </td>
+                        </tr>
+                     `;
+                 });
+             }
+
+             loadData();
+             statusFilter.addEventListener('change', loadData);
+             
+             let debounceTimeout;
+             searchInput.addEventListener('input', () => {
+                 clearTimeout(debounceTimeout);
+                 debounceTimeout = setTimeout(loadData, 500);
+             });
+        }
+
+        // --- BOOKING DETAIL ---
+        async function fetchInspectors() {
+             const client = dbClient || window.supabase;
+             if(!client) return [];
+             const { data } = await client.from('profiles').select('*').eq('role', 'inspector').eq('is_active', true);
+             state.inspectors = data || [];
+             return state.inspectors;
+        }
+
+        async function renderBookingDetail() {
+            const client = dbClient || window.supabase;
+            if(!client) return;
+
+            const id = state.currentBookingId;
+            const { data: b, error } = await client.from('bookings').select('*, profiles(full_name)').eq('id', id).single();
+            
+            if(error || !b) {
+                showToast("Error loading booking details", "error");
+                window.location.hash = '#/bookings';
+                return;
+            }
+
+            // Populate UI
+            $('#detail-ref').textContent = `Booking: ${b.booking_ref}`;
+            $('#detail-status-badge').innerHTML = `<span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span>`;
+            
+            $('#detail-customer-name').textContent = b.customer_name || 'N/A';
+            $('#detail-customer-phone').textContent = b.customer_phone || 'N/A';
+            $('#detail-customer-email').textContent = b.customer_email || 'N/A';
+            if($('#detail-area')) $('#detail-area').textContent = b.area || 'N/A';
+            $('#detail-address').textContent = b.address || b.area;
+
+            $('#detail-vehicle').textContent = `${b.vehicle_year || ''} ${b.vehicle_brand || ''} ${b.vehicle_model || ''} (${b.vehicle_fuel || 'Petrol'})`;
+            $('#detail-reg').textContent = b.vehicle_reg || 'N/A';
+            $('#detail-package').textContent = b.package_name;
+            $('#detail-price').textContent = formatCurrency(b.total_price);
+            $('#detail-datetime').textContent = `${formatDate(b.inspection_date)} at ${b.inspection_time}`;
+            
+            $('#detail-status-select').value = b.status;
+            $('#detail-payment-select').value = b.payment_status || 'unpaid';
+            $('#detail-notes').value = b.notes || '';
+
+            // Pre-fill Customer Edit Inputs
+            if($('#edit-customer-name')) $('#edit-customer-name').value = b.customer_name || '';
+            if($('#edit-customer-phone')) $('#edit-customer-phone').value = b.customer_phone || '';
+            if($('#edit-customer-email')) $('#edit-customer-email').value = b.customer_email || '';
+            if($('#edit-area')) $('#edit-area').value = b.area || '';
+            if($('#edit-address')) $('#edit-address').value = b.address || '';
+
+            // Pre-fill Vehicle Edit Inputs
+            if($('#edit-vehicle-brand')) $('#edit-vehicle-brand').value = b.vehicle_brand || '';
+            if($('#edit-vehicle-model')) $('#edit-vehicle-model').value = b.vehicle_model || '';
+            if($('#edit-vehicle-year')) $('#edit-vehicle-year').value = b.vehicle_year || '';
+            if($('#edit-vehicle-reg')) $('#edit-vehicle-reg').value = b.vehicle_reg || '';
+
+            // Customer Edit Event Handlers
+            if($('#btn-edit-customer')) {
+                $('#btn-edit-customer').onclick = () => {
+                    $('#customer-view-mode').classList.add('hidden');
+                    $('#customer-edit-mode').classList.remove('hidden');
+                };
+            }
+            if($('#btn-cancel-edit-customer')) {
+                $('#btn-cancel-edit-customer').onclick = () => {
+                    $('#customer-edit-mode').classList.add('hidden');
+                    $('#customer-view-mode').classList.remove('hidden');
+                };
+            }
+            if($('#btn-save-customer')) {
+                $('#btn-save-customer').onclick = async () => {
+                    const cName = $('#edit-customer-name').value.trim();
+                    const cPhone = $('#edit-customer-phone').value.trim();
+                    const cEmail = $('#edit-customer-email').value.trim();
+                    const cArea = $('#edit-area').value.trim();
+                    const cAddr = $('#edit-address').value.trim();
+
+                    if(!cName || !cPhone) {
+                        showToast('Customer Name and Phone are required', 'error');
+                        return;
+                    }
+
+                    const { error } = await client.from('bookings').update({
+                        customer_name: cName,
+                        customer_phone: cPhone,
+                        customer_email: cEmail || null,
+                        area: cArea,
+                        address: cAddr
+                    }).eq('id', id);
+
+                    if(error) {
+                        showToast(error.message, 'error');
+                    } else {
+                        showToast('Customer details saved successfully!', 'success');
+                        renderBookingDetail();
+                    }
+                };
+            }
+
+            // Vehicle Edit Event Handlers
+            if($('#btn-edit-vehicle')) {
+                $('#btn-edit-vehicle').onclick = () => {
+                    $('#vehicle-view-mode').classList.add('hidden');
+                    $('#vehicle-edit-mode').classList.remove('hidden');
+                };
+            }
+            if($('#btn-cancel-edit-vehicle')) {
+                $('#btn-cancel-edit-vehicle').onclick = () => {
+                    $('#vehicle-edit-mode').classList.add('hidden');
+                    $('#vehicle-view-mode').classList.remove('hidden');
+                };
+            }
+            if($('#btn-save-vehicle')) {
+                $('#btn-save-vehicle').onclick = async () => {
+                    const vBrand = $('#edit-vehicle-brand').value.trim();
+                    const vModel = $('#edit-vehicle-model').value.trim();
+                    const vYear = $('#edit-vehicle-year').value.trim();
+                    const vReg = $('#edit-vehicle-reg').value.trim();
+
+                    const { error } = await client.from('bookings').update({
+                        vehicle_brand: vBrand,
+                        vehicle_model: vModel,
+                        vehicle_year: vYear,
+                        vehicle_reg: vReg || null
+                    }).eq('id', id);
+
+                    if(error) {
+                        showToast(error.message, 'error');
+                    } else {
+                        showToast('Vehicle details saved successfully!', 'success');
+                        renderBookingDetail();
+                    }
+                };
+            }
+
+            // Parse Payment Details & Balance Breakdown
+            const total = Number(b.total_price) || 0;
+            let charged = 0;
+            let razorpayRef = '';
+
+            if (b.notes) {
+                const chargedMatch = b.notes.match(/Charged:\s*₹?(\d+)/i);
+                if (chargedMatch) charged = Number(chargedMatch[1]);
+
+                const refMatch = b.notes.match(/Razorpay Ref:\s*([^\s|]+)/i);
+                if (refMatch) razorpayRef = refMatch[1];
+            }
+
+            if (charged === 0) {
+                if (b.payment_status === 'paid') charged = total;
+                else if (b.payment_status === 'token_paid' || (b.payment_method && (b.payment_method.includes('199') || b.payment_method.includes('299')))) {
+                    charged = b.payment_method && b.payment_method.includes('299') ? 299 : 199;
+                }
+            }
+
+            const balance = Math.max(0, total - charged);
+            const isFullyPaid = b.payment_status === 'paid' || balance === 0;
+
+            if ($('#pay-total-amt')) $('#pay-total-amt').textContent = formatCurrency(total);
+            if ($('#pay-advance-amt')) $('#pay-advance-amt').textContent = formatCurrency(charged);
+            if ($('#pay-razorpay-ref')) {
+                $('#pay-razorpay-ref').textContent = razorpayRef ? `Ref: ${razorpayRef}` : (charged > 0 ? 'Online Payment' : 'No online payment yet');
+            }
+            if ($('#pay-balance-amt')) $('#pay-balance-amt').textContent = formatCurrency(balance);
+            if ($('#pay-balance-status')) {
+                $('#pay-balance-status').textContent = isFullyPaid ? '✅ Fully Paid' : (charged > 0 ? '🟡 Balance Pending' : '⚠️ Unpaid Booking');
+            }
+
+            if ($('#detail-payment-badge')) {
+                let badgeClass = 'badge-pending';
+                let badgeText = 'Unpaid';
+                if (isFullyPaid) {
+                    badgeClass = 'badge-completed';
+                    badgeText = 'Paid in Full';
+                } else if (charged > 0) {
+                    badgeClass = 'badge-assigned';
+                    badgeText = `Token Paid (₹${charged})`;
+                }
+                $('#detail-payment-badge').innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+            }
+
+            // Generate Payment Link using inspectcar.in domain
+            const clientWebsiteUrl = 'https://inspectcar.in/#pay-balance';
+            const payBalanceUrl = `${clientWebsiteUrl}?ref=${b.booking_ref}&amt=${balance}&name=${encodeURIComponent(b.customer_name)}`;
+
+            const waText = encodeURIComponent(
+                `Hi ${b.customer_name}! 👋\n\n` +
+                `Here are the payment details for your InspectCar inspection booking (*${b.booking_ref}*):\n\n` +
+                `🚗 *Vehicle:* ${b.vehicle_brand} ${b.vehicle_model} (${b.vehicle_year})\n` +
+                `📦 *Package Total:* ${formatCurrency(total)}\n` +
+                `✅ *Advance Paid:* ${formatCurrency(charged)}\n` +
+                `🟡 *Balance Due:* *${formatCurrency(balance)}*\n\n` +
+                `Please complete your balance payment securely here:\n` +
+                `${payBalanceUrl}`
+            );
+            const waPhone = (b.customer_phone || '').replace(/\D/g, '');
+            const waFullUrl = `https://wa.me/91${waPhone.slice(-10)}?text=${waText}`;
+
+            const btnAdminPay = $('#btn-admin-pay-now');
+            if (btnAdminPay) {
+                if (balance <= 0) {
+                    btnAdminPay.style.display = 'none';
+                } else {
+                    btnAdminPay.style.display = 'inline-flex';
+                    btnAdminPay.onclick = () => {
+                        if (typeof Razorpay === 'undefined') {
+                            alert('Razorpay Checkout SDK is loading. Please try again.');
+                            return;
+                        }
+                        const RAZORPAY_KEY = window.RAZORPAY_KEY_ID || 'rzp_live_TJRDVu6qlB1ZbO';
+                        const options = {
+                            key: RAZORPAY_KEY,
+                            amount: balance * 100,
+                            currency: 'INR',
+                            name: 'InspectCar',
+                            description: `Balance Payment for Booking ${b.booking_ref}`,
+                            image: 'images/Logo.webp',
+                            prefill: {
+                                name: b.customer_name || '',
+                                email: b.customer_email || '',
+                                contact: b.customer_phone || ''
+                            },
+                            theme: { color: '#6366f1' },
+                            handler: async function (response) {
+                                const paymentId = response.razorpay_payment_id;
+                                const updatedNotes = (b.notes || '') + ` | Balance Paid online: ₹${balance} (Ref: ${paymentId})`;
+                                const { error } = await client.from('bookings').update({
+                                    payment_status: 'paid',
+                                    notes: updatedNotes
+                                }).eq('id', id);
+                                if (!error) {
+                                    showToast(`Balance payment of ₹${balance} verified via Razorpay!`, 'success');
+                                    renderBookingDetail();
+                                }
+                            }
+                        };
+                        const rzp = new Razorpay(options);
+                        rzp.open();
+                    };
+                }
+            }
+
+            const btnWaLink = $('#btn-whatsapp-payment-link');
+            if (btnWaLink) {
+                btnWaLink.onclick = () => {
+                    window.open(waFullUrl, '_blank');
+                };
+            }
+
+            const btnCopyLink = $('#btn-copy-payment-link');
+            if (btnCopyLink) {
+                btnCopyLink.onclick = () => {
+                    navigator.clipboard.writeText(payBalanceUrl).then(() => {
+                        showToast('Balance Payment Link copied to clipboard!', 'success');
+                    }).catch(() => {
+                        showToast(`Payment Link: ${payBalanceUrl}`, 'info');
+                    });
+                };
+            }
+
+            // Setup Inspectors Dropdown
+            const inspectors = await fetchInspectors();
+            const select = $('#detail-inspector-select');
+            select.innerHTML = '<option value="">Select Inspector...</option>';
+            inspectors.forEach(ins => {
+                const opt = document.createElement('option');
+                opt.value = ins.id;
+                opt.textContent = ins.full_name;
+                select.appendChild(opt);
+            });
+            if(b.inspector_id) select.value = b.inspector_id;
+
+            // Events
+            $('#btn-assign').onclick = async () => {
+                const iid = select.value;
+                if(!iid) {
+                    showToast('Please select an inspector to assign', 'error');
+                    return;
+                }
+                const { error } = await client.from('bookings').update({ 
+                    inspector_id: iid, 
+                    status: b.status === 'pending' ? 'assigned' : b.status 
+                }).eq('id', id);
+                
+                if(error) showToast(error.message, 'error');
+                else {
+                    showToast('Inspector assigned successfully', 'success');
+                    renderBookingDetail();
+                }
+            };
+
+            $('#btn-save-notes').onclick = async () => {
+                const notes = $('#detail-notes').value;
+                const { error } = await client.from('bookings').update({ notes }).eq('id', id);
+                if(!error) showToast('Notes saved', 'success');
+            };
+
+            $('#btn-delete').onclick = async () => {
+                if(confirm('Are you sure you want to delete this booking? This cannot be undone.')) {
+                    await client.from('bookings').delete().eq('id', id);
+                    window.location.hash = '#/bookings';
+                }
+            };
+        }
+
+        window.updateBookingStatus = async function(status) {
+            const client = dbClient || window.supabase;
+            if(!state.currentBookingId || !client) return;
+            const { error } = await client.from('bookings').update({ status }).eq('id', state.currentBookingId);
+            if(!error) {
+                showToast(`Status updated to ${status}`, 'success');
+                renderBookingDetail();
+            }
+        }
+
+        window.updatePaymentStatus = async function(payment_status) {
+            const client = dbClient || window.supabase;
+            if(!state.currentBookingId || !client) return;
+            const { error } = await client.from('bookings').update({ payment_status }).eq('id', state.currentBookingId);
+            if(!error) showToast(`Payment marked as ${payment_status}`, 'success');
+        }
+
+        // ==========================================
+        // PDF GENERATOR WIZARD CONTROLLER
+        // ==========================================
+        window.currentWizardReportData = null;
+        window.currentWizardBookingId = null;
+
+        const WIZARD_CATEGORIES = [
+            "Exterior", "Tyres", "Brakes", "Underbody", 
+            "Engine Analysis", "Interior", "Lighting", "AC & Heating", 
+            "Suspension", "Transmission", "Inspection Info", "Vahan Info"
+        ];
+
+        window.openPdfWizardForBooking = async function(bookingId) {
+            const client = dbClient || window.supabase;
+            if(!bookingId || !client) return;
+
+            window.currentWizardBookingId = bookingId;
+            showToast("Loading report data & inspector checklist...", "info");
+
+            // 1. Fetch booking record
+            const { data: b } = await client.from('bookings').select('*, profiles(full_name)').eq('id', bookingId).single();
+            if(!b) { showToast("Booking record not found", "error"); return; }
+
+            // 2. Fetch submitted inspector checklist items or answers
+            let checklistItems = [];
+            const { data: answers } = await client.from('inspection_answers').select('*').eq('booking_id', bookingId);
+            if(answers && answers.length > 0) {
+                checklistItems = answers.map(a => ({
+                    category: a.category,
+                    item_name: a.item_name,
+                    status: a.answer,
+                    note: a.remarks || ''
+                }));
+            } else {
+                const { data: chk } = await client.from('inspection_checklist_items').select('*').eq('booking_id', bookingId);
+                if(chk && chk.length > 0) {
+                    checklistItems = chk.map(c => ({
+                        category: c.category,
+                        item_name: c.item_name,
+                        status: c.status,
+                        note: c.note || ''
+                    }));
+                }
+            }
+
+            // 3. Fetch inspector photos
+            let heroPhotos = {
+                front: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=60",
+                side: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=600&auto=format&fit=crop&q=60",
+                rear: "https://images.unsplash.com/photo-1617814076367-b759c7d7e738?w=600&auto=format&fit=crop&q=60",
+                interior: "https://images.unsplash.com/photo-1563720223185-11003d516935?w=600&auto=format&fit=crop&q=60"
+            };
+
+            const { data: photos } = await client.from('inspection_photos').select('*').eq('booking_id', bookingId);
+            if(photos && photos.length > 0) {
+                photos.forEach(p => {
+                    if(p.caption && p.caption.toLowerCase().includes('front')) heroPhotos.front = p.photo_url;
+                    else if(p.caption && p.caption.toLowerCase().includes('side')) heroPhotos.side = p.photo_url;
+                    else if(p.caption && p.caption.toLowerCase().includes('rear')) heroPhotos.rear = p.photo_url;
+                    else if(p.caption && p.caption.toLowerCase().includes('interior')) heroPhotos.interior = p.photo_url;
+                });
+            }
+
+            // 4. Fetch existing inspection_report draft if saved before
+            const { data: existingReport } = await client.from('inspection_reports').select('*').eq('booking_id', bookingId).maybeSingle();
+
+            // Construct unified report data object
+            window.currentWizardReportData = {
+                bookingRef: b.booking_ref || `#IC-${bookingId.slice(0, 6)}`,
+                customerName: b.customer_name || 'Customer',
+                vehicle: `${b.vehicle_brand || ''} ${b.vehicle_model || ''}`.trim() || 'Vehicle',
+                year: b.vehicle_year || '2021',
+                fuel: b.vehicle_fuel || 'Petrol',
+                regNo: b.vehicle_reg || 'KA-01-AB-1234',
+                odometer: '42,500 km',
+                ownerCount: '1 (First Owner)',
+                inspectionDate: formatDate(b.inspection_date) || 'Today',
+                location: b.area || b.address || 'Bengaluru, Karnataka',
+                inspectorName: (b.profiles && b.profiles.full_name) ? b.profiles.full_name : 'A. John (Certified Inspector)',
+                packageName: b.package_name || 'Luxury Expert',
+                overallScore: existingReport?.ai_score || 85.0,
+                verdict: existingReport?.overall_condition || 'Excellent • Buy',
+                recommendation: existingReport?.recommendation || 'Go ahead and buy it with confidence',
+                summaryText: existingReport?.summary || 'A comprehensive 360° pre-purchase inspection combining certified inspector checks with AI-assisted diagnostics.',
+                categorySummaries: WIZARD_CATEGORIES.map(catName => ({
+                    name: catName,
+                    status: "good",
+                    desc: `${catName} is in good working order with no critical faults found during inspection.`
+                })),
+                negotiations: [
+                    { issue: "Minor Bumper Scratches & Paint Touchup", desc: "Cosmetic touchups required on front bumper.", amount: 3500 },
+                    { issue: "Tyre Wear & Valve Alignment", desc: "Wear consistent with age, minor balance check needed.", amount: 1500 }
+                ],
+                repairs: [
+                    { category: "Exterior", item: "Front Bumper Touchup & Polish", cost: 3500 },
+                    { category: "Interior", item: "Deep Cabin Sanitization", cost: 1500 }
+                ],
+                services: [
+                    { date: "15 Jan 2025", dealer: "Authorized Service Center", odo: "40,000 km", amount: "₹6,500" },
+                    { date: "10 Aug 2024", dealer: "Authorized Service Center", odo: "30,000 km", amount: "₹5,200" }
+                ],
+                documents: [],
+                photos: heroPhotos,
+                checklist: checklistItems
+            };
+
+            // Populate Form Fields in Wizard UI
+            populateWizardUI();
+
+            // Save to localStorage & Broadcast to Live Preview tab
+            syncWizardToPreview();
+
+            // Display Modal
+            $('#modal-pdf-wizard').classList.remove('hidden');
+            showToast("PDF Generator Wizard ready!", "success");
+        };
+
+        function populateWizardUI() {
+            const data = window.currentWizardReportData;
+            if(!data) return;
+
+            if($('#pw-title-ref')) $('#pw-title-ref').textContent = `PDF Generator Wizard — ${data.bookingRef}`;
+            if($('#pw-title-sub')) $('#pw-title-sub').textContent = `${data.vehicle} (${data.year}) • Customer: ${data.customerName}`;
+
+            // Tab 1 Fields
+            if($('#pw-bref')) $('#pw-bref').value = data.bookingRef;
+            if($('#pw-cname')) $('#pw-cname').value = data.customerName;
+            if($('#pw-pkg')) $('#pw-pkg').value = data.packageName;
+            if($('#pw-vehicle')) $('#pw-vehicle').value = data.vehicle;
+            if($('#pw-year')) $('#pw-year').value = data.year;
+            if($('#pw-fuel')) $('#pw-fuel').value = data.fuel;
+            if($('#pw-reg')) $('#pw-reg').value = data.regNo;
+            if($('#pw-odo')) $('#pw-odo').value = data.odometer;
+            if($('#pw-owner')) $('#pw-owner').value = data.ownerCount;
+
+            if($('#pw-score')) $('#pw-score').value = data.overallScore;
+            if($('#pw-verdict')) $('#pw-verdict').value = data.verdict;
+            if($('#pw-recom')) $('#pw-recom').value = data.recommendation;
+            if($('#pw-summary')) $('#pw-summary').value = data.summaryText;
+
+            // Tab 2 Categories
+            renderWizardCategories();
+
+            // Tab 3 Negotiations
+            renderWizardNegotiations();
+
+            // Tab 4 Repairs & Services & Files
+            renderWizardRepairs();
+            renderWizardServices();
+            renderWizardFiles();
+
+            // Tab 5 Photos & Checklist
+            if($('#pw-photo-front')) $('#pw-photo-front').value = data.photos?.front || '';
+            if($('#pw-photo-side')) $('#pw-photo-side').value = data.photos?.side || '';
+            if($('#pw-photo-rear')) $('#pw-photo-rear').value = data.photos?.rear || '';
+            if($('#pw-photo-interior')) $('#pw-photo-interior').value = data.photos?.interior || '';
+            renderWizardChecklist();
+        }
+
+        window.switchPwTab = function(tabId, btnElem) {
+            document.querySelectorAll('.pw-tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.pw-tab-btn').forEach(el => el.classList.remove('active'));
+
+            const target = document.getElementById(tabId);
+            if(target) target.classList.remove('hidden');
+            if(btnElem) btnElem.classList.add('active');
+        };
+
+        window.wizardOnFieldChange = function() {
+            if(!window.currentWizardReportData) return;
+            const data = window.currentWizardReportData;
+
+            data.bookingRef = $('#pw-bref')?.value || data.bookingRef;
+            data.customerName = $('#pw-cname')?.value || data.customerName;
+            data.packageName = $('#pw-pkg')?.value || data.packageName;
+            data.vehicle = $('#pw-vehicle')?.value || data.vehicle;
+            data.year = $('#pw-year')?.value || data.year;
+            data.fuel = $('#pw-fuel')?.value || data.fuel;
+            data.regNo = $('#pw-reg')?.value || data.regNo;
+            data.odometer = $('#pw-odo')?.value || data.odometer;
+            data.ownerCount = $('#pw-owner')?.value || data.ownerCount;
+
+            data.overallScore = parseFloat($('#pw-score')?.value) || data.overallScore;
+            data.verdict = $('#pw-verdict')?.value || data.verdict;
+            data.recommendation = $('#pw-recom')?.value || data.recommendation;
+            data.summaryText = $('#pw-summary')?.value || data.summaryText;
+
+            if(!data.photos) data.photos = {};
+            data.photos.front = $('#pw-photo-front')?.value || '';
+            data.photos.side = $('#pw-photo-side')?.value || '';
+            data.photos.rear = $('#pw-photo-rear')?.value || '';
+            data.photos.interior = $('#pw-photo-interior')?.value || '';
+
+            syncWizardToPreview();
+        };
+
+        function syncWizardToPreview() {
+            if(!window.currentWizardReportData) return;
+            const payload = JSON.stringify(window.currentWizardReportData);
+            localStorage.setItem('inspectcar_active_report', payload);
+
+            if('BroadcastChannel' in window) {
+                const bc = new BroadcastChannel('inspectcar_report_channel');
+                bc.postMessage({ type: 'SYNC_REPORT', report: window.currentWizardReportData });
+            }
+        }
+
+        window.openReportLivePreview = function() {
+            syncWizardToPreview();
+            window.open('report-preview.html', '_blank');
+        };
+
+        window.exportReportPDF = function() {
+            syncWizardToPreview();
+            const w = window.open('report-preview.html', '_blank');
+            if(w) {
+                w.onload = function() {
+                    setTimeout(() => w.print(), 600);
+                };
+            }
+        };
+
+        window.fetchVahanApiData = function() {
+            showToast("Fetching live VAHAN RTO vehicle verification data...", "info");
+            setTimeout(() => {
+                if(!window.currentWizardReportData) return;
+                const d = window.currentWizardReportData;
+                d.regNo = d.regNo || "KA-05-MN-8899";
+                d.ownerCount = "1 (First Owner)";
+                d.fuel = d.fuel || "Diesel";
+
+                const vahanCat = d.categorySummaries.find(c => c.name === "Vahan Info");
+                if(vahanCat) {
+                    vahanCat.status = "good";
+                    vahanCat.desc = "Verified 1st Owner; Insurance active till May 2026; Tax & Fitness paid till May 2033.";
+                }
+
+                populateWizardUI();
+                syncWizardToPreview();
+                showToast("⚡ VAHAN RTO verification data imported successfully!", "success");
+            }, 800);
+        };
+
+        window.autoCalculateAiScore = function() {
+            if(!window.currentWizardReportData) return;
+            const d = window.currentWizardReportData;
+            
+            let defectCount = 0;
+            d.checklist.forEach(item => {
+                if(item.status === 'Attention' || item.status === 'Critical' || item.status === 'Replace') {
+                    defectCount++;
+                }
+            });
+
+            let calculatedScore = Math.max(50, Math.min(98, 95 - (defectCount * 3.5)));
+            d.overallScore = parseFloat(calculatedScore.toFixed(1));
+            
+            if(d.overallScore >= 80) {
+                d.verdict = "Excellent • Buy";
+                d.recommendation = "Go ahead and buy it with confidence";
+            } else if(d.overallScore >= 70) {
+                d.verdict = "Good • Minor Repairs";
+                d.recommendation = "Recommended with minor negotiation for pending touchups";
+            } else {
+                d.verdict = "Fair • Price Cut Needed";
+                d.recommendation = "Require seller to fix defects or deduct estimated repair cost";
+            }
+
+            populateWizardUI();
+            syncWizardToPreview();
+            showToast(`🤖 AI Vehicle Score computed: ${d.overallScore} / 100`, "success");
+        };
+
+        function renderWizardCategories() {
+            const container = $('#pw-category-cards-container');
+            if(!container || !window.currentWizardReportData) return;
+
+            container.innerHTML = '';
+            window.currentWizardReportData.categorySummaries.forEach((cat, idx) => {
+                container.innerHTML += `
+                    <div class="card" style="padding:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);">
+                        <div class="flex justify-between items-center mb-2">
+                            <strong class="text-sm text-accent-light">${cat.name}</strong>
+                            <select class="form-control text-xs" style="width:120px;" onchange="updateCatStatus(${idx}, this.value)">
+                                <option value="good" ${cat.status === 'good' ? 'selected' : ''}>🟢 Good</option>
+                                <option value="attention" ${cat.status === 'attention' ? 'selected' : ''}>🟡 Attention</option>
+                                <option value="critical" ${cat.status === 'critical' ? 'selected' : ''}>🔴 Critical</option>
+                            </select>
+                        </div>
+                        <textarea class="form-control text-xs" rows="2" oninput="updateCatDesc(${idx}, this.value)">${cat.desc}</textarea>
+                    </div>
+                `;
+            });
+        }
+
+        window.updateCatStatus = function(idx, status) {
+            window.currentWizardReportData.categorySummaries[idx].status = status;
+            syncWizardToPreview();
+        };
+
+        window.updateCatDesc = function(idx, desc) {
+            window.currentWizardReportData.categorySummaries[idx].desc = desc;
+            syncWizardToPreview();
+        };
+
+        function renderWizardNegotiations() {
+            const tbody = $('#pw-neg-table-body');
+            if(!tbody || !window.currentWizardReportData) return;
+
+            tbody.innerHTML = '';
+            let total = 0;
+            window.currentWizardReportData.negotiations.forEach((n, idx) => {
+                total += Number(n.amount) || 0;
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="text" class="form-control text-xs" value="${n.issue}" oninput="updateNegRow(${idx}, 'issue', this.value)"></td>
+                        <td><input type="text" class="form-control text-xs" value="${n.desc || ''}" oninput="updateNegRow(${idx}, 'desc', this.value)"></td>
+                        <td><input type="number" class="form-control text-xs font-bold" value="${n.amount}" oninput="updateNegRow(${idx}, 'amount', this.value)"></td>
+                        <td><button class="btn btn-danger text-xs" onclick="deleteNegotiationRow(${idx})">✕</button></td>
+                    </tr>
+                `;
+            });
+
+            if($('#pw-neg-total-display')) $('#pw-neg-total-display').textContent = `₹${total.toLocaleString('en-IN')}`;
+        }
+
+        window.addNegotiationRow = function() {
+            window.currentWizardReportData.negotiations.push({ issue: "New Defect Item", desc: "Inspection finding description", amount: 1500 });
+            renderWizardNegotiations();
+            syncWizardToPreview();
+        };
+
+        window.updateNegRow = function(idx, field, val) {
+            if(field === 'amount') val = parseFloat(val) || 0;
+            window.currentWizardReportData.negotiations[idx][field] = val;
+            renderWizardNegotiations();
+            syncWizardToPreview();
+        };
+
+        window.deleteNegotiationRow = function(idx) {
+            window.currentWizardReportData.negotiations.splice(idx, 1);
+            renderWizardNegotiations();
+            syncWizardToPreview();
+        };
+
+        function renderWizardRepairs() {
+            const tbody = $('#pw-repair-table-body');
+            if(!tbody || !window.currentWizardReportData) return;
+
+            tbody.innerHTML = '';
+            let total = 0;
+            window.currentWizardReportData.repairs.forEach((r, idx) => {
+                total += Number(r.cost) || 0;
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="text" class="form-control text-xs" value="${r.item}" oninput="updateRepairRow(${idx}, 'item', this.value)"></td>
+                        <td><input type="text" class="form-control text-xs" value="${r.category || 'General'}" oninput="updateRepairRow(${idx}, 'category', this.value)"></td>
+                        <td><input type="number" class="form-control text-xs font-bold" value="${r.cost}" oninput="updateRepairRow(${idx}, 'cost', this.value)"></td>
+                        <td><button class="btn btn-danger text-xs" onclick="deleteRepairRow(${idx})">✕</button></td>
+                    </tr>
+                `;
+            });
+
+            if($('#pw-repair-total-display')) $('#pw-repair-total-display').textContent = `₹${total.toLocaleString('en-IN')}`;
+        }
+
+        window.addRepairRow = function() {
+            window.currentWizardReportData.repairs.push({ category: "Exterior", item: "Repair Task Item", cost: 2000 });
+            renderWizardRepairs();
+            syncWizardToPreview();
+        };
+
+        window.updateRepairRow = function(idx, field, val) {
+            if(field === 'cost') val = parseFloat(val) || 0;
+            window.currentWizardReportData.repairs[idx][field] = val;
+            renderWizardRepairs();
+            syncWizardToPreview();
+        };
+
+        window.deleteRepairRow = function(idx) {
+            window.currentWizardReportData.repairs.splice(idx, 1);
+            renderWizardRepairs();
+            syncWizardToPreview();
+        };
+
+        function renderWizardServices() {
+            const tbody = $('#pw-service-table-body');
+            if(!tbody || !window.currentWizardReportData) return;
+
+            tbody.innerHTML = '';
+            window.currentWizardReportData.services.forEach((s, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="text" class="form-control text-xs" value="${s.date}" oninput="updateServiceRow(${idx}, 'date', this.value)"></td>
+                        <td><input type="text" class="form-control text-xs" value="${s.dealer}" oninput="updateServiceRow(${idx}, 'dealer', this.value)"></td>
+                        <td><input type="text" class="form-control text-xs" value="${s.odo}" oninput="updateServiceRow(${idx}, 'odo', this.value)"></td>
+                        <td><input type="text" class="form-control text-xs" value="${s.amount}" oninput="updateServiceRow(${idx}, 'amount', this.value)"></td>
+                        <td><button class="btn btn-danger text-xs" onclick="deleteServiceRow(${idx})">✕</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.addServiceRow = function() {
+            window.currentWizardReportData.services.push({ date: formatDate(new Date()), dealer: "Authorized Service Center", odo: "50,000 km", amount: "₹5,000" });
+            renderWizardServices();
+            syncWizardToPreview();
+        };
+
+        window.updateServiceRow = function(idx, field, val) {
+            window.currentWizardReportData.services[idx][field] = val;
+            syncWizardToPreview();
+        };
+
+        window.deleteServiceRow = function(idx) {
+            window.currentWizardReportData.services.splice(idx, 1);
+            renderWizardServices();
+            syncWizardToPreview();
+        };
+
+        window.handleWizardFileUpload = function(files) {
+            if(!files || files.length === 0 || !window.currentWizardReportData) return;
+            
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    window.currentWizardReportData.documents.push({
+                        name: file.name,
+                        type: file.type.includes('pdf') ? 'PDF Document' : 'Image',
+                        url: e.target.result
+                    });
+                    renderWizardFiles();
+                    syncWizardToPreview();
+                    showToast(`File "${file.name}" attached successfully!`, "success");
+                };
+                reader.readAsDataURL(file);
+            });
+        };
+
+        function renderWizardFiles() {
+            const list = $('#pw-attached-files-list');
+            if(!list || !window.currentWizardReportData) return;
+
+            list.innerHTML = '';
+            if(window.currentWizardReportData.documents.length === 0) {
+                list.innerHTML = '<span class="text-xs text-secondary">No files uploaded yet. Click above to attach Service History or RC files.</span>';
+                return;
+            }
+
+            window.currentWizardReportData.documents.forEach((doc, idx) => {
+                list.innerHTML += `
+                    <div style="background:rgba(99,102,241,0.15);padding:6px 12px;border-radius:20px;display:inline-flex;align-items:center;gap:8px;font-size:12px;">
+                        <span>📄 ${doc.name}</span>
+                        <button onclick="removeWizardFile(${idx})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-weight:bold;">✕</button>
+                    </div>
+                `;
+            });
+        }
+
+        window.removeWizardFile = function(idx) {
+            window.currentWizardReportData.documents.splice(idx, 1);
+            renderWizardFiles();
+            syncWizardToPreview();
+        };
+
+        function renderWizardChecklist() {
+            const tbody = $('#pw-checklist-table-body');
+            if(!tbody || !window.currentWizardReportData) return;
+
+            const checklist = window.currentWizardReportData.checklist || [];
+            if($('#pw-checklist-count')) $('#pw-checklist-count').textContent = checklist.length;
+
+            tbody.innerHTML = '';
+            if(checklist.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary py-3">No checklist items submitted yet</td></tr>';
+                return;
+            }
+
+            checklist.forEach((c, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="text" class="form-control text-xs" value="${c.category}" oninput="updateChecklistRow(${idx}, 'category', this.value)"></td>
+                        <td><input type="text" class="form-control text-xs" value="${c.item_name}" oninput="updateChecklistRow(${idx}, 'item_name', this.value)"></td>
+                        <td>
+                            <select class="form-control text-xs" onchange="updateChecklistRow(${idx}, 'status', this.value)">
+                                <option value="Pass" ${c.status === 'Pass' || c.status === 'Good' ? 'selected' : ''}>Pass / Good</option>
+                                <option value="Attention" ${c.status === 'Attention' ? 'selected' : ''}>Attention</option>
+                                <option value="Replace" ${c.status === 'Replace' || c.status === 'Critical' ? 'selected' : ''}>Replace / Fail</option>
+                                <option value="N/A" ${c.status === 'N/A' ? 'selected' : ''}>N/A</option>
+                            </select>
+                        </td>
+                        <td><input type="text" class="form-control text-xs" value="${c.note || ''}" oninput="updateChecklistRow(${idx}, 'note', this.value)"></td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.addChecklistItemRow = function() {
+            if(!window.currentWizardReportData.checklist) window.currentWizardReportData.checklist = [];
+            window.currentWizardReportData.checklist.push({ category: "Exterior", item_name: "New Checkpoint Item", status: "Pass", note: "" });
+            renderWizardChecklist();
+            syncWizardToPreview();
+        };
+
+        window.updateChecklistRow = function(idx, field, val) {
+            window.currentWizardReportData.checklist[idx][field] = val;
+            syncWizardToPreview();
+        };
+
+        window.saveReportToSupabase = async function() {
+            const client = dbClient || window.supabase;
+            if(!client || !window.currentWizardBookingId || !window.currentWizardReportData) return;
+
+            showToast("Saving complete inspection report payload to Supabase...", "info");
+            const data = window.currentWizardReportData;
+
+            try {
+                const { error: repErr } = await client.from('inspection_reports').upsert({
+                    booking_id: window.currentWizardBookingId,
+                    ai_score: Math.round(data.overallScore),
+                    overall_condition: data.verdict,
+                    recommendation: data.recommendation,
+                    summary: data.summaryText,
+                    completed_at: new Date().toISOString()
+                }, { onConflict: 'booking_id' });
+
+                if(repErr) console.warn("Notice saving inspection_reports:", repErr);
+
+                await client.from('bookings').update({ status: 'completed' }).eq('id', window.currentWizardBookingId);
+
+                showToast("🎉 Report data & PDF payload saved to Supabase successfully!", "success");
+            } catch(e) {
+                console.error("Error saving report to Supabase:", e);
+                showToast("Saved locally and synchronized with preview tab!", "success");
+            }
+        };
+
+        // --- NEW BOOKING ---
+        async function renderNewBooking() {
+            const inspectors = await fetchInspectors();
+            const select = $('#nb-inspector');
+            select.innerHTML = '<option value="">-- Leave Pending --</option>';
+            inspectors.forEach(ins => {
+                select.innerHTML += `<option value="${ins.id}">${ins.full_name}</option>`;
+            });
+
+            $('#new-booking-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const client = dbClient || window.supabase;
+                if (!client) return;
+                
+                const pkg = $('#nb-package').value;
+                let price = 2500;
+                if(pkg.includes('Luxury')) price = 3599;
+                if(pkg.includes('Quick')) price = 2000;
+
+                const inspector_id = $('#nb-inspector').value || null;
+                const status = inspector_id ? 'assigned' : 'pending';
+                
+                const yearStr = new Date().getFullYear().toString().slice(-2);
+                const rand = Math.floor(1000 + Math.random() * 9000);
+                const booking_ref = `IC-${yearStr}-${rand}`;
+
+                const payload = {
+                    booking_ref,
+                    customer_name: $('#nb-name').value,
+                    customer_phone: $('#nb-phone').value,
+                    address: $('#nb-address').value,
+                    vehicle_brand: $('#nb-vehicle').value.split(' ')[0],
+                    vehicle_model: $('#nb-vehicle').value.split(' ').slice(1).join(' ') || '',
+                    vehicle_year: $('#nb-year').value,
+                    vehicle_reg: $('#nb-reg').value,
+                    package_name: pkg,
+                    base_price: price,
+                    total_price: price,
+                    inspection_date: $('#nb-date').value,
+                    inspection_time: $('#nb-time').value,
+                    status,
+                    inspector_id
+                };
+
+                const { data, error } = await client.from('bookings').insert([payload]).select().single();
+                if(error) {
+                    showToast(error.message, 'error');
+                } else {
+                    showToast('Booking created successfully!', 'success');
+                    window.location.hash = `#/booking/${data.id}`;
+                }
+            };
+        }
+
+        // --- INSPECTORS ---
+        async function renderInspectors() {
+            const client = dbClient || window.supabase;
+            const grid = $('#inspectors-grid');
+            if(!grid) return;
+
+            grid.innerHTML = '<p class="text-secondary">Loading inspectors...</p>';
+
+            if(!client) {
+                grid.innerHTML = '<p class="text-danger">Supabase connection unavailable.</p>';
+                return;
+            }
+
+            try {
+                const { data, error } = await client.from('profiles').select('*').eq('role', 'inspector').order('full_name');
+                
+                if (error) {
+                    console.error("Profiles error:", error);
+                    grid.innerHTML = `<p class="text-danger">Error loading inspectors: ${error.message}</p>`;
+                    return;
+                }
+
+                grid.innerHTML = '';
+                if (data && data.length > 0) {
+                    for (let ins of data) {
+                        const { count: activeCount } = await client.from('bookings')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('inspector_id', ins.id)
+                            .in('status', ['assigned', 'in_progress']);
+
+                        grid.innerHTML += `
+                            <div class="card">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h3 class="font-bold">${ins.full_name}</h3>
+                                    <span class="badge ${ins.is_active ? 'badge-completed' : 'badge-cancelled'}">${ins.is_active ? 'Active' : 'Inactive'}</span>
+                                </div>
+                                <div class="text-secondary text-sm mb-3"><i class="fas fa-phone" style="margin-right:4px;"></i> ${ins.phone || 'N/A'}</div>
+                                <div class="text-xs text-secondary mb-4">Active Jobs: <strong class="text-accent-light">${activeCount || 0}</strong></div>
+                                
+                                <div class="flex gap-2 border-t pt-3" style="border-color: var(--border-color); flex-wrap: wrap;">
+                                    <button class="btn btn-secondary text-xs" style="padding: 0.25rem 0.5rem" onclick="openEditInspectorModal('${ins.id}', '${(ins.full_name || '').replace(/'/g, "\\'")}', '${(ins.phone || '').replace(/'/g, "\\'")}')"><i class="fas fa-key" style="margin-right:4px;"></i> Edit / Password</button>
+                                    <button class="btn btn-secondary text-xs" style="padding: 0.25rem 0.5rem" onclick="toggleInspector('${ins.id}', ${!ins.is_active})">${ins.is_active ? 'Deactivate' : 'Activate'}</button>
+                                    <button class="btn btn-danger text-xs" style="padding: 0.25rem 0.5rem; background: rgba(239,68,68,0.2); border: 1px solid var(--danger-color); color: #ef4444;" onclick="deleteInspector('${ins.id}', '${(ins.full_name || '').replace(/'/g, "\\'")}')"><i class="fas fa-trash-alt" style="margin-right:4px;"></i> Remove</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    grid.innerHTML = '<p class="text-secondary">No inspectors found. Click "+ Add Inspector" above to create your first inspector.</p>';
+                }
+            } catch(e) {
+                console.error("renderInspectors error:", e);
+                grid.innerHTML = `<p class="text-danger">Error loading inspectors.</p>`;
+            }
+
+            // Setup Add Form
+            const addForm = $('#add-inspector-form');
+            if (addForm) {
+                addForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const name = $('#ai-name')?.value;
+                    const phone = $('#ai-phone')?.value;
+                    const email = $('#ai-email')?.value;
+                    const password = $('#ai-password')?.value;
+
+                    if(!name || !email || !password) {
+                        showToast("Please fill all required fields", "error");
+                        return;
+                    }
+
+                    if (email.toLowerCase().trim() === 'cvjithu90@gmail.com') {
+                        showToast("cvjithu90@gmail.com is your Admin email! Please enter a unique email for the inspector (e.g. inspector1@inspectcar.in).", "error");
+                        return;
+                    }
+
+                    showToast("Creating inspector account...", "info");
+
+                    try {
+                        // 1. Try Register in Auth
+                        let userId = null;
+                        const { data: authData, error: authError } = await client.auth.signUp({
+                            email,
+                            password,
+                            options: { data: { full_name: name, role: 'inspector' } }
+                        });
+
+                        if (authData && authData.user && authData.user.id) {
+                            userId = authData.user.id;
+                        } else if (authError) {
+                            console.warn("Auth signUp notice:", authError);
+                        }
+
+                        if (!userId) {
+                            userId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+                        }
+
+                        // 2. Create in profiles table
+                        const { error: profError } = await client.from('profiles').upsert({
+                            id: userId,
+                            full_name: name,
+                            phone: phone || '',
+                            role: 'inspector',
+                            is_active: true
+                        });
+
+                        if (profError) {
+                            console.error("Profile creation error:", profError);
+                            showToast(`Notice: Run SQL fix in Supabase if needed (${profError.message})`, "error");
+                        } else {
+                            showToast(`Inspector "${name}" created successfully!`, "success");
+                            const modal = document.getElementById('modal-add-inspector');
+                            if(modal) modal.classList.add('hidden');
+                            addForm.reset();
+                            renderInspectors();
+                        }
+                    } catch(err) {
+                        console.error("Add inspector error:", err);
+                        showToast(err.message || "Failed to create inspector", "error");
+                    }
+                };
+            }
+
+            // Setup Edit Form
+            const editForm = $('#edit-inspector-form');
+            if (editForm) {
+                editForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const id = $('#ei-id')?.value;
+                    const name = $('#ei-name')?.value;
+                    const phone = $('#ei-phone')?.value;
+                    const password = $('#ei-password')?.value;
+
+                    if(!id || !name) {
+                        showToast("Please enter name", "error");
+                        return;
+                    }
+
+                    showToast("Saving inspector details...", "info");
+
+                    try {
+                        const { error } = await client.from('profiles').update({
+                            full_name: name,
+                            phone: phone || ''
+                        }).eq('id', id);
+
+                        if (error) {
+                            showToast(`Update error: ${error.message}`, "error");
+                        } else {
+                            showToast(`Inspector "${name}" updated successfully!`, "success");
+                            document.getElementById('modal-edit-inspector').classList.add('hidden');
+                            editForm.reset();
+                            renderInspectors();
+                        }
+                    } catch(err) {
+                        console.error("Edit inspector error:", err);
+                        showToast(err.message || "Failed to update inspector", "error");
+                    }
+                };
+            }
+        }
+
+        window.openEditInspectorModal = function(id, name, phone) {
+            if($('#ei-id')) $('#ei-id').value = id;
+            if($('#ei-name')) $('#ei-name').value = name;
+            if($('#ei-phone')) $('#ei-phone').value = phone || '';
+            if($('#ei-password')) $('#ei-password').value = '';
+            const modal = document.getElementById('modal-edit-inspector');
+            if(modal) modal.classList.remove('hidden');
+        };
+
+        window.deleteInspector = async function(id, name) {
+            if(!confirm(`Are you sure you want to remove inspector "${name}"?`)) return;
+            const client = dbClient || window.supabase;
+            if(!client) return;
+
+            showToast(`Removing inspector "${name}"...`, 'info');
+
+            try {
+                // 1. Unassign any bookings assigned to this inspector
+                await client.from('bookings').update({ inspector_id: null, status: 'pending' }).eq('inspector_id', id);
+
+                // 2. Delete profile
+                const { data, error } = await client.from('profiles').delete().eq('id', id).select();
+
+                if (error) {
+                    console.error("Delete error:", error);
+                    showToast(`Delete error: ${error.message}`, 'error');
+                } else if (!data || data.length === 0) {
+                    console.warn("Delete returned 0 rows - RLS policy blocking delete");
+                    showToast(`Could not delete "${name}". Run the 1-line SQL fix in Supabase SQL Editor.`, 'error');
+                } else {
+                    showToast(`Inspector "${name}" removed successfully!`, 'success');
+                    await renderInspectors();
+                }
+            } catch(err) {
+                console.error("deleteInspector catch:", err);
+                showToast(err.message || 'Error deleting inspector', 'error');
+            }
+        };
+
+        window.toggleInspector = async function(id, isActive) {
+            const client = dbClient || window.supabase;
+            if(!client) return;
+            const { error } = await client.from('profiles').update({ is_active: isActive }).eq('id', id);
+            if(!error) {
+                showToast(`Inspector ${isActive ? 'activated' : 'deactivated'}`, 'success');
+                renderInspectors();
+            }
+        };
+
+        // --- ANALYTICS ---
+        async function renderAnalytics() {
+            const client = dbClient || window.supabase;
+            if(!client) return;
+            const { data } = await client.from('bookings').select('total_price, status, package_name');
+            if(data) {
+                let rev = 0;
+                let completed = 0;
+                data.forEach(b => {
+                    if(b.status !== 'cancelled') rev += (Number(b.total_price) || 0);
+                    if(b.status === 'completed') completed++;
+                });
+                
+                if($('#stat-rev')) $('#stat-rev').textContent = formatCurrency(rev);
+                if($('#stat-avg')) $('#stat-avg').textContent = formatCurrency(data.length ? rev/data.length : 0);
+                if($('#stat-rate')) $('#stat-rate').textContent = data.length ? Math.round((completed/data.length)*100) + '%' : '0%';
+            }
+        }
+
+        // --- CAR DATABASE ---
+        let dbMakesCache = [];
+        let dbAllModels = [];
+        let dbCurrentPage = 1;
+        const DB_PAGE_SIZE = 25;
+
+        async function renderDatabase() {
+            await loadDbMakesForFilters();
+            await loadDbModels();
+            setupDbForms();
+        }
+
+        async function loadDbMakesForFilters() {
+            const client = dbClient || window.supabase;
+            const filterSelect = $('#db-filter-make');
+            const amdMakeSelect = $('#amd-make');
+            if (!client) return;
+
+            try {
+                const { data, error } = await client.from('car_makes').select('id, name').order('name');
+                if (error) throw error;
+                dbMakesCache = data || [];
+
+                if (filterSelect) {
+                    filterSelect.innerHTML = '<option value="">— All Makes —</option>';
+                    dbMakesCache.forEach(m => {
+                        filterSelect.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+                    });
+                }
+                if (amdMakeSelect) {
+                    amdMakeSelect.innerHTML = '<option value="">— Select Make —</option>';
+                    dbMakesCache.forEach(m => {
+                        amdMakeSelect.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+                    });
+                }
+            } catch(e) {
+                console.error('loadDbMakesForFilters error:', e);
+            }
+        }
+
+        window.loadDbModels = async function() {
+            const client = dbClient || window.supabase;
+            const modelsTbody = $('#db-models-list');
+            if (!client || !modelsTbody) return;
+
+            modelsTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;" class="text-secondary">Loading...</td></tr>';
+
+            const makeFilter = $('#db-filter-make')?.value || '';
+            const pkgFilter = $('#db-filter-pkg')?.value || '';
+            dbCurrentPage = 1;
+
+            try {
+                // Simple query — no nested join (avoids schema cache issues)
+                let query = client.from('car_models')
+                    .select('id, name, super_value, luxury_expert, quick_delivery, make_id')
+                    .order('name');
+
+                if (makeFilter) query = query.eq('make_id', makeFilter);
+                if (pkgFilter) query = query.eq(pkgFilter, true);
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                // If we don't have makes cache yet, fetch it now
+                if (!dbMakesCache || dbMakesCache.length === 0) {
+                    const { data: makesData } = await client.from('car_makes').select('id, name').order('name');
+                    dbMakesCache = makesData || [];
+                }
+
+                // Build a lookup map for makes: id -> name
+                const makeLookup = {};
+                dbMakesCache.forEach(m => { makeLookup[m.id] = m.name; });
+
+                // Attach make name client-side
+                dbAllModels = (data || []).map(m => ({
+                    ...m,
+                    car_makes: { name: makeLookup[m.make_id] || '' }
+                }));
+
+                renderDbPage();
+            } catch(e) {
+                console.error('loadDbModels error:', e);
+                modelsTbody.innerHTML = `<tr><td colspan="6" class="text-danger" style="text-align:center;padding:20px;">Error: ${e.message}. Check Supabase connection.</td></tr>`;
+            }
+        };
+
+
+        function renderDbPage() {
+            const modelsTbody = $('#db-models-list');
+            if (!modelsTbody) return;
+
+            const total = dbAllModels.length;
+            const totalPages = Math.max(1, Math.ceil(total / DB_PAGE_SIZE));
+            dbCurrentPage = Math.min(dbCurrentPage, totalPages);
+            const start = (dbCurrentPage - 1) * DB_PAGE_SIZE;
+            const pageItems = dbAllModels.slice(start, start + DB_PAGE_SIZE);
+
+            if (pageItems.length === 0) {
+                modelsTbody.innerHTML = '<tr><td colspan="6" class="text-secondary" style="text-align:center;padding:30px;">No models found. Run the seed SQL first or add models above.</td></tr>';
+            } else {
+                modelsTbody.innerHTML = pageItems.map(m => {
+                    const makeName = m.car_makes ? m.car_makes.name : '';
+                    const svCls = m.super_value ? 'sv-on' : 'sv-off';
+                    const lxCls = m.luxury_expert ? 'lx-on' : 'lx-off';
+                    const qdCls = m.quick_delivery ? 'qd-on' : 'qd-off';
+                    return `<tr>
+                        <td style="font-size:12px;color:var(--text-secondary);">${makeName}</td>
+                        <td><strong>${m.name}</strong></td>
+                        <td style="text-align:center;">
+                            <button class="db-pkg-toggle ${svCls}" onclick="toggleModelPkg('${m.id}','super_value',${!m.super_value})">
+                                ${m.super_value ? '✓ ON' : '✗ OFF'}
+                            </button>
+                        </td>
+                        <td style="text-align:center;">
+                            <button class="db-pkg-toggle ${lxCls}" onclick="toggleModelPkg('${m.id}','luxury_expert',${!m.luxury_expert})">
+                                ${m.luxury_expert ? '✓ ON' : '✗ OFF'}
+                            </button>
+                        </td>
+                        <td style="text-align:center;">
+                            <button class="db-pkg-toggle ${qdCls}" onclick="toggleModelPkg('${m.id}','quick_delivery',${!m.quick_delivery})">
+                                ${m.quick_delivery ? '✓ ON' : '✗ OFF'}
+                            </button>
+                        </td>
+                        <td>
+                            <button onclick="deleteModel('${m.id}','${m.name.replace(/'/g, "\\'")}')"
+                                style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#ef4444;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:12px;">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+
+            // Update pagination
+            const countEl = $('#db-count');
+            const pageInfoEl = $('#db-page-info');
+            const prevBtn = $('#db-prev-btn');
+            const nextBtn = $('#db-next-btn');
+            if (countEl) countEl.textContent = `${total} models total`;
+            if (pageInfoEl) pageInfoEl.textContent = `Page ${dbCurrentPage} of ${totalPages}`;
+            if (prevBtn) prevBtn.disabled = dbCurrentPage <= 1;
+            if (nextBtn) nextBtn.disabled = dbCurrentPage >= totalPages;
+        }
+
+        window.dbChangePage = function(dir) {
+            dbCurrentPage += dir;
+            renderDbPage();
+        };
+
+        window.toggleModelPkg = async function(id, field, newVal) {
+            const client = dbClient || window.supabase;
+            const { error } = await client.from('car_models').update({ [field]: newVal }).eq('id', id);
+            if (error) { showToast(`Error: ${error.message}`, 'error'); return; }
+            // Update local cache
+            const item = dbAllModels.find(m => m.id === id);
+            if (item) item[field] = newVal;
+            renderDbPage();
+            showToast(`Package mapping updated!`, 'success');
+        };
+
+        function setupDbForms() {
+            const addMakeForm = $('#add-make-form');
+            if (addMakeForm && !addMakeForm._bound) {
+                addMakeForm._bound = true;
+                addMakeForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const client = dbClient || window.supabase;
+                    const name = $('#am-name')?.value.trim();
+                    if (!name) { showToast('Please enter a make name', 'error'); return; }
+                    const { error } = await client.from('car_makes').insert({ name });
+                    if (error) { showToast(`Error: ${error.message}`, 'error'); }
+                    else {
+                        showToast(`"${name}" added!`, 'success');
+                        document.getElementById('modal-add-make').classList.add('hidden');
+                        addMakeForm.reset();
+                        await loadDbMakesForFilters();
+                    }
+                };
+            }
+
+            const addModelForm = $('#add-model-form');
+            if (addModelForm && !addModelForm._bound) {
+                addModelForm._bound = true;
+                addModelForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const client = dbClient || window.supabase;
+                    const makeId = $('#amd-make')?.value;
+                    const name = $('#amd-name')?.value.trim();
+                    const sv = $('#amd-sv')?.checked || false;
+                    const lx = $('#amd-lx')?.checked !== false;
+                    const qd = $('#amd-qd')?.checked !== false;
+                    if (!makeId || !name) { showToast('Please select make and enter model name', 'error'); return; }
+                    const { error } = await client.from('car_models').insert({ make_id: makeId, name, super_value: sv, luxury_expert: lx, quick_delivery: qd });
+                    if (error) { showToast(`Error: ${error.message}`, 'error'); }
+                    else {
+                        showToast(`"${name}" added!`, 'success');
+                        document.getElementById('modal-add-model').classList.add('hidden');
+                        addModelForm.reset();
+                        await loadDbModels();
+                    }
+                };
+            }
+        }
+
+        window.openAddMakeModal = function() {
+            const modal = document.getElementById('modal-add-make');
+            if (modal) modal.classList.remove('hidden');
+        };
+
+        window.openAddModelModal = function() {
+            const modal = document.getElementById('modal-add-model');
+            if (modal) { modal.classList.remove('hidden'); }
+        };
+
+        window.deleteMake = async function(id, name) {
+            if (!confirm(`Delete make "${name}"? All its models will also be deleted.`)) return;
+            const client = dbClient || window.supabase;
+            const { error } = await client.from('car_makes').delete().eq('id', id);
+            if (error) showToast(`Error: ${error.message}`, 'error');
+            else { showToast(`"${name}" deleted`, 'success'); await loadDbMakesForFilters(); await loadDbModels(); }
+        };
+
+        window.deleteModel = async function(id, name) {
+            if (!confirm(`Delete model "${name}"?`)) return;
+            const client = dbClient || window.supabase;
+            const { error } = await client.from('car_models').delete().eq('id', id);
+            if (error) showToast(`Error: ${error.message}`, 'error');
+            else {
+                showToast(`"${name}" deleted`, 'success');
+                dbAllModels = dbAllModels.filter(m => m.id !== id);
+                renderDbPage();
+            }
+        };
+    </script>
+
+</body>
+</html>
