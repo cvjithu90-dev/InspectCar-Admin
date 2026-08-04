@@ -448,6 +448,7 @@
                 <a href="#/dashboard" class="nav-item" data-path="/dashboard"><span><i class="fas fa-chart-line"></i></span> Dashboard</a>
                 <a href="#/bookings" class="nav-item" data-path="/bookings"><span><i class="fas fa-clipboard-list"></i></span> Bookings</a>
                 <a href="#/new-booking" class="nav-item" data-path="/new-booking"><span><i class="fas fa-plus-circle"></i></span> New Booking</a>
+                <a href="#/reports" class="nav-item" data-path="/reports"><span><i class="fas fa-file-pdf"></i></span> Reports</a>
                 <a href="#/inspectors" class="nav-item" data-path="/inspectors"><span><i class="fas fa-user-shield"></i></span> Inspectors</a>
                 <a href="#/analytics" class="nav-item" data-path="/analytics"><span><i class="fas fa-chart-pie"></i></span> Analytics</a>
                 <a href="#/database" class="nav-item" data-path="/database"><span><i class="fas fa-database"></i></span> Car Database</a>
@@ -1226,6 +1227,14 @@
                 } else if (path === '#/database') {
                     viewTemplateId = 'view-database';
                     renderLogic = renderDatabase;
+                } else if (path === '#/reports') {
+                    viewTemplateId = 'view-reports';
+                    renderLogic = renderReports;
+                } else if (path.startsWith('#/report/')) {
+                    // Full-screen wizard — takes over #app entirely
+                    state.currentBookingId = path.split('/')[2];
+                    await openReportWizard(state.currentBookingId);
+                    return;
                 }
 
                 const pageContainer = $('#page-container');
@@ -2316,6 +2325,1008 @@
             }
         };
     </script>
+
+<!-- ============================================================
+     REPORTS LIST TEMPLATE
+============================================================ -->
+<template id="view-reports">
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h2 class="text-xl font-bold">Inspection Reports</h2>
+            <p class="text-secondary text-sm mt-1">Manage and generate PDF reports for completed inspections</p>
+        </div>
+    </div>
+    <div id="reports-list-container" style="background:var(--surface-color);border-radius:12px;overflow:hidden;border:1px solid var(--border-color);">
+        <div style="text-align:center;padding:60px;color:var(--text-secondary);">Loading reports...</div>
+    </div>
+</template>
+
+<style>
+/* ============================================================
+   WIZARD STYLES
+============================================================ */
+.wz-shell{display:flex;flex-direction:column;height:100vh;background:var(--bg-color);}
+.wz-topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--surface-color);border-bottom:1px solid var(--border-color);flex-shrink:0;gap:12px;}
+.wz-topbar-left{display:flex;align-items:center;gap:12px;min-width:0;}
+.wz-back-btn{background:transparent;border:1px solid var(--border-color);color:var(--text-primary);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;white-space:nowrap;}
+.wz-back-btn:hover{background:var(--surface-color-hover);}
+.wz-title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wz-subtitle{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wz-topbar-actions{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.wz-steps{display:flex;background:var(--surface-color);border-bottom:1px solid var(--border-color);overflow-x:auto;flex-shrink:0;padding:0 8px;scrollbar-width:none;}
+.wz-steps::-webkit-scrollbar{display:none;}
+.wz-step-dot{display:flex;flex-direction:column;align-items:center;padding:8px 12px;cursor:pointer;gap:3px;font-size:10px;color:var(--text-secondary);border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;min-width:70px;}
+.wz-step-dot i{font-size:13px;}
+.wz-step-dot:hover{color:var(--accent-primary);background:var(--surface-color-hover);}
+.wz-step-dot.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary);font-weight:700;background:rgba(99,102,241,0.08);}
+.wz-step-dot.done{color:var(--success);}
+.wz-body{display:flex;flex:1;overflow:hidden;}
+.wz-main{flex:1;overflow-y:auto;padding:20px 24px;}
+.wz-step-header{margin-bottom:18px;}
+.wz-step-title{font-size:20px;font-weight:800;margin-bottom:4px;}
+.wz-step-desc{font-size:12px;color:var(--text-secondary);}
+.wz-card{background:var(--surface-color);border-radius:12px;padding:18px;margin-bottom:14px;border:1px solid var(--border-color);}
+.wz-card-title{font-size:12px;font-weight:700;margin-bottom:12px;color:var(--accent-light);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.wz-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.wz-field-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.wz-field{display:flex;flex-direction:column;gap:4px;}
+.wz-field label{font-size:10px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+.wz-field input,.wz-field select,.wz-field textarea{background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:8px 11px;border-radius:8px;font-size:12px;width:100%;font-family:inherit;}
+.wz-field input:focus,.wz-field select:focus,.wz-field textarea:focus{border-color:var(--accent-primary);outline:none;}
+.wz-field-full{grid-column:1/-1;}
+.wz-nav-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--surface-color);border-top:1px solid var(--border-color);flex-shrink:0;}
+.wz-loader{position:fixed;inset:0;background:rgba(14,14,28,0.88);display:none;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px;}
+.wz-loader.visible{display:flex;}
+.wz-loader-spinner{width:38px;height:38px;border:3px solid var(--border-color);border-top-color:var(--accent-primary);border-radius:50%;animation:wzSpin 0.8s linear infinite;}
+@keyframes wzSpin{to{transform:rotate(360deg);}}
+.wz-api-btn{background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);color:var(--accent-light);padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:all 0.2s;font-family:inherit;}
+.wz-api-btn:hover{background:rgba(99,102,241,0.25);}
+.wz-cat-card{background:var(--bg-color);border:1px solid var(--border-color);border-radius:10px;padding:12px;margin-bottom:8px;}
+.wz-status-select{background:var(--surface-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 8px;border-radius:6px;font-size:11px;font-family:inherit;}
+.wz-table{width:100%;border-collapse:collapse;font-size:12px;}
+.wz-table th{background:var(--surface-color-hover);padding:9px 10px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;}
+.wz-table td{padding:7px 10px;border-bottom:1px solid var(--border-color);}
+.wz-table td input,.wz-table td select{background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:4px 7px;border-radius:6px;font-size:11px;width:100%;font-family:inherit;}
+.wz-add-row-btn{background:transparent;border:1px dashed var(--border-color);color:var(--text-secondary);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:11px;width:100%;margin-top:6px;font-family:inherit;}
+.wz-add-row-btn:hover{border-color:var(--accent-primary);color:var(--accent-primary);}
+.wz-del-btn{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#EF4444;padding:3px 7px;border-radius:5px;cursor:pointer;font-size:10px;font-family:inherit;}
+.wz-del-btn:hover{background:rgba(239,68,68,0.25);}
+.wz-upload-area{border:2px dashed var(--border-color);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all 0.2s;}
+.wz-upload-area:hover,.wz-upload-area.dragover{border-color:var(--accent-primary);background:rgba(99,102,241,0.05);}
+.wz-file-list{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;}
+.wz-file-item{background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;}
+.wz-file-name{font-size:11px;font-weight:600;}
+.wz-file-meta{font-size:9px;color:var(--text-secondary);}
+.wz-photo-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.wz-photo-thumb{position:relative;width:90px;height:70px;border-radius:7px;overflow:hidden;border:1px solid var(--border-color);}
+.wz-photo-thumb img{width:100%;height:100%;object-fit:cover;}
+.wz-photo-del{position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:4px;width:18px;height:18px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;}
+.wz-verdict-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.wz-verdict-opt{border:2px solid var(--border-color);border-radius:10px;padding:10px;cursor:pointer;text-align:center;transition:all 0.2s;}
+.wz-verdict-opt:hover{border-color:var(--accent-primary);}
+.wz-verdict-opt.selected{border-color:var(--accent-primary);background:rgba(99,102,241,0.1);}
+.wz-verdict-opt .v-emoji{font-size:22px;margin-bottom:3px;}
+.wz-verdict-opt .v-label{font-size:11px;font-weight:700;}
+.wz-verdict-opt .v-sub{font-size:9px;color:var(--text-secondary);}
+.wz-publish-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.wz-publish-btn{padding:14px;border-radius:12px;border:none;cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;transition:all 0.2s;font-family:inherit;}
+.wz-publish-btn.primary{background:var(--accent-primary);color:#fff;}
+.wz-publish-btn.secondary{background:var(--surface-color-hover);color:var(--text-primary);border:1px solid var(--border-color);}
+.wz-publish-btn:hover{opacity:0.88;transform:translateY(-1px);}
+.wz-autosave-badge{font-size:10px;color:var(--success);display:flex;align-items:center;gap:4px;}
+.wz-checklist-item{background:var(--bg-color);border:1px solid var(--border-color);border-radius:7px;padding:10px;margin-bottom:6px;}
+.wz-checklist-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.wz-checklist-name{flex:2;font-size:12px;font-weight:600;min-width:140px;}
+</style>
+
+<script>
+// ============================================================
+// REPORTS LIST
+// ============================================================
+async function renderReports() {
+    const client = dbClient || window.supabase;
+    const container = document.getElementById('reports-list-container');
+    if (!container) return;
+    if (!client) { container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-secondary);">Database not connected.</div>'; return; }
+    const { data, error } = await client.from('bookings')
+        .select('*')
+        .in('status', ['completed','report_draft','report_published'])
+        .order('inspection_date', { ascending: false });
+    if (error || !data || data.length === 0) {
+        container.innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-secondary);">No completed inspections found. Bookings with status <b>completed</b> will appear here.</div>';
+        return;
+    }
+    const rows = data.map(b => `
+        <tr style="border-bottom:1px solid var(--border-color);">
+            <td style="padding:12px 16px;font-weight:700;color:var(--accent-light);">${b.booking_ref}</td>
+            <td style="padding:12px 16px;">${b.customer_name}<div style="font-size:11px;color:var(--text-secondary);">${b.customer_phone}</div></td>
+            <td style="padding:12px 16px;">${b.vehicle_brand||''} ${b.vehicle_model||''}</td>
+            <td style="padding:12px 16px;">${formatDate(b.inspection_date)}</td>
+            <td style="padding:12px 16px;"><span class="badge badge-${b.status}">${(b.report_status||b.status).replace(/_/g,' ')}</span></td>
+            <td style="padding:12px 16px;">
+                <button class="btn btn-primary" style="font-size:12px;" onclick="window.location.hash='#/report/${b.id}'">
+                    <i class="fas fa-magic"></i> Open Wizard
+                </button>
+            </td>
+        </tr>`).join('');
+    container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+            <thead style="border-bottom:2px solid var(--border-color);">
+                <tr style="background:var(--surface-color-hover);">
+                    <th style="padding:11px 16px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Booking Ref</th>
+                    <th style="padding:11px 16px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Customer</th>
+                    <th style="padding:11px 16px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Vehicle</th>
+                    <th style="padding:11px 16px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Date</th>
+                    <th style="padding:11px 16px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Status</th>
+                    <th style="padding:11px 16px;text-align:left;font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Action</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+// ============================================================
+// WIZARD CONTROLLER
+// ============================================================
+let wz = null;
+let wzPreviewWindow = null;
+let wzAutoSaveTimer = null;
+let wzBroadcastChannel = null;
+const WZ_LS_KEY = 'inspectcar_active_report';
+const WZ_CHANNEL = 'inspectcar_report_channel';
+
+const WIZARD_STEPS = [
+    { id:1, label:'Vehicle Info',      icon:'fa-car' },
+    { id:2, label:'Summary',           icon:'fa-star' },
+    { id:3, label:'Technical',         icon:'fa-tools' },
+    { id:4, label:'Scoring',           icon:'fa-chart-bar' },
+    { id:5, label:'Service History',   icon:'fa-history' },
+    { id:6, label:'Documents',         icon:'fa-folder-open' },
+    { id:7, label:'Repair Estimate',   icon:'fa-wrench' },
+    { id:8, label:'Admin Remarks',     icon:'fa-comment-alt' },
+    { id:9, label:'Preview',           icon:'fa-eye' },
+    { id:10, label:'Generate PDF',     icon:'fa-file-pdf' }
+];
+
+async function openReportWizard(bookingId) {
+    const appEl = $('#app');
+    if (!appEl) return;
+    if (wzAutoSaveTimer) { clearInterval(wzAutoSaveTimer); wzAutoSaveTimer = null; }
+
+    // Build full-screen wizard shell
+    appEl.innerHTML = buildWizardShell();
+
+    try { wzBroadcastChannel = new BroadcastChannel(WZ_CHANNEL); } catch(e) {}
+
+    wz = { bookingId, currentStep:1, booking:null, answers:[], photos:[], draft:{} };
+
+    showWzLoader('Loading inspection data...');
+    await Promise.all([loadWzBooking(), loadWzAnswers(), loadWzDraft()]);
+    hideWzLoader();
+
+    if (!wz.draft.categories || wz.draft.categories.length === 0) autoPopulateCategories();
+    goToWzStep(wz.draft.currentStep || 1);
+    startWzAutoSave();
+    updateWzPreview();
+}
+
+function buildWizardShell() {
+    const stepDots = WIZARD_STEPS.map(s =>
+        `<div class="wz-step-dot" id="wz-dot-${s.id}" onclick="goToWzStep(${s.id})" title="${s.label}">` +
+        `<i class="fas ${s.icon}"></i><span>${s.label}</span></div>`
+    ).join('');
+    return `
+    <div id="wz-loader" class="wz-loader"><div class="wz-loader-spinner"></div><div id="wz-loader-text" style="color:var(--text-secondary);font-size:12px;">Loading...</div></div>
+    <div class="wz-shell">
+        <div class="wz-topbar">
+            <div class="wz-topbar-left">
+                <button class="wz-back-btn" onclick="if(wzAutoSaveTimer)clearInterval(wzAutoSaveTimer);window.location.hash='#/reports'"><i class="fas fa-arrow-left"></i> Back</button>
+                <div><div class="wz-title" id="wz-title-text">Report Generator Wizard</div><div class="wz-subtitle" id="wz-subtitle-text">Loading...</div></div>
+            </div>
+            <div class="wz-topbar-actions">
+                <div class="wz-autosave-badge" id="wz-autosave-badge" style="display:none;"><i class="fas fa-check-circle"></i> Saved</div>
+                <button class="btn btn-secondary" onclick="wzSaveDraft()" style="font-size:11px;"><i class="fas fa-save"></i> Save</button>
+                <button class="btn btn-secondary" onclick="wzOpenPreview()" style="font-size:11px;"><i class="fas fa-eye"></i> Preview</button>
+                <button class="btn btn-primary" onclick="wzPublishReport()" style="font-size:11px;"><i class="fas fa-check"></i> Publish</button>
+            </div>
+        </div>
+        <div class="wz-steps">${stepDots}</div>
+        <div class="wz-body"><div class="wz-main" id="wz-main-content"></div></div>
+        <div class="wz-nav-row">
+            <button class="btn btn-secondary" id="wz-prev-btn" onclick="wzPrevStep()"><i class="fas fa-arrow-left"></i> Previous</button>
+            <span style="font-size:11px;color:var(--text-secondary);" id="wz-step-indicator">Step 1 of 10</span>
+            <button class="btn btn-primary" id="wz-next-btn" onclick="wzNextStep()">Next <i class="fas fa-arrow-right"></i></button>
+        </div>
+    </div>`;
+}
+
+// ── Data loaders ─────────────────────────────────────────────
+async function loadWzBooking() {
+    const client = dbClient || window.supabase;
+    if (!client || !wz) return;
+    try {
+        const { data } = await client.from('bookings').select('*, profiles(full_name)').eq('id', wz.bookingId).single();
+        if (data) {
+            wz.booking = data;
+            Object.assign(wz.draft, {
+                booking_ref: data.booking_ref, customer_name: data.customer_name,
+                customer_phone: data.customer_phone, vehicle_brand: data.vehicle_brand,
+                vehicle_model: data.vehicle_model, vehicle_year: data.vehicle_year,
+                vehicle_fuel: data.vehicle_fuel, vehicle_reg: data.vehicle_reg,
+                package_name: data.package_name, inspection_date: data.inspection_date,
+                area: data.area, location_type: data.location_type,
+                inspector_name: data.profiles?.full_name || '',
+                ai_score: data.ai_score || '', verdict: data.verdict || '',
+                odometer_km: data.odometer_km || '', owner_count: data.owner_count || '',
+                vin_number: data.vin_number || '', color: data.color || '',
+                body_type: data.body_type || '', engine_number: data.engine_number || '',
+                chassis_number: data.chassis_number || '', reg_date: data.reg_date || '',
+                rto_code: data.rto_code || '', insurance_expiry: data.insurance_expiry || '',
+                puc_expiry: data.puc_expiry || '', tax_expiry: data.tax_expiry || '',
+                admin_notes: data.admin_notes || '', recommendation: data.recommendation || '',
+                inspector_notes: data.notes || ''
+            });
+            const titleEl = document.getElementById('wz-title-text');
+            const subEl   = document.getElementById('wz-subtitle-text');
+            if (titleEl) titleEl.textContent = 'Report: ' + data.booking_ref;
+            if (subEl)   subEl.textContent   = (data.vehicle_brand||'') + ' ' + (data.vehicle_model||'') + ' · ' + data.customer_name;
+        }
+    } catch(e) { console.warn('loadWzBooking:', e); }
+}
+
+async function loadWzAnswers() {
+    const client = dbClient || window.supabase;
+    if (!client || !wz) return;
+    try {
+        const { data: answers } = await client.from('inspection_answers').select('*').eq('booking_id', wz.bookingId).order('category');
+        const { data: photos }  = await client.from('inspection_photos').select('*').eq('booking_id', wz.bookingId);
+        wz.answers = answers || [];
+        wz.photos  = photos  || [];
+        if (!wz.draft.checklist) wz.draft.checklist = {};
+        (answers || []).forEach(ans => {
+            if (!wz.draft.checklist[ans.category]) wz.draft.checklist[ans.category] = [];
+            if (!wz.draft.checklist[ans.category].find(i => i.item_name === ans.item_name)) {
+                const itemPhotos = (photos||[]).filter(p => p.item_name === ans.item_name).map(p => p.photo_url);
+                wz.draft.checklist[ans.category].push({
+                    item_name: ans.item_name, answer: ans.answer,
+                    severity: ans.severity || 'low', note: ans.remarks || '',
+                    paint_thickness: ans.paint_thickness || '', obd_value: ans.obd_value || '',
+                    photos: itemPhotos
+                });
+            }
+        });
+    } catch(e) { console.warn('loadWzAnswers:', e); }
+}
+
+async function loadWzDraft() {
+    const client = dbClient || window.supabase;
+    if (!client || !wz) return;
+    try {
+        const { data } = await client.from('report_drafts').select('*').eq('booking_id', wz.bookingId).single();
+        if (data && data.draft_data) {
+            wz.draft = Object.assign({}, wz.draft, data.draft_data);
+            wz.draft.currentStep = data.current_step || 1;
+        }
+    } catch(e) {
+        try {
+            const raw = localStorage.getItem(WZ_LS_KEY + '_' + wz.bookingId);
+            if (raw) wz.draft = Object.assign({}, wz.draft, JSON.parse(raw));
+        } catch(e2) {}
+    }
+}
+
+function autoPopulateCategories() {
+    if (!wz) return;
+    const catNames = ['Exterior','Tyres','Brakes','Underbody','Engine Analysis','Interior','Lighting','AC','Suspension','Gear & Transmission','Inspection Info','Vahan Info'];
+    const answers = wz.answers || [];
+    wz.draft.categories = catNames.map(name => {
+        const rel = answers.filter(a => a.category && a.category.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+        const failCt = rel.filter(a => a.answer === 'Fail' || a.severity === 'high').length;
+        const warnCt = rel.filter(a => a.severity === 'medium' || ['Scratch','Dent','Rust','Worn'].includes(a.answer)).length;
+        return { name, status: failCt > 0 ? 'critical' : warnCt > 0 ? 'attention' : 'good', description: '' };
+    });
+}
+
+// ── Navigation ───────────────────────────────────────────────
+function goToWzStep(step) {
+    if (!wz) return;
+    const n = Math.max(1, Math.min(10, step));
+    wz.currentStep = n;
+    if (wz.draft) wz.draft.currentStep = n;
+    document.querySelectorAll('.wz-step-dot').forEach((el, i) => {
+        el.classList.remove('active','done');
+        if (i+1 === n) el.classList.add('active');
+        else if (i+1 < n) el.classList.add('done');
+    });
+    const ind = document.getElementById('wz-step-indicator');
+    if (ind) ind.textContent = 'Step ' + n + ' of 10';
+    const prevBtn = document.getElementById('wz-prev-btn');
+    const nextBtn = document.getElementById('wz-next-btn');
+    if (prevBtn) prevBtn.style.display = n === 1 ? 'none' : '';
+    if (nextBtn) nextBtn.innerHTML = n === 10 ? '<i class="fas fa-check"></i> Finish' : 'Next <i class="fas fa-arrow-right"></i>';
+    const main = document.getElementById('wz-main-content');
+    if (main) { main.innerHTML = buildWzStep(n); bindWzStepScroll(n); }
+    updateWzPreview();
+}
+window.goToWzStep = goToWzStep;
+window.wzNextStep = () => goToWzStep((wz?.currentStep||1) + 1);
+window.wzPrevStep = () => goToWzStep((wz?.currentStep||1) - 1);
+
+function bindWzStepScroll(n) {
+    // Re-scroll to top of main content on step change
+    const main = document.getElementById('wz-main-content');
+    if (main) main.scrollTop = 0;
+}
+
+// ── Step builders ─────────────────────────────────────────────
+function buildWzStep(n) {
+    switch(n) {
+        case 1:  return buildStep1();
+        case 2:  return buildStep2();
+        case 3:  return buildStep3();
+        case 4:  return buildStep4();
+        case 5:  return buildStep5();
+        case 6:  return buildStep6();
+        case 7:  return buildStep7();
+        case 8:  return buildStep8();
+        case 9:  return buildStep9();
+        case 10: return buildStep10();
+        default: return '<p>Unknown step</p>';
+    }
+}
+
+// Helper render functions
+function wzFi(id, label, val, type, ph) {
+    type = type || 'text'; ph = ph || '';
+    return '<div class="wz-field"><label>' + label + '</label>' +
+        '<input type="' + type + '" id="' + id + '" value="' + escW(val) + '" placeholder="' + ph + '" oninput="wzFieldChange(\'' + id + '\')"></div>';
+}
+function wzFta(id, label, val, rows) {
+    rows = rows || 3;
+    return '<div class="wz-field wz-field-full"><label>' + label + '</label>' +
+        '<textarea id="' + id + '" rows="' + rows + '" oninput="wzFieldChange(\'' + id + '\')">' + escW(val) + '</textarea></div>';
+}
+function wzFsel(id, label, val, options) {
+    const opts = options.map(function(o) {
+        if (typeof o === 'string') return '<option value="' + o + '"' + (val===o?' selected':'') + '>' + o + '</option>';
+        return '<option value="' + o.v + '"' + (val===o.v?' selected':'') + '>' + o.l + '</option>';
+    }).join('');
+    return '<div class="wz-field"><label>' + label + '</label><select id="' + id + '" onchange="wzFieldChange(\'' + id + '\')">' + opts + '</select></div>';
+}
+function escW(s) { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function buildStep1() {
+    const d = wz.draft;
+    return '<div class="wz-step-header"><div class="wz-step-title">🚗 Vehicle Information</div>' +
+        '<div class="wz-step-desc">Verify and complete all vehicle and owner details. Use the auto-fetch buttons for VAHAN data population.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Booking &amp; Customer <span style="font-size:11px;color:var(--text-secondary);">' + escW(d.booking_ref) + '</span></div>' +
+        '<div class="wz-field-grid">' +
+        wzFi('wf-customer-name','Customer Name',d.customer_name||'') +
+        wzFi('wf-customer-phone','Phone',d.customer_phone||'','tel') +
+        wzFi('wf-booking-ref','Booking Ref',d.booking_ref||'') +
+        wzFi('wf-inspector-name','Inspector',d.inspector_name||'') +
+        wzFi('wf-inspection-date','Inspection Date',d.inspection_date||'','date') +
+        wzFi('wf-area','Location / Area',d.area||'') +
+        '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Vehicle Details ' +
+        '<button class="wz-api-btn" onclick="wzFetchVahan()"><i class="fas fa-bolt"></i> Auto-Fetch VAHAN</button></div>' +
+        '<div class="wz-field-grid">' +
+        wzFi('wf-vehicle-brand','Make / Brand',d.vehicle_brand||'') +
+        wzFi('wf-vehicle-model','Model',d.vehicle_model||'') +
+        wzFi('wf-vehicle-year','Year',d.vehicle_year||'') +
+        wzFsel('wf-vehicle-fuel','Fuel Type',d.vehicle_fuel||'',['Petrol','Diesel','CNG','Electric','Hybrid']) +
+        wzFi('wf-vehicle-reg','Registration No.',d.vehicle_reg||'') +
+        wzFi('wf-vin-number','VIN / Chassis No.',d.vin_number||'') +
+        wzFi('wf-engine-number','Engine Number',d.engine_number||'') +
+        wzFi('wf-color','Color',d.color||'') +
+        wzFi('wf-body-type','Body Type',d.body_type||'') +
+        wzFi('wf-odometer-km','Odometer (km)',d.odometer_km||'','number') +
+        wzFi('wf-owner-count','Owner Count',d.owner_count||'','number') +
+        wzFi('wf-rto-code','RTO / Authority',d.rto_code||'') +
+        '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Validity &amp; Dates ' +
+        '<div style="display:flex;gap:6px;">' +
+        '<button class="wz-api-btn" onclick="wzFetchInsurance()"><i class="fas fa-shield-alt"></i> Insurance</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchPUC()"><i class="fas fa-leaf"></i> PUC</button>' +
+        '</div></div>' +
+        '<div class="wz-field-grid">' +
+        wzFi('wf-reg-date','Registration Date',d.reg_date||'','date') +
+        wzFi('wf-insurance-expiry','Insurance Valid Till',d.insurance_expiry||'','date') +
+        wzFi('wf-puc-expiry','PUC Valid Till',d.puc_expiry||'','date') +
+        wzFi('wf-tax-expiry','Tax & Fitness Valid Till',d.tax_expiry||'','date') +
+        '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">API Integration Placeholders</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+        '<button class="wz-api-btn" onclick="wzFetchFasTag()"><i class="fas fa-road"></i> FASTag</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchLoan()"><i class="fas fa-university"></i> Loan / Hypothecation</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchAccident()"><i class="fas fa-car-crash"></i> Accident History</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchMarketPrice()"><i class="fas fa-rupee-sign"></i> Market Valuation</button>' +
+        '<button class="wz-api-btn" onclick="wzDecodeVIN()"><i class="fas fa-barcode"></i> VIN Decoder</button>' +
+        '</div><div id="api-result-panel" style="margin-top:8px;"></div></div>';
+}
+
+function buildStep2() {
+    const d = wz.draft;
+    const verdicts = [
+        {v:'Excellent · Buy',emoji:'🟢',l:'Excellent',s:'Strongly recommended'},
+        {v:'Good · Minor Repairs',emoji:'🟡',l:'Good',s:'Buy with minor fixes'},
+        {v:'Fair · Price Cut Needed',emoji:'🟠',l:'Fair',s:'Negotiate the price'},
+        {v:'Poor · Avoid',emoji:'🔴',l:'Poor',s:'Avoid or heavy discount'}
+    ];
+    const verdictHtml = verdicts.map(function(v) {
+        const sel = (d.verdict||'') === v.v ? ' selected' : '';
+        const eid = 'vopt-' + v.v.replace(/[^a-zA-Z0-9]/g,'_');
+        return '<div class="wz-verdict-opt' + sel + '" id="' + eid + '" onclick="wzSetVerdict(\'' + v.v.replace(/'/g,"\\'") + '\')">' +
+            '<div class="v-emoji">' + v.emoji + '</div><div class="v-label">' + v.l + '</div><div class="v-sub">' + v.s + '</div></div>';
+    }).join('');
+    return '<div class="wz-step-header"><div class="wz-step-title">⭐ Inspection Summary</div>' +
+        '<div class="wz-step-desc">Set the overall AI score, verdict, and executive summary.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Overall AI Score ' +
+        '<button class="wz-api-btn" onclick="wzAutoCalcScore()"><i class="fas fa-calculator"></i> Auto-Calculate</button></div>' +
+        '<div class="wz-field-grid">' +
+        '<div class="wz-field"><label>AI Score (0–100)</label>' +
+        '<input type="number" min="0" max="100" id="wf-ai-score" value="' + escW(d.ai_score) + '" oninput="wzFieldChange(\'wf-ai-score\')" style="font-size:26px;font-weight:800;color:var(--accent-primary);"></div>' +
+        wzFi('wf-package-name','Package',d.package_name||'') +
+        wzFi('wf-completed-date','Completed Date',d.completed_date||d.inspection_date||'','date') +
+        '</div>' +
+        '<div style="margin-top:12px;"><label style="font-size:10px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;">Verdict</label>' +
+        '<div class="wz-verdict-grid">' + verdictHtml + '</div></div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Recommendation &amp; Summary</div>' +
+        '<div class="wz-field-grid">' +
+        wzFta('wf-recommendation','Final Recommendation (1 line for customer)',d.recommendation||'',2) +
+        wzFta('wf-summary','Executive Summary (2–4 sentences)',d.summary||'',4) +
+        '</div></div>';
+}
+
+function buildStep3() {
+    const d = wz.draft;
+    const checklist = d.checklist || {};
+    const allCats = Object.keys(checklist);
+    if (allCats.length === 0) {
+        return '<div class="wz-step-header"><div class="wz-step-title">🔧 Technical Inspection</div></div>' +
+            '<div class="wz-card"><p style="color:var(--text-secondary);font-size:13px;">No checklist data found. The inspector may not have submitted yet, or the data table names may differ from expected (<b>inspection_answers</b>).</p></div>';
+    }
+    return '<div class="wz-step-header"><div class="wz-step-title">🔧 Technical Checkpoints</div>' +
+        '<div class="wz-step-desc">Review and edit every checklist item submitted by the inspector. Click a category to expand it.</div></div>' +
+        allCats.map(function(cat) {
+            const items = checklist[cat] || [];
+            const itemRows = items.map(function(item, ii) {
+                const statusOpts = ['Pass','Fail','Scratch','Dent','Rust','Worn','NA'].map(function(s) {
+                    return '<option value="' + s + '"' + (item.answer===s?' selected':'') + '>' + s + '</option>';
+                }).join('');
+                const sevOpts = ['low','medium','high'].map(function(s) {
+                    return '<option value="' + s + '"' + (item.severity===s?' selected':'') + '>' + s + '</option>';
+                }).join('');
+                const photosHtml = (item.photos && item.photos.length) ?
+                    '<div class="wz-photo-grid">' + item.photos.map(function(p, pi) {
+                        return '<div class="wz-photo-thumb"><img src="' + p + '"><button class="wz-photo-del" onclick="wzDeleteChecklistPhoto(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',' + pi + ')">✕</button></div>';
+                    }).join('') + '</div>' : '';
+                return '<div class="wz-checklist-item">' +
+                    '<div class="wz-checklist-row">' +
+                    '<div class="wz-checklist-name">' + escW(item.item_name) + '</div>' +
+                    '<select class="wz-status-select" onchange="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'answer\',this.value)">' + statusOpts + '</select>' +
+                    '<input type="text" placeholder="Notes..." value="' + escW(item.note||'') + '" oninput="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'note\',this.value)" style="flex:2;min-width:120px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 8px;border-radius:6px;font-size:11px;">' +
+                    '<select onchange="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'severity\',this.value)" style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 7px;border-radius:6px;font-size:11px;">' + sevOpts + '</select>' +
+                    '</div>' + photosHtml + '</div>';
+            }).join('');
+            return '<div class="wz-card" style="margin-bottom:10px;">' +
+                '<div class="wz-card-title" style="cursor:pointer;user-select:none;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">' +
+                escW(cat) + ' <span style="font-size:10px;color:var(--text-secondary);margin-left:6px;">' + items.length + ' items</span>' +
+                '<i class="fas fa-chevron-down" style="margin-left:auto;"></i></div>' +
+                '<div>' + itemRows + '</div></div>';
+        }).join('');
+}
+
+function buildStep4() {
+    const d = wz.draft;
+    const cats = d.categories || [];
+    const catsHtml = cats.map(function(c, i) {
+        const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'🟡 Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
+            return '<option value="' + o.v + '"' + (c.status===o.v?' selected':'') + '>' + o.l + '</option>';
+        }).join('');
+        return '<div class="wz-cat-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+            '<div style="font-weight:700;font-size:13px;">' + escW(c.name) + '</div>' +
+            '<select class="wz-status-select" onchange="wzUpdateCategory(' + i + ',\'status\',this.value)">' + statusOpts + '</select>' +
+            '</div>' +
+            '<input type="text" placeholder="Category summary (e.g. No issues found...)" value="' + escW(c.description||'') + '" oninput="wzUpdateCategory(' + i + ',\'description\',this.value)" style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 11px;border-radius:8px;font-size:12px;font-family:inherit;">' +
+            '</div>';
+    }).join('');
+    return '<div class="wz-step-header"><div class="wz-step-title">📊 Scoring &amp; Category Health</div>' +
+        '<div class="wz-step-desc">Set each category\'s health status and add negotiation suggestions.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Negotiation Suggestions ' +
+        '<button class="wz-api-btn" onclick="wzAutoGenNegotiations()"><i class="fas fa-magic"></i> Auto-Generate</button></div>' +
+        '<table class="wz-table"><thead><tr><th>Issue</th><th>Description</th><th>Amount (₹)</th><th></th></tr></thead>' +
+        '<tbody id="neg-table-body">' + buildNegRows() + '</tbody></table>' +
+        '<button class="wz-add-row-btn" onclick="wzAddNegRow()">+ Add Negotiation Item</button></div>' +
+        '<div class="wz-card"><div class="wz-card-title">12-Category Health Breakdown</div>' +
+        (catsHtml || '<p style="color:var(--text-secondary);">No categories loaded.</p>') + '</div>';
+}
+
+function buildNegRows() {
+    const negs = (wz && wz.draft && wz.draft.negotiations) ? wz.draft.negotiations : [];
+    return negs.map(function(n, i) {
+        return '<tr><td><input value="' + escW(n.issue||'') + '" oninput="wzUpdateNeg(' + i + ',\'issue\',this.value)"></td>' +
+            '<td><input value="' + escW(n.description||'') + '" oninput="wzUpdateNeg(' + i + ',\'description\',this.value)"></td>' +
+            '<td><input type="number" value="' + escW(n.amount||'') + '" oninput="wzUpdateNeg(' + i + ',\'amount\',this.value)" style="width:90px;"></td>' +
+            '<td><button class="wz-del-btn" onclick="wzDelNeg(' + i + ')">✕</button></td></tr>';
+    }).join('');
+}
+
+function buildStep5() {
+    const svc = (wz && wz.draft && wz.draft.service_history) ? wz.draft.service_history : [];
+    const rows = svc.map(function(s, i) {
+        const typeOpts = ['dealer','authorized','local','oem'].map(function(t) {
+            return '<option value="' + t + '"' + (s.service_type===t?' selected':'') + '>' + t + '</option>';
+        }).join('');
+        return '<tr>' +
+            '<td><input type="date" value="' + escW(s.service_date||'') + '" oninput="wzUpdateSvc(' + i + ',\'service_date\',this.value)"></td>' +
+            '<td><input value="' + escW(s.dealer_name||'') + '" oninput="wzUpdateSvc(' + i + ',\'dealer_name\',this.value)"></td>' +
+            '<td><input type="number" value="' + escW(s.odometer_km||'') + '" oninput="wzUpdateSvc(' + i + ',\'odometer_km\',this.value)" style="width:90px;"></td>' +
+            '<td><select onchange="wzUpdateSvc(' + i + ',\'service_type\',this.value)" style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px;border-radius:6px;font-size:11px;">' + typeOpts + '</select></td>' +
+            '<td><input value="' + escW(s.description||'') + '" oninput="wzUpdateSvc(' + i + ',\'description\',this.value)"></td>' +
+            '<td><input type="number" value="' + escW(s.cost||'') + '" oninput="wzUpdateSvc(' + i + ',\'cost\',this.value)" style="width:80px;"></td>' +
+            '<td><button class="wz-del-btn" onclick="wzDelSvc(' + i + ')">✕</button></td></tr>';
+    }).join('');
+    return '<div class="wz-step-header"><div class="wz-step-title">🔖 Service History</div>' +
+        '<div class="wz-step-desc">Add or verify the vehicle\'s service records.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Service Records ' +
+        '<button class="wz-api-btn" onclick="wzFetchServiceHistory()"><i class="fas fa-bolt"></i> Fetch from API</button></div>' +
+        '<table class="wz-table"><thead><tr><th>Date</th><th>Dealer / Center</th><th>Odometer</th><th>Type</th><th>Description</th><th>Cost (₹)</th><th></th></tr></thead>' +
+        '<tbody id="svc-table-body">' + rows + '</tbody></table>' +
+        '<button class="wz-add-row-btn" onclick="wzAddSvcRow()">+ Add Service Record</button></div>';
+}
+
+function buildStep6() {
+    const docs = (wz && wz.draft && wz.draft.documents) ? wz.draft.documents : [];
+    const docTypes = ['rc_copy','insurance','service_history','invoice','warranty','puc','other'];
+    const fileList = docs.map(function(d, i) {
+        return '<div class="wz-file-item"><span style="font-size:18px;">📄</span>' +
+            '<div><div class="wz-file-name">' + escW(d.file_name||d.doc_type) + '</div>' +
+            '<div class="wz-file-meta">' + escW(d.doc_type) + '</div></div>' +
+            '<button class="wz-del-btn" onclick="wzDelDoc(' + i + ')">Remove</button></div>';
+    }).join('');
+    const sideLabels = ['Front View','Side (Driver)','Rear View','Side (Passenger)'];
+    const sides = ['front','side_driver','rear','side_passenger'];
+    const heroGrid = sides.map(function(side, idx) {
+        const url = (wz.draft.hero_photos||{})[side];
+        return '<div style="border:2px dashed var(--border-color);border-radius:10px;overflow:hidden;height:120px;position:relative;cursor:pointer;" onclick="document.getElementById(\'hero-input-' + side + '\').click()">' +
+            (url ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">' :
+                '<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-secondary);"><i class="fas fa-camera" style="font-size:22px;margin-bottom:5px;"></i><span style="font-size:11px;">' + sideLabels[idx] + '</span></div>') +
+            '<input type="file" id="hero-input-' + side + '" style="display:none;" accept="image/*" onchange="wzSetHeroPhoto(\'' + side + '\',this)">' +
+            (url ? '<button onclick="event.stopPropagation();wzClearHeroPhoto(\'' + side + '\')" style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;">✕</button>' : '') +
+            '</div>';
+    }).join('');
+    return '<div class="wz-step-header"><div class="wz-step-title">📁 Documents &amp; Photos</div>' +
+        '<div class="wz-step-desc">Upload RC copy, insurance, service history PDFs, and vehicle exterior photos.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Upload Supporting Documents</div>' +
+        '<div style="margin-bottom:10px;"><label style="font-size:10px;color:var(--text-secondary);font-weight:600;">Document Type</label>' +
+        '<select id="doc-type-select" style="display:block;margin-top:4px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 11px;border-radius:8px;font-size:12px;">' +
+        docTypes.map(function(t) { return '<option value="' + t + '">' + t.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}) + '</option>'; }).join('') + '</select></div>' +
+        '<div class="wz-upload-area" id="doc-upload-area" onclick="document.getElementById(\'doc-file-input\').click()" ondrop="wzHandleDocDrop(event)" ondragover="event.preventDefault();this.classList.add(\'dragover\')" ondragleave="this.classList.remove(\'dragover\')">' +
+        '<i class="fas fa-cloud-upload-alt" style="font-size:26px;color:var(--text-secondary);margin-bottom:6px;"></i>' +
+        '<div style="font-size:13px;font-weight:600;">Click or Drag &amp; Drop files here</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">PDF, JPG, PNG up to 20MB</div>' +
+        '<input type="file" id="doc-file-input" style="display:none;" multiple accept=".pdf,.jpg,.jpeg,.png" onchange="wzHandleDocUpload(this.files)"></div>' +
+        '<div class="wz-file-list" id="doc-file-list">' + fileList + '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Exterior Hero Photos (4 Sides)</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' + heroGrid + '</div></div>';
+}
+
+function buildStep7() {
+    const repairs = (wz && wz.draft && wz.draft.repairs) ? wz.draft.repairs : [];
+    const rows = repairs.map(function(r, i) {
+        const sevOpts = ['low','medium','high','critical'].map(function(s) {
+            return '<option value="' + s + '"' + (r.severity===s?' selected':'') + '>' + s + '</option>';
+        }).join('');
+        return '<tr>' +
+            '<td><input value="' + escW(r.category||'') + '" oninput="wzUpdateRepair(' + i + ',\'category\',this.value)" placeholder="e.g. Exterior"></td>' +
+            '<td><input value="' + escW(r.component||'') + '" oninput="wzUpdateRepair(' + i + ',\'component\',this.value)" placeholder="Component"></td>' +
+            '<td><input value="' + escW(r.description||'') + '" oninput="wzUpdateRepair(' + i + ',\'description\',this.value)" placeholder="Description"></td>' +
+            '<td><select onchange="wzUpdateRepair(' + i + ',\'severity\',this.value)" style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:4px 6px;border-radius:5px;font-size:11px;">' + sevOpts + '</select></td>' +
+            '<td><input type="number" value="' + escW(r.est_cost_min||'') + '" oninput="wzUpdateRepair(' + i + ',\'est_cost_min\',this.value)" style="width:75px;" placeholder="Min"></td>' +
+            '<td><input type="number" value="' + escW(r.est_cost_max||'') + '" oninput="wzUpdateRepair(' + i + ',\'est_cost_max\',this.value)" style="width:75px;" placeholder="Max"></td>' +
+            '<td><button class="wz-del-btn" onclick="wzDelRepair(' + i + ')">✕</button></td></tr>';
+    }).join('');
+    const total = repairs.reduce(function(s,r){return s+(Number(r.est_cost_max)||Number(r.est_cost_min)||0);},0);
+    return '<div class="wz-step-header"><div class="wz-step-title">🔩 Repair Estimate</div>' +
+        '<div class="wz-step-desc">Add estimated repair costs by category. Auto-generate from checklist fails.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Repair Line Items ' +
+        '<button class="wz-api-btn" onclick="wzAutoGenRepairs()"><i class="fas fa-magic"></i> Auto-Generate</button></div>' +
+        '<table class="wz-table"><thead><tr><th>Category</th><th>Component</th><th>Description</th><th>Severity</th><th>Min ₹</th><th>Max ₹</th><th></th></tr></thead>' +
+        '<tbody id="repair-table-body">' + rows + '</tbody></table>' +
+        '<button class="wz-add-row-btn" onclick="wzAddRepairRow()">+ Add Repair Item</button>' +
+        '<div style="margin-top:10px;background:linear-gradient(135deg,#2B1657,#4C1D95);border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="color:#D9CFFF;font-size:11px;">Total Estimated Repair Cost</span>' +
+        '<span style="color:#fff;font-size:18px;font-weight:800;" id="repair-total-display">₹' + total.toLocaleString('en-IN') + '</span></div></div>';
+}
+
+function buildStep8() {
+    const d = wz.draft;
+    const log = (d && d.audit_log) ? d.audit_log : [];
+    const logHtml = log.length === 0 ?
+        '<p style="color:var(--text-secondary);font-size:12px;">No changes recorded yet.</p>' :
+        log.slice(-20).reverse().map(function(e) {
+            return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color);font-size:11px;">' +
+                '<span style="color:var(--text-secondary);white-space:nowrap;">' + new Date(e.ts).toLocaleTimeString() + '</span>' +
+                '<span style="color:var(--text-secondary);">Changed <b style="color:var(--text-primary);">' + escW(e.field) + '</b></span></div>';
+        }).join('');
+    return '<div class="wz-step-header"><div class="wz-step-title">💬 Admin Remarks</div>' +
+        '<div class="wz-step-desc">Add inspector notes, admin remarks, and the final customer-facing recommendation.</div></div>' +
+        '<div class="wz-card"><div class="wz-field-grid">' +
+        wzFta('wf-inspector-notes','Inspector Notes (from field)',d.inspector_notes||d.admin_notes||'',4) +
+        wzFta('wf-admin-remarks','Admin Internal Remarks',d.admin_remarks||'',4) +
+        wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',3) +
+        wzFta('wf-summary','Executive Summary',d.summary||'',5) +
+        '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Audit Log <span style="font-size:10px;color:var(--text-secondary);">Last 20 edits this session</span></div>' +
+        '<div>' + logHtml + '</div></div>';
+}
+
+function buildStep9() {
+    return '<div class="wz-step-header"><div class="wz-step-title">👁️ Live Report Preview</div>' +
+        '<div class="wz-step-desc">Real-time preview of the final PDF. Any changes you make in the wizard update this instantly.</div></div>' +
+        '<div class="wz-card" style="padding:12px;">' +
+        '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
+        '<button class="btn btn-primary" onclick="wzOpenPreview()"><i class="fas fa-external-link-alt"></i> Open Full Preview</button>' +
+        '<button class="btn btn-secondary" onclick="wzRefreshPreviewFrame()"><i class="fas fa-sync"></i> Refresh</button></div>' +
+        '<iframe id="wz-preview-frame" src="report-preview.html" style="width:100%;height:680px;border:1px solid var(--border-color);border-radius:10px;background:#fff;"></iframe></div>';
+}
+
+function buildStep10() {
+    const d = wz ? wz.draft : {};
+    const checklistTotal = Object.values(d.checklist||{}).reduce(function(s,c){return s+c.length;},0);
+    const summaryCards = [
+        ['Booking Ref', d.booking_ref],
+        ['Vehicle', (d.vehicle_brand||'') + ' ' + (d.vehicle_model||'')],
+        ['AI Score', (d.ai_score||'—') + '/100'],
+        ['Verdict', d.verdict||'—'],
+        ['Checklist Items', checklistTotal],
+        ['Repair Items', (d.repairs||[]).length]
+    ].map(function(pair) {
+        return '<div style="background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;padding:11px;">' +
+            '<div style="font-size:9px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:3px;">' + pair[0] + '</div>' +
+            '<div style="font-size:14px;font-weight:800;color:var(--accent-primary);">' + escW(String(pair[1]||'—')) + '</div></div>';
+    }).join('');
+    return '<div class="wz-step-header"><div class="wz-step-title">📄 Generate &amp; Share PDF</div>' +
+        '<div class="wz-step-desc">Download the final report, share with the customer, or publish it.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">PDF Actions</div>' +
+        '<div class="wz-publish-actions">' +
+        '<button class="wz-publish-btn primary" onclick="wzDownloadPDF()"><i class="fas fa-download"></i> Download PDF</button>' +
+        '<button class="wz-publish-btn primary" onclick="wzPublishReport()"><i class="fas fa-check-circle"></i> Publish Report</button>' +
+        '<button class="wz-publish-btn secondary" onclick="wzWhatsAppPDF()"><i class="fab fa-whatsapp"></i> Send via WhatsApp</button>' +
+        '<button class="wz-publish-btn secondary" onclick="wzEmailPDF()"><i class="fas fa-envelope"></i> Send via Email</button>' +
+        '<button class="wz-publish-btn secondary" onclick="wzShareLink()"><i class="fas fa-link"></i> Copy Share Link</button>' +
+        '<button class="wz-publish-btn secondary" onclick="wzSaveDraft()"><i class="fas fa-save"></i> Save Draft</button>' +
+        '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Report Summary</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">' + summaryCards + '</div></div>';
+}
+
+// ── Field change handlers ─────────────────────────────────────
+const WZ_FIELD_MAP = {
+    'wf-customer-name':'customer_name','wf-customer-phone':'customer_phone','wf-booking-ref':'booking_ref',
+    'wf-inspector-name':'inspector_name','wf-inspection-date':'inspection_date','wf-area':'area',
+    'wf-vehicle-brand':'vehicle_brand','wf-vehicle-model':'vehicle_model','wf-vehicle-year':'vehicle_year',
+    'wf-vehicle-fuel':'vehicle_fuel','wf-vehicle-reg':'vehicle_reg','wf-vin-number':'vin_number',
+    'wf-engine-number':'engine_number','wf-color':'color','wf-body-type':'body_type',
+    'wf-odometer-km':'odometer_km','wf-owner-count':'owner_count','wf-rto-code':'rto_code',
+    'wf-reg-date':'reg_date','wf-insurance-expiry':'insurance_expiry','wf-puc-expiry':'puc_expiry',
+    'wf-tax-expiry':'tax_expiry','wf-ai-score':'ai_score','wf-package-name':'package_name',
+    'wf-completed-date':'completed_date','wf-recommendation':'recommendation','wf-summary':'summary',
+    'wf-inspector-notes':'inspector_notes','wf-admin-remarks':'admin_remarks'
+};
+
+window.wzFieldChange = function(inputId) {
+    if (!wz || !wz.draft) return;
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const key = WZ_FIELD_MAP[inputId];
+    if (key) {
+        const old = wz.draft[key];
+        wz.draft[key] = el.value;
+        wzLogAudit(key, old, el.value);
+    }
+    updateWzPreview();
+};
+
+window.wzSetVerdict = function(v) {
+    if (!wz || !wz.draft) return;
+    wz.draft.verdict = v;
+    document.querySelectorAll('.wz-verdict-opt').forEach(function(el) { el.classList.remove('selected'); });
+    const id = 'vopt-' + v.replace(/[^a-zA-Z0-9]/g,'_');
+    const opt = document.getElementById(id);
+    if (opt) opt.classList.add('selected');
+    updateWzPreview();
+};
+
+window.wzUpdateCategory = function(idx, field, val) {
+    if (!wz || !wz.draft || !wz.draft.categories || !wz.draft.categories[idx]) return;
+    wz.draft.categories[idx][field] = val;
+    updateWzPreview();
+};
+
+window.wzUpdateChecklistItem = function(cat, itemIdx, field, val) {
+    if (!wz || !wz.draft || !wz.draft.checklist || !wz.draft.checklist[cat] || !wz.draft.checklist[cat][itemIdx]) return;
+    wz.draft.checklist[cat][itemIdx][field] = val;
+    updateWzPreview();
+};
+
+window.wzDeleteChecklistPhoto = function(cat, itemIdx, photoIdx) {
+    if (!wz || !wz.draft || !wz.draft.checklist || !wz.draft.checklist[cat] || !wz.draft.checklist[cat][itemIdx]) return;
+    wz.draft.checklist[cat][itemIdx].photos.splice(photoIdx, 1);
+    goToWzStep(wz.currentStep);
+};
+
+// Negotiations
+window.wzAddNegRow = function() {
+    if (!wz.draft.negotiations) wz.draft.negotiations = [];
+    wz.draft.negotiations.push({ issue:'', description:'', amount:0 });
+    const tbody = document.getElementById('neg-table-body');
+    if (tbody) tbody.innerHTML = buildNegRows();
+    updateWzPreview();
+};
+window.wzUpdateNeg = function(i, f, v) { if (wz.draft.negotiations && wz.draft.negotiations[i]) { wz.draft.negotiations[i][f] = v; updateWzPreview(); } };
+window.wzDelNeg = function(i) { if (wz.draft.negotiations) { wz.draft.negotiations.splice(i,1); const tb=document.getElementById('neg-table-body'); if(tb)tb.innerHTML=buildNegRows(); updateWzPreview(); } };
+
+// Service history
+window.wzAddSvcRow = function() {
+    if (!wz.draft.service_history) wz.draft.service_history = [];
+    wz.draft.service_history.push({ service_date:'', dealer_name:'', odometer_km:'', service_type:'dealer', description:'', cost:'' });
+    goToWzStep(5);
+};
+window.wzUpdateSvc = function(i, f, v) { if (wz.draft.service_history && wz.draft.service_history[i]) { wz.draft.service_history[i][f] = v; updateWzPreview(); } };
+window.wzDelSvc = function(i) { if (wz.draft.service_history) { wz.draft.service_history.splice(i,1); goToWzStep(5); } };
+
+// Repairs
+window.wzAddRepairRow = function() {
+    if (!wz.draft.repairs) wz.draft.repairs = [];
+    wz.draft.repairs.push({ category:'Exterior', component:'', description:'', severity:'medium', est_cost_min:0, est_cost_max:0 });
+    goToWzStep(7);
+};
+window.wzUpdateRepair = function(i, f, v) {
+    if (!wz.draft.repairs || !wz.draft.repairs[i]) return;
+    wz.draft.repairs[i][f] = v;
+    const total = wz.draft.repairs.reduce(function(s,r){return s+(Number(r.est_cost_max)||Number(r.est_cost_min)||0);},0);
+    const el = document.getElementById('repair-total-display');
+    if (el) el.textContent = '₹' + total.toLocaleString('en-IN');
+    updateWzPreview();
+};
+window.wzDelRepair = function(i) { if (wz.draft.repairs) { wz.draft.repairs.splice(i,1); goToWzStep(7); } };
+
+// Documents
+window.wzDelDoc = function(i) { if (wz.draft.documents) { wz.draft.documents.splice(i,1); goToWzStep(6); } };
+window.wzHandleDocDrop = function(e) {
+    e.preventDefault();
+    var area = document.getElementById('doc-upload-area');
+    if (area) area.classList.remove('dragover');
+    wzHandleDocUpload(e.dataTransfer.files);
+};
+window.wzHandleDocUpload = function(files) {
+    if (!wz.draft.documents) wz.draft.documents = [];
+    var typeEl = document.getElementById('doc-type-select');
+    var docType = typeEl ? typeEl.value : 'other';
+    Array.from(files).forEach(function(file) {
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            wz.draft.documents.push({ file_name: file.name, doc_type: docType, file_size: file.size, mime_type: file.type, file_url: ev.target.result });
+            goToWzStep(6); updateWzPreview();
+        };
+        reader.readAsDataURL(file);
+    });
+};
+window.wzSetHeroPhoto = function(side, input) {
+    if (!input.files[0]) return;
+    if (!wz.draft.hero_photos) wz.draft.hero_photos = {};
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        compressWzImage(e.target.result, 1200, 800, 0.75).then(function(compressed) {
+            wz.draft.hero_photos[side] = compressed;
+            goToWzStep(6); updateWzPreview();
+        });
+    };
+    reader.readAsDataURL(input.files[0]);
+};
+window.wzClearHeroPhoto = function(side) {
+    if (wz.draft.hero_photos) delete wz.draft.hero_photos[side];
+    goToWzStep(6); updateWzPreview();
+};
+
+function compressWzImage(dataUrl, maxW, maxH, quality) {
+    return new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+            var canvas = document.createElement('canvas');
+            var w = img.width, h = img.height;
+            if (w > maxW) { h = h * maxW / w; w = maxW; }
+            if (h > maxH) { w = w * maxH / h; h = maxH; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = dataUrl;
+    });
+}
+
+// ── Auto-calculations ─────────────────────────────────────────
+window.wzAutoCalcScore = function() {
+    if (!wz || !wz.draft || !wz.draft.checklist) return;
+    var allItems = Object.values(wz.draft.checklist).reduce(function(a,b){return a.concat(b);},[]);
+    var fails = allItems.filter(function(i){return i.answer==='Fail'||i.severity==='high';}).length;
+    var warns = allItems.filter(function(i){return i.severity==='medium'||['Scratch','Dent','Rust','Worn'].indexOf(i.answer)>=0;}).length;
+    var score = Math.min(100, Math.max(0, Math.round(100 - (fails*8) - (warns*3))));
+    wz.draft.ai_score = score;
+    var el = document.getElementById('wf-ai-score');
+    if (el) el.value = score;
+    var verdict = score >= 80 ? 'Excellent · Buy' : score >= 65 ? 'Good · Minor Repairs' : score >= 50 ? 'Fair · Price Cut Needed' : 'Poor · Avoid';
+    wzSetVerdict(verdict);
+    showToast('Score auto-calculated: ' + score + '/100', 'success');
+};
+
+window.wzAutoGenNegotiations = function() {
+    if (!wz || !wz.draft || !wz.draft.checklist) return;
+    var negs = [];
+    Object.keys(wz.draft.checklist).forEach(function(cat) {
+        var fails = wz.draft.checklist[cat].filter(function(i){return i.answer==='Fail'||i.severity==='high';});
+        if (fails.length > 0) {
+            negs.push({ issue: cat + ' — ' + fails.slice(0,2).map(function(f){return f.item_name;}).join(', '), description: fails.length + ' item(s) require attention.', amount: fails.length * 3000 });
+        }
+    });
+    wz.draft.negotiations = negs;
+    goToWzStep(4);
+    showToast(negs.length + ' negotiation suggestions generated', 'success');
+};
+
+window.wzAutoGenRepairs = function() {
+    if (!wz || !wz.draft || !wz.draft.checklist) return;
+    var repairs = [];
+    Object.keys(wz.draft.checklist).forEach(function(cat) {
+        wz.draft.checklist[cat].filter(function(i){return i.answer==='Fail'||i.severity==='high';}).forEach(function(item) {
+            repairs.push({ category: cat.split(' ')[0], component: item.item_name, description: item.note||'Requires attention', severity: item.severity||'medium', est_cost_min: 1500, est_cost_max: 5000 });
+        });
+    });
+    wz.draft.repairs = repairs;
+    goToWzStep(7);
+    showToast(repairs.length + ' repair items generated', 'success');
+};
+
+// ── API placeholders ──────────────────────────────────────────
+function setApiResult(msg, success) {
+    var panel = document.getElementById('api-result-panel');
+    if (!panel) return;
+    var bg = (success !== false) ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)';
+    var bc = (success !== false) ? 'var(--success)' : 'var(--danger)';
+    panel.innerHTML = '<div style="background:' + bg + ';border:1px solid ' + bc + ';border-radius:8px;padding:9px 13px;font-size:12px;margin-top:6px;">' + msg + '</div>';
+}
+window.wzFetchVahan = function() {
+    var reg = wz && wz.draft ? wz.draft.vehicle_reg : '';
+    if (!reg) { setApiResult('Please enter Registration Number first.', false); return; }
+    setApiResult('⏳ Fetching VAHAN data for <b>' + reg + '</b>...', true);
+    setTimeout(function() { setApiResult('✅ VAHAN API placeholder triggered for <b>' + reg + '</b>. Connect a real VAHAN API endpoint to auto-populate fields.', true); }, 1500);
+};
+window.wzFetchInsurance    = function() { setApiResult('⚡ Insurance API placeholder — connect IIB or insurance provider API here.'); };
+window.wzFetchPUC          = function() { setApiResult('⚡ PUC/PUCC API placeholder — connect MoRTH or PUCC API here.'); };
+window.wzFetchFasTag       = function() { setApiResult('⚡ FASTag API placeholder — connect NETC FASTag API here.'); };
+window.wzFetchLoan         = function() { setApiResult('⚡ Loan/Hypothecation API — connect VAHAN/Sarathi API here.'); };
+window.wzFetchAccident     = function() { setApiResult('⚡ Accident History API — connect IIB Claims API here.'); };
+window.wzFetchMarketPrice  = function() { setApiResult('⚡ Market Valuation API — connect CarDekho/OBV API here.'); };
+window.wzDecodeVIN         = function() { setApiResult('⚡ VIN Decoder API — connect NHTSA or local VIN decode service here.'); };
+window.wzFetchServiceHistory = function() { setApiResult('⚡ Service History API — connect OEM service APIs here.'); };
+
+// ── Live preview sync ─────────────────────────────────────────
+function updateWzPreview() {
+    if (!wz || !wz.draft) return;
+    var payload = buildPreviewPayload();
+    try {
+        localStorage.setItem(WZ_LS_KEY, JSON.stringify(payload));
+        if (wzBroadcastChannel) wzBroadcastChannel.postMessage({ type: 'REPORT_UPDATE', payload: payload });
+    } catch(e) {}
+    if (wz.currentStep === 9) {
+        var frame = document.getElementById('wz-preview-frame');
+        if (frame) {
+            try { if (frame.contentWindow && frame.contentWindow.renderReport) frame.contentWindow.renderReport(payload); } catch(e) {}
+        }
+    }
+}
+
+function buildPreviewPayload() {
+    var d = (wz && wz.draft) ? wz.draft : {};
+    return {
+        booking_ref:d.booking_ref, customer_name:d.customer_name,
+        vehicle_brand:d.vehicle_brand, vehicle_model:d.vehicle_model, vehicle_year:d.vehicle_year,
+        vehicle_fuel:d.vehicle_fuel, vehicle_reg:d.vehicle_reg, vin_number:d.vin_number,
+        engine_number:d.engine_number, chassis_number:d.chassis_number, color:d.color,
+        body_type:d.body_type, odometer_km:d.odometer_km, owner_count:d.owner_count,
+        rto_code:d.rto_code, reg_date:d.reg_date, insurance_expiry:d.insurance_expiry,
+        puc_expiry:d.puc_expiry, tax_expiry:d.tax_expiry, ai_score:d.ai_score,
+        verdict:d.verdict, recommendation:d.recommendation, summary:d.summary,
+        inspection_date:d.inspection_date, completed_date:d.completed_date,
+        package_name:d.package_name, area:d.area, location_type:d.location_type,
+        inspector_name:d.inspector_name, inspector_notes:d.inspector_notes,
+        admin_remarks:d.admin_remarks, categories:d.categories||[],
+        negotiations:d.negotiations||[], repairs:d.repairs||[],
+        service_history:d.service_history||[], documents:d.documents||[],
+        hero_photos:d.hero_photos||{}, checklist:d.checklist||{}
+    };
+}
+
+window.wzOpenPreview = function() { updateWzPreview(); wzPreviewWindow = window.open('report-preview.html','_blank','width=920,height=820'); };
+window.wzRefreshPreviewFrame = function() { var f=document.getElementById('wz-preview-frame'); if(f)f.src='report-preview.html?t='+Date.now(); };
+window.wzDownloadPDF = function() { updateWzPreview(); window.open('report-preview.html?print=1','_blank'); };
+window.wzWhatsAppPDF = function() {
+    var phone = (wz && wz.booking && wz.booking.customer_phone) ? wz.booking.customer_phone.replace(/[^0-9]/g,'') : '919900368006';
+    var d = (wz && wz.draft) ? wz.draft : {};
+    var msg = encodeURIComponent('Hello ' + (d.customer_name||'') + ',\n\nYour InspectCar inspection report for ' + (d.vehicle_brand||'') + ' ' + (d.vehicle_model||'') + ' (Ref: ' + (d.booking_ref||'') + ') is ready.\n\nInspectCar: +91 99003 68006 | inspectcar.in');
+    window.open('https://wa.me/' + phone + '?text=' + msg, '_blank');
+};
+window.wzEmailPDF = function() {
+    var d = (wz && wz.draft) ? wz.draft : {};
+    var email = (wz && wz.booking) ? (wz.booking.customer_email||'') : '';
+    window.open('mailto:' + email + '?subject=' + encodeURIComponent('InspectCar Report — ' + (d.booking_ref||'')) + '&body=' + encodeURIComponent('Please find your vehicle inspection report attached.\n\nBooking: ' + (d.booking_ref||'') + '\nVehicle: ' + (d.vehicle_brand||'') + ' ' + (d.vehicle_model||'')));
+};
+window.wzShareLink = function() {
+    var url = window.location.origin + window.location.pathname.replace('index.html','') + 'report-preview.html';
+    try { navigator.clipboard.writeText(url); showToast('Preview link copied!', 'success'); } catch(e) { prompt('Copy this link:', url); }
+};
+
+// ── Save Draft ────────────────────────────────────────────────
+window.wzSaveDraft = async function() {
+    if (!wz) return;
+    try {
+        var client = dbClient || window.supabase;
+        var payload = { booking_id: wz.bookingId, draft_data: wz.draft, current_step: wz.currentStep, last_saved: new Date().toISOString() };
+        if (client) await client.from('report_drafts').upsert(payload, { onConflict: 'booking_id' });
+        localStorage.setItem(WZ_LS_KEY + '_' + wz.bookingId, JSON.stringify(wz.draft));
+        var badge = document.getElementById('wz-autosave-badge');
+        if (badge) { badge.style.display = 'flex'; setTimeout(function(){badge.style.display='none';}, 3000); }
+        showToast('Draft saved!', 'success');
+    } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+};
+
+function startWzAutoSave() {
+    if (wzAutoSaveTimer) clearInterval(wzAutoSaveTimer);
+    wzAutoSaveTimer = setInterval(async function() { if (wz) await wzSaveDraft(); }, 30000);
+}
+
+// ── Publish ───────────────────────────────────────────────────
+window.wzPublishReport = async function() {
+    if (!wz) return;
+    if (!confirm('Publish this report? This will mark the booking as report_published and create a version snapshot.')) return;
+    try {
+        showWzLoader('Publishing report...');
+        var client = dbClient || window.supabase;
+        var payload = buildPreviewPayload();
+        await wzSaveDraft();
+        if (client) {
+            var { data: versions } = await client.from('report_versions').select('version_number').eq('booking_id', wz.bookingId).order('version_number', { ascending: false }).limit(1);
+            var nextVersion = ((versions && versions[0] ? versions[0].version_number : 0) || 0) + 1;
+            await client.from('report_versions').insert({ booking_id: wz.bookingId, version_number: nextVersion, report_data: payload, published_by: (state && state.profile ? state.profile.full_name : 'Admin'), notes: 'Version ' + nextVersion + ' published' });
+            await client.from('bookings').update({ report_status: 'report_published', ai_score: payload.ai_score, verdict: payload.verdict }).eq('id', wz.bookingId);
+            await client.from('report_audit_log').insert({ booking_id: wz.bookingId, action: 'publish', admin_email: (state && state.user ? state.user.email : ''), field_path: 'report', new_value: 'Version ' + nextVersion + ' published' });
+        }
+        hideWzLoader();
+        showToast('Report published successfully!', 'success');
+    } catch(e) { hideWzLoader(); showToast('Publish failed: ' + e.message, 'error'); }
+};
+
+// ── Audit log ─────────────────────────────────────────────────
+function wzLogAudit(field, oldVal, newVal) {
+    if (!wz || !wz.draft) return;
+    if (!wz.draft.audit_log) wz.draft.audit_log = [];
+    wz.draft.audit_log.push({ ts: new Date().toISOString(), field: field, old: String(oldVal||''), new: String(newVal||'') });
+}
+
+// ── UI helpers ────────────────────────────────────────────────
+function showWzLoader(msg) {
+    var el = document.getElementById('wz-loader');
+    var txt = document.getElementById('wz-loader-text');
+    if (el) el.classList.add('visible');
+    if (txt) txt.textContent = msg || 'Loading...';
+}
+function hideWzLoader() {
+    var el = document.getElementById('wz-loader');
+    if (el) el.classList.remove('visible');
+}
+</script>
 
 </body>
 </html>

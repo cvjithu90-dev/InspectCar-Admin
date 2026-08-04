@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>InspectCar — Vehicle Inspection Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   PRINT / PDF STYLES  (A4)
+============================================================ */
+@page { margin: 0; size: A4; }
+* { box-sizing: border-box; }
+body {
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  color: #241D33;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  background: #f0f0f5;
+}
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 16mm 14mm 18mm 14mm;
+  position: relative;
+  page-break-after: always;
+  background: #fff;
+  margin: 0 auto 20px auto;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+}
+.page:last-child { page-break-after: avoid; margin-bottom: 0; }
+@media print {
+  body { background: #fff; }
+  .page { box-shadow: none; margin: 0; }
+  .no-print { display: none !important; }
+}
+
+/* ---------- Cover ---------- */
+.cover {
+  padding: 0;
+  background: linear-gradient(160deg, #150C29 0%, #241147 55%, #3B1670 100%);
+  color: #fff;
+  height: 297mm;
+  position: relative;
+  overflow: hidden;
+}
+.cover-glow {
+  position: absolute; top: -120px; right: -120px; width: 420px; height: 420px;
+  background: radial-gradient(circle, rgba(167,139,250,0.55) 0%, rgba(124,58,237,0) 70%);
+}
+.cover-glow2 {
+  position: absolute; bottom: -160px; left: -100px; width: 480px; height: 480px;
+  background: radial-gradient(circle, rgba(124,58,237,0.35) 0%, rgba(124,58,237,0) 70%);
+}
+.cover-inner { position: relative; padding: 20mm 16mm; height: 100%; }
+.cover-logo { font-size: 22px; font-weight: 900; margin-bottom: 46px; color: #fff; letter-spacing: -0.5px; }
+.cover-logo span { color: #A78BFA; }
+.cover-tag {
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,0.35);
+  color: #C9B6FF;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+}
+.cover-title {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0 0 10px 0;
+  max-width: 480px;
+}
+.cover-title span { color: #B49BFF; }
+.cover-sub {
+  font-size: 13.5px;
+  color: #D9CFFF;
+  max-width: 420px;
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+.cover-scorewrap {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 16px;
+  padding: 18px 22px;
+  max-width: 420px;
+  margin-bottom: 40px;
+}
+.cover-score-num { font-size: 34px; font-weight: 800; color: #fff; }
+.cover-score-label { font-size: 10.5px; color: #C9B6FF; text-transform: uppercase; letter-spacing: 1px; }
+.cover-verdict { font-size: 14px; font-weight: 700; color: #4ADE80; margin-top: 2px; }
+.cover-verdict.amber { color: #FCD34D; }
+.cover-verdict.red { color: #F87171; }
+.cover-meta {
+  position: absolute;
+  bottom: 20mm;
+  left: 16mm;
+  right: 16mm;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  padding-top: 16px;
+}
+.cover-meta-item { font-size: 10.5px; color: #D9CFFF; }
+.cover-meta-item b { display: block; color: #fff; font-size: 12.5px; margin-top: 2px; }
+.cover-contact {
+  position: absolute; top: 20mm; right: 16mm; text-align: right; font-size: 10.5px; color: #D9CFFF;
+}
+.cover-contact b { color: #fff; display: block; font-size: 12px; }
+
+/* ---------- Page header & footer ---------- */
+.hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 2px solid #EFE8FF;
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+}
+.hdr-word { font-size: 17px; font-weight: 800; }
+.hdr-word .i { color: #241D33; }
+.hdr-word .c { color: #7C3AED; }
+.hdr-right { font-size: 9.5px; color: #8A8296; text-align: right; }
+.footer {
+  position: absolute; bottom: 8mm; left: 14mm; right: 14mm;
+  display: flex; justify-content: space-between;
+  font-size: 8.5px; color: #A79DBE; border-top: 1px solid #EEE7FB; padding-top: 6px;
+}
+
+.section-title { font-size: 16px; font-weight: 800; color: #1E1730; margin: 4px 0 4px 0; }
+.section-sub { font-size: 10px; color: #8A8296; margin-bottom: 14px; }
+.pill-purple {
+  display: inline-block; background: #EFE6FF; color: #6D28D9; font-size: 9.5px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px; text-transform: uppercase;
+}
+
+/* ---------- Score dial ---------- */
+.score-row { display: flex; gap: 16px; margin-bottom: 18px; }
+.score-card {
+  flex: 0 0 160px;
+  background: linear-gradient(160deg,#2B1657,#4C1D95);
+  border-radius: 16px; color: #fff; padding: 18px;
+  text-align: center;
+}
+.score-big { font-size: 34px; font-weight: 800; }
+.score-of { font-size: 10px; color: #D9CFFF; }
+.score-verdict-badge {
+  margin-top: 10px; display: inline-block; background: rgba(74,222,128,0.18);
+  color: #4ADE80; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 12px;
+}
+.score-verdict-badge.amber { background: rgba(252,211,77,0.18); color: #FCD34D; }
+.score-verdict-badge.red { background: rgba(248,113,113,0.18); color: #F87171; }
+.grid2 { display: flex; flex-wrap: wrap; gap: 10px; flex: 1; }
+.mini-card {
+  width: calc(33.3% - 7px);
+  background: #FAF8FF; border: 1px solid #EFE6FF; border-radius: 10px; padding: 9px 11px;
+}
+.mini-card .k { font-size: 9px; color: #8A8296; text-transform: uppercase; letter-spacing: 0.5px; }
+.mini-card .v { font-size: 11.5px; font-weight: 700; color: #241D33; margin-top: 2px; }
+
+/* ---------- Category cards ---------- */
+.cat-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.cat-card {
+  width: calc(50% - 5px);
+  border: 1px solid #EEE7FB; border-radius: 12px; padding: 12px 14px;
+  background: #fff;
+}
+.cat-card h4 {
+  margin: 0 0 6px 0; font-size: 11.5px; font-weight: 800; color: #1E1730;
+  display: flex; align-items: center; gap: 6px;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot-g { background: #22C55E; }
+.dot-a { background: #F59E0B; }
+.dot-r { background: #EF4444; }
+.cat-card p { margin: 0; font-size: 10px; line-height: 1.55; color: #514A63; }
+
+/* ---------- Negotiation ---------- */
+.neg-card {
+  border-left: 4px solid #7C3AED; background: #FAF8FF; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 10px; display: flex; justify-content: space-between; gap: 14px;
+}
+.neg-left { flex: 1; }
+.neg-left .issue { font-weight: 700; font-size: 10.5px; color: #1E1730; margin-bottom: 3px; }
+.neg-left .desc { font-size: 9.5px; color: #5A5268; line-height: 1.5; }
+.neg-right { flex: 0 0 90px; text-align: right; }
+.neg-amt { font-size: 15px; font-weight: 800; color: #7C3AED; }
+.neg-amt-label { font-size: 8px; color: #8A8296; text-transform: uppercase; }
+.neg-total {
+  background: #1E1035; color: #fff; border-radius: 10px; padding: 12px 16px;
+  display: flex; justify-content: space-between; align-items: center; margin-top: 4px;
+}
+.neg-total .t1 { font-size: 11px; color: #D9CFFF; }
+.neg-total .t2 { font-size: 20px; font-weight: 800; }
+
+/* ---------- Info grid ---------- */
+.info-grid { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.info-col { flex: 1; min-width: 45%; }
+.info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #EDE6FA; font-size: 10px; }
+.info-row .k { color: #8A8296; }
+.info-row .v { color: #241D33; font-weight: 600; text-align: right; }
+.redact { color: #B7AFC9; font-style: italic; font-weight: 500 !important; }
+
+.subhead {
+  font-size: 12px; font-weight: 800; color: #4C1D95; margin: 16px 0 8px 0;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* ---------- Repair Estimate ---------- */
+.chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.chip {
+  background: #F3EEFF; color: #5B21B6; font-size: 9px; font-weight: 600;
+  padding: 4px 10px; border-radius: 20px; border: 1px solid #E4D8FF;
+}
+table.est {
+  width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10px;
+}
+table.est th {
+  background: #4C1D95; color: #fff; text-align: left; padding: 7px 10px; font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+table.est td { padding: 6px 10px; border-bottom: 1px solid #F0EAFA; }
+table.est tr:nth-child(even) td { background: #FBF9FF; }
+table.est tr.cat-total td { font-weight: 800; background: #F3EEFF; color: #4C1D95; }
+.grand-total-box {
+  background: linear-gradient(160deg,#2B1657,#4C1D95); color: #fff; border-radius: 12px;
+  padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
+}
+.grand-total-box .g1 { font-size: 11px; color: #D9CFFF; }
+.grand-total-box .g2 { font-size: 24px; font-weight: 800; }
+
+/* ---------- Service history ---------- */
+table.svc { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+table.svc th { background: #EFE6FF; color: #4C1D95; text-align: left; padding: 6px 8px; }
+table.svc td { padding: 5px 8px; border-bottom: 1px solid #F3EEFF; }
+table.svc tr:nth-child(even) td { background: #FBF9FF; }
+
+/* ---------- Checkpoint sections ---------- */
+.cp-section { margin-bottom: 6px; }
+.cp-title {
+  background: #1E1035; color: #fff; padding: 8px 12px; border-radius: 8px 8px 0 0;
+  font-size: 11.5px; font-weight: 800; display: flex; justify-content: space-between;
+}
+.cp-title span.n { color: #B49BFF; font-weight: 600; font-size: 9.5px; }
+table.cp { width: 100%; border-collapse: collapse; font-size: 9.5px; border: 1px solid #EEE7FB; border-top: none; }
+table.cp th { background: #FAF8FF; text-align: left; padding: 6px 9px; color: #6D28D9; font-size: 9px; text-transform: uppercase; }
+table.cp td { padding: 6px 9px; border-top: 1px solid #F3EEFF; vertical-align: top; }
+table.cp td.ans { font-weight: 700; color: #1E1730; white-space: nowrap; }
+table.cp td.note { color: #8A8296; }
+.cp-photos { display: flex; gap: 6px; padding: 4px 9px 8px 9px; flex-wrap: wrap; }
+.cp-photos img { width: 78px; height: 58px; object-fit: cover; border-radius: 6px; border: 1px solid #EEE7FB; }
+
+/* ---------- Gallery hero ---------- */
+.gallery4 { display: flex; gap: 8px; margin-bottom: 14px; }
+.gallery4 .g-item { flex: 1; }
+.gallery4 img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; border: 1px solid #EEE7FB; }
+.gallery4 .cap { font-size: 8.5px; color: #8A8296; text-align: center; margin-top: 3px; }
+
+/* ---------- Documents ---------- */
+.doc-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.doc-card {
+  background: #FAF8FF; border: 1px solid #EFE6FF; border-radius: 10px;
+  padding: 10px 14px; display: flex; align-items: center; gap: 10px; width: calc(50% - 4px);
+}
+.doc-icon { width: 30px; height: 30px; background: #7C3AED; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
+.doc-info .doc-name { font-size: 10px; font-weight: 700; color: #1E1730; }
+.doc-info .doc-type { font-size: 9px; color: #8A8296; }
+
+/* ---------- Back Cover ---------- */
+.back {
+  background: linear-gradient(160deg, #150C29 0%, #241147 55%, #3B1670 100%);
+  color: #fff; height: 297mm; padding: 0; text-align: center;
+}
+.back-inner { padding-top: 110mm; }
+.back-logo { font-size: 22px; font-weight: 900; margin-bottom: 22px; }
+.back-logo span { color: #A78BFA; }
+.back-inner h3 { font-size: 20px; margin: 0 0 8px 0; }
+.back-inner p { color: #D9CFFF; font-size: 11px; max-width: 380px; margin: 0 auto 26px auto; line-height: 1.6; }
+.back-btn {
+  display: inline-block; background: #7C3AED; color: #fff; font-weight: 700; font-size: 11px;
+  padding: 10px 26px; border-radius: 24px; margin-bottom: 30px; text-decoration: none;
+}
+.back-contacts { font-size: 10px; color: #C9B6FF; line-height: 2; }
+
+/* ---------- Answer status badges ---------- */
+.ans-pass { color: #16A34A; }
+.ans-fail { color: #DC2626; }
+.ans-na   { color: #9CA3AF; }
+.ans-warn { color: #D97706; }
+
+/* ---------- Print action bar (web only) ---------- */
+.print-bar {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.print-bar button {
+  background: #7C3AED;
+  color: #fff;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 50px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(124,58,237,0.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+.print-bar button:hover { background: #6D28D9; }
+@media print { .print-bar { display: none; } }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     PRINT ACTION BAR (Web Only)
+============================================================ -->
+<div class="print-bar no-print">
+  <button onclick="window.print()">🖨️ Print / Save PDF</button>
+  <button onclick="window.close()">✕ Close</button>
+</div>
+
+<!-- ============================================================
+     PAGE 1: COVER
+============================================================ -->
+<div class="page cover" id="pg-cover">
+  <div class="cover-glow"></div>
+  <div class="cover-glow2"></div>
+  <div class="cover-inner">
+    <div class="cover-logo">Inspect<span>Car</span></div>
+    <div class="cover-contact">
+      WhatsApp<b id="cv-phone">+91 99003 68006</b>
+      <div style="height:8px"></div>
+      Website<b>inspectcar.in</b>
+    </div>
+    <div class="cover-tag">AI &middot; 300+ Point Inspection</div>
+    <div class="cover-title">Complete Vehicle<br/>Inspection <span>Report</span></div>
+    <div class="cover-sub">A comprehensive 360&deg; pre-purchase inspection combining certified inspector checks with AI-assisted diagnostics &mdash; so you can buy with complete confidence.</div>
+
+    <div class="cover-scorewrap">
+      <div>
+        <div class="cover-score-num"><span id="cv-score">—</span><span style="font-size:16px; color:#C9B6FF;">/100</span></div>
+        <div class="cover-score-label">Overall AI Vehicle Score</div>
+      </div>
+      <div style="width:1px; height:38px; background:rgba(255,255,255,0.2);"></div>
+      <div>
+        <div class="cover-verdict" id="cv-verdict">—</div>
+        <div style="font-size:10.5px; color:#D9CFFF;" id="cv-recommendation">—</div>
+      </div>
+    </div>
+
+    <div class="cover-meta">
+      <div class="cover-meta-item">Booking ID<b id="cv-booking-ref">—</b></div>
+      <div class="cover-meta-item">Vehicle<b id="cv-vehicle">—</b></div>
+      <div class="cover-meta-item">Inspection Date<b id="cv-date">—</b></div>
+      <div class="cover-meta-item">Location<b id="cv-location">—</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 2: INSPECTION SUMMARY
+============================================================ -->
+<div class="page" id="pg-summary">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Booking ID <span id="s-booking-ref">—</span><br/>Inspector: <span id="s-inspector">—</span></div>
+  </div>
+
+  <div class="pill-purple">Summary</div>
+  <div class="section-title">Inspection Summary</div>
+  <div class="section-sub">Overall AI-assisted health score based on 300+ inspection checkpoints across exterior, mechanical, electrical and document verification.</div>
+
+  <div class="score-row">
+    <div class="score-card">
+      <div class="score-big" id="s-score">—</div>
+      <div class="score-of">OUT OF 100</div>
+      <div class="score-verdict-badge" id="s-verdict-badge">—</div>
+    </div>
+    <div class="grid2">
+      <div class="mini-card"><div class="k">Booked</div><div class="v" id="s-booked">—</div></div>
+      <div class="mini-card"><div class="k">Completed</div><div class="v" id="s-completed">—</div></div>
+      <div class="mini-card"><div class="k">Package</div><div class="v" id="s-package">—</div></div>
+      <div class="mini-card"><div class="k">Fuel Type</div><div class="v" id="s-fuel">—</div></div>
+      <div class="mini-card"><div class="k">Manufactured</div><div class="v" id="s-year">—</div></div>
+      <div class="mini-card"><div class="k">Owner Count</div><div class="v" id="s-owners">—</div></div>
+    </div>
+  </div>
+
+  <div class="subhead">Category Breakdown</div>
+  <div class="cat-grid" id="s-category-grid">
+    <!-- Populated dynamically -->
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection &middot; <span id="s-location-footer">India</span></div>
+    <div>Page 2</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 3: ANOMALY CHECKS & NEGOTIATION
+============================================================ -->
+<div class="page" id="pg-negotiation">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Anomaly Checks &amp; Negotiation<br/>AI-generated from inspection findings</div>
+  </div>
+
+  <div class="pill-purple">Anomaly Checks</div>
+  <div class="section-title">Insurance &amp; Ownership</div>
+  <div class="cat-grid" style="margin-bottom:18px;" id="n-anomaly-grid">
+    <div class="cat-card"><h4><span class="dot dot-g"></span>Insurance Status</h4><p id="n-insurance">—</p></div>
+    <div class="cat-card"><h4><span class="dot dot-g"></span>Vehicle Ownership</h4><p id="n-ownership">—</p></div>
+    <div class="cat-card"><h4><span class="dot dot-a"></span>PUC Status</h4><p id="n-puc">—</p></div>
+    <div class="cat-card"><h4><span class="dot dot-g"></span>Dent / Tamper Check</h4><p id="n-tamper">No VIN plate or registration mismatches found.</p></div>
+  </div>
+
+  <div class="pill-purple">Negotiation Tips</div>
+  <div class="section-title">AI Price Negotiation Suggestions</div>
+  <div class="section-sub">Based on detected defects, here is the estimated room for negotiation with the seller.</div>
+
+  <div id="n-negotiation-list">
+    <!-- Populated dynamically -->
+  </div>
+
+  <div class="neg-total">
+    <div><div class="t1">Total suggested negotiation room</div></div>
+    <div class="t2" id="n-total">&#8377;0</div>
+  </div>
+
+  <div class="subhead">Additional AI Checks</div>
+  <div class="cat-grid" id="n-additional-checks">
+    <div class="cat-card"><h4><span class="dot dot-g"></span>Engine Calibration</h4><p id="n-engine-cal">No active or pending diagnostic trouble codes found.</p></div>
+    <div class="cat-card"><h4><span class="dot dot-a"></span>Tyre Analysis</h4><p id="n-tyre-analysis">Tyre condition assessment based on inspection data.</p></div>
+    <div class="cat-card"><h4><span class="dot dot-a"></span>Service History</h4><p>Full service history captured separately &mdash; see Service History section.</p></div>
+    <div class="cat-card"><h4><span class="dot dot-a"></span>Market Price Analysis</h4><p id="n-market">Market price analysis pending.</p></div>
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+    <div>Page 3</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 4: VAHAN VERIFICATION
+============================================================ -->
+<div class="page" id="pg-vahan">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Owner &amp; Vehicle Information<br/>Sourced from RC / Vahan verification</div>
+  </div>
+
+  <div class="pill-purple">Vahan Verification</div>
+  <div class="section-title">Owner Details</div>
+  <div class="info-grid" style="margin-bottom:20px;" id="v-owner-grid">
+    <div class="info-col">
+      <div class="info-row"><div class="k">Name</div><div class="v redact">Withheld for privacy</div></div>
+      <div class="info-row"><div class="k">Father's Name</div><div class="v redact">Withheld for privacy</div></div>
+      <div class="info-row"><div class="k">Phone</div><div class="v redact">Withheld for privacy</div></div>
+      <div class="info-row"><div class="k">Ownership Type</div><div class="v" id="v-ownership-type">Individual</div></div>
+    </div>
+    <div class="info-col">
+      <div class="info-row"><div class="k">Present Address</div><div class="v redact">Withheld for privacy</div></div>
+      <div class="info-row"><div class="k">Permanent Address</div><div class="v redact">Withheld for privacy</div></div>
+      <div class="info-row"><div class="k">Owner Count</div><div class="v" id="v-owner-count">—</div></div>
+      <div class="info-row"><div class="k">Registration Authority</div><div class="v" id="v-rto">—</div></div>
+    </div>
+  </div>
+
+  <div class="section-title" style="font-size:14px;">Vehicle Details</div>
+  <div class="info-grid" style="margin-bottom:20px;">
+    <div class="info-col">
+      <div class="info-row"><div class="k">Make &amp; Model</div><div class="v" id="v-make-model">—</div></div>
+      <div class="info-row"><div class="k">Registration Number</div><div class="v" id="v-reg-no">—</div></div>
+      <div class="info-row"><div class="k">Registration Date</div><div class="v" id="v-reg-date">—</div></div>
+      <div class="info-row"><div class="k">Manufacturing Year</div><div class="v" id="v-mfg-year">—</div></div>
+      <div class="info-row"><div class="k">Engine Number</div><div class="v" id="v-engine-no">—</div></div>
+      <div class="info-row"><div class="k">Chassis / VIN</div><div class="v" id="v-vin">—</div></div>
+      <div class="info-row"><div class="k">Color</div><div class="v" id="v-color">—</div></div>
+    </div>
+    <div class="info-col">
+      <div class="info-row"><div class="k">Fuel Type</div><div class="v" id="v-fuel">—</div></div>
+      <div class="info-row"><div class="k">Body Type</div><div class="v" id="v-body">—</div></div>
+      <div class="info-row"><div class="k">Odometer (at inspection)</div><div class="v" id="v-odometer">—</div></div>
+      <div class="info-row"><div class="k">Seat Capacity</div><div class="v" id="v-seats">—</div></div>
+      <div class="info-row"><div class="k">Insurance Valid Till</div><div class="v" id="v-insurance">—</div></div>
+      <div class="info-row"><div class="k">PUC Valid Till</div><div class="v" id="v-puc">—</div></div>
+      <div class="info-row"><div class="k">Tax &amp; Fitness Valid Till</div><div class="v" id="v-tax">—</div></div>
+    </div>
+  </div>
+
+  <div class="cat-grid">
+    <div class="cat-card"><h4><span class="dot" id="v-insurance-dot" style="background:#22C55E"></span>Insurance</h4><p id="v-insurance-text">—</p></div>
+    <div class="cat-card"><h4><span class="dot" id="v-puc-dot" style="background:#F59E0B"></span>Pollution Certificate</h4><p id="v-puc-text">—</p></div>
+    <div class="cat-card"><h4><span class="dot" id="v-finance-dot" style="background:#22C55E"></span>Finance Status</h4><p id="v-finance-text">Not financed.</p></div>
+    <div class="cat-card"><h4><span class="dot" id="v-tax-dot" style="background:#22C55E"></span>Tax &amp; Fitness</h4><p id="v-tax-text">—</p></div>
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+    <div>Page 4</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 5: REPAIR ESTIMATE
+============================================================ -->
+<div class="page" id="pg-repair">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Repair Estimate<br/>Admin-compiled estimate based on inspection findings</div>
+  </div>
+
+  <div class="pill-purple">Repair Estimate</div>
+  <div class="section-title">Estimated Repair &amp; Rectification Costs</div>
+  <div class="section-sub">All figures are indicative estimates based on local market rates.</div>
+
+  <div class="chip-wrap" id="r-chips">
+    <!-- Category chips populated dynamically -->
+  </div>
+
+  <div id="r-estimate-tables">
+    <!-- Tables populated dynamically -->
+  </div>
+
+  <div class="grand-total-box">
+    <div><div class="g1">Grand Total Estimated Repair Cost</div></div>
+    <div class="g2" id="r-grand-total">&#8377;0</div>
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+    <div>Page 5</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 6: SERVICE HISTORY
+============================================================ -->
+<div class="page" id="pg-service">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Service History<br/>Verified service records</div>
+  </div>
+
+  <div class="pill-purple">Service History</div>
+  <div class="section-title">Vehicle Service Records</div>
+  <div class="section-sub">Service history sourced from admin-verified records and/or uploaded documents.</div>
+
+  <table class="svc">
+    <thead>
+      <tr>
+        <th>Date</th><th>Service Center / Dealer</th><th>Odometer</th><th>Service Type</th><th>Description</th><th>Cost</th>
+      </tr>
+    </thead>
+    <tbody id="svc-tbody">
+      <tr><td colspan="6" style="text-align:center; padding:20px; color:#9CA3AF;">No service records available</td></tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:20px;">
+    <div class="subhead">Supporting Documents</div>
+    <div class="doc-grid" id="doc-grid">
+      <!-- Documents populated dynamically -->
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+    <div>Page 6</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 7: PHOTO GALLERY + CHECKPOINTS
+============================================================ -->
+<div class="page" id="pg-checkpoints">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Diagnostic Checkpoints<br/>Inspector-verified 300+ point inspection</div>
+  </div>
+
+  <div class="pill-purple">Photo Gallery</div>
+  <div class="section-title">Vehicle Exterior Overview</div>
+
+  <div class="gallery4" id="hero-gallery">
+    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Front View</div><div class="cap">Front</div></div>
+    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Driver Side</div><div class="cap">Side (Driver)</div></div>
+    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Rear View</div><div class="cap">Rear</div></div>
+    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Passenger Side</div><div class="cap">Side (Passenger)</div></div>
+  </div>
+
+  <div class="subhead">Inspection Checkpoints</div>
+  <div id="checkpoint-sections">
+    <!-- Populated dynamically by category -->
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+    <div>Page 7+</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 8: ADMIN REMARKS & BACK COVER
+============================================================ -->
+<div class="page" id="pg-remarks" style="min-height: auto; padding-bottom: 30px;">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Admin Remarks &amp; Recommendations<br/>Final assessment by InspectCar team</div>
+  </div>
+
+  <div class="pill-purple">Admin Remarks</div>
+  <div class="section-title">Inspector Notes &amp; Recommendations</div>
+
+  <div style="background:#FAF8FF; border:1px solid #EFE6FF; border-radius:12px; padding:16px; margin-bottom:16px;">
+    <div class="subhead" style="margin-top:0;">Inspector Notes</div>
+    <p id="r-inspector-notes" style="font-size:10.5px; color:#514A63; line-height:1.7;">—</p>
+  </div>
+
+  <div style="background:#FAF8FF; border:1px solid #EFE6FF; border-radius:12px; padding:16px; margin-bottom:16px;">
+    <div class="subhead" style="margin-top:0;">Admin Remarks</div>
+    <p id="r-admin-remarks" style="font-size:10.5px; color:#514A63; line-height:1.7;">—</p>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#2B1657,#4C1D95); border-radius:12px; padding:16px; color:#fff;">
+    <div style="font-size:11px; color:#C9B6FF; margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:1px;">Final Recommendation</div>
+    <div id="r-final-recommendation" style="font-size:14px; font-weight:800;">—</div>
+  </div>
+
+  <div style="margin-top:20px; font-size:9px; color:#9CA3AF; line-height:1.7; border-top:1px solid #EFE6FF; padding-top:14px;">
+    <b style="color:#5B21B6;">Disclaimer:</b> This report is prepared by InspectCar based on a physical visual and functional inspection performed at the time and location mentioned. InspectCar does not guarantee the future performance of the vehicle. The report reflects the condition of the vehicle at the time of inspection only and should not be used as a substitute for professional mechanical advice. InspectCar holds no liability for any decisions made based on this report.
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; inspectcar.in &middot; +91 99003 68006</div>
+    <div>Report ID: <span id="r-report-id">—</span></div>
+  </div>
+</div>
+
+<!-- BACK COVER -->
+<div class="page back" id="pg-back">
+  <div class="back-inner">
+    <div class="back-logo">Inspect<span>Car</span></div>
+    <h3>Need help understanding this report?</h3>
+    <p>Our certified inspector is available to walk you through every detail of this inspection and help you make the right decision.</p>
+    <a class="back-btn" href="https://wa.me/919900368006">💬 Chat with Inspector on WhatsApp</a>
+    <div class="back-contacts">
+      WhatsApp: +91 99003 68006 &nbsp;&bull;&nbsp; Email: support@inspectcar.in &nbsp;&bull;&nbsp; Website: inspectcar.in
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     LIVE SYNC SCRIPT
+============================================================ -->
+<script>
+  const CHANNEL_NAME = 'inspectcar_report_channel';
+  const LS_KEY       = 'inspectcar_active_report';
+
+  // ── Render from data object ──────────────────────────────────
+  function renderReport(d) {
+    if (!d) return;
+
+    const fmt = (v, fallback='—') => v || fallback;
+    const fmtINR = n => n ? '₹' + Number(n).toLocaleString('en-IN') : '₹0';
+
+    // Cover
+    document.getElementById('cv-score').textContent       = fmt(d.ai_score);
+    document.getElementById('cv-verdict').textContent     = fmt(d.verdict);
+    document.getElementById('cv-verdict').className       = 'cover-verdict ' + verdictClass(d.verdict);
+    document.getElementById('cv-recommendation').textContent = fmt(d.recommendation);
+    document.getElementById('cv-booking-ref').textContent = fmt(d.booking_ref);
+    document.getElementById('cv-vehicle').textContent     = [d.vehicle_brand, d.vehicle_model].filter(Boolean).join(' ') || '—';
+    document.getElementById('cv-date').textContent        = fmt(d.inspection_date);
+    document.getElementById('cv-location').textContent    = fmt(d.area, fmt(d.location_type));
+    document.getElementById('cv-phone').textContent       = '+91 99003 68006';
+
+    // Summary
+    document.getElementById('s-booking-ref').textContent = fmt(d.booking_ref);
+    document.getElementById('s-inspector').textContent   = fmt(d.inspector_name, 'InspectCar Inspector');
+    document.getElementById('s-score').textContent       = fmt(d.ai_score);
+    const vbadge = document.getElementById('s-verdict-badge');
+    vbadge.textContent = fmt(d.verdict);
+    vbadge.className = 'score-verdict-badge ' + verdictClass(d.verdict);
+    document.getElementById('s-booked').textContent      = fmt(d.inspection_date);
+    document.getElementById('s-completed').textContent   = fmt(d.completed_date, fmt(d.inspection_date));
+    document.getElementById('s-package').textContent     = fmt(d.package_name);
+    document.getElementById('s-fuel').textContent        = fmt(d.vehicle_fuel);
+    document.getElementById('s-year').textContent        = fmt(d.vehicle_year);
+    document.getElementById('s-owners').textContent      = d.owner_count ? d.owner_count + (d.owner_count === 1 ? ' (First Owner)' : ' Owners') : '—';
+    document.getElementById('s-location-footer').textContent = fmt(d.area, 'India');
+
+    // Category grid
+    const cats = d.categories || [];
+    const catGrid = document.getElementById('s-category-grid');
+    if (cats.length > 0) {
+      catGrid.innerHTML = cats.map(c => `
+        <div class="cat-card">
+          <h4><span class="dot ${dotClass(c.status)}"></span>${escHtml(c.name)}</h4>
+          <p>${escHtml(c.description || '—')}</p>
+        </div>`).join('');
+    }
+
+    // Vahan
+    document.getElementById('v-owner-count').textContent    = d.owner_count ? d.owner_count + (d.owner_count===1?' (First Owner)':' Owners') : '—';
+    document.getElementById('v-rto').textContent            = fmt(d.rto_code);
+    document.getElementById('v-make-model').textContent     = [d.vehicle_brand, d.vehicle_model].filter(Boolean).join(' ') || '—';
+    document.getElementById('v-reg-no').textContent         = fmt(d.vehicle_reg);
+    document.getElementById('v-reg-date').textContent       = fmt(d.reg_date);
+    document.getElementById('v-mfg-year').textContent       = fmt(d.vehicle_year);
+    document.getElementById('v-engine-no').textContent      = fmt(d.engine_number, 'Withheld for privacy');
+    document.getElementById('v-vin').textContent            = fmt(d.vin_number, 'Withheld for privacy');
+    document.getElementById('v-color').textContent          = fmt(d.color);
+    document.getElementById('v-fuel').textContent           = fmt(d.vehicle_fuel);
+    document.getElementById('v-body').textContent           = fmt(d.body_type);
+    document.getElementById('v-odometer').textContent       = d.odometer_km ? Number(d.odometer_km).toLocaleString('en-IN') + ' km' : '—';
+    document.getElementById('v-seats').textContent          = fmt(d.seat_capacity);
+    document.getElementById('v-insurance').textContent      = fmt(d.insurance_expiry);
+    document.getElementById('v-puc').textContent            = fmt(d.puc_expiry);
+    document.getElementById('v-tax').textContent            = fmt(d.tax_expiry);
+
+    // Anomaly / Negotiation
+    document.getElementById('n-insurance').textContent  = d.insurance_expiry ? 'Valid till ' + d.insurance_expiry + '.' : '—';
+    document.getElementById('n-ownership').textContent  = d.owner_count ? (d.owner_count === 1 ? 'Single owner (individual).' : d.owner_count + ' previous owners.') : '—';
+    document.getElementById('n-puc').textContent        = d.puc_expiry ? 'Valid till ' + d.puc_expiry + '.' : 'Not available at time of inspection.';
+
+    const negList = d.negotiations || [];
+    const negContainer = document.getElementById('n-negotiation-list');
+    if (negList.length > 0) {
+      let total = 0;
+      negContainer.innerHTML = negList.map(n => {
+        total += Number(n.amount) || 0;
+        return `<div class="neg-card">
+          <div class="neg-left">
+            <div class="issue">${escHtml(n.issue)}</div>
+            <div class="desc">${escHtml(n.description || '')}</div>
+          </div>
+          <div class="neg-right">
+            <div class="neg-amt">₹${Number(n.amount||0).toLocaleString('en-IN')}</div>
+            <div class="neg-amt-label">Suggested cut</div>
+          </div>
+        </div>`;
+      }).join('');
+      document.getElementById('n-total').textContent = '₹' + total.toLocaleString('en-IN');
+    } else {
+      negContainer.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No negotiation suggestions added yet.</p>';
+      document.getElementById('n-total').textContent = '₹0';
+    }
+
+    // Repair Estimates
+    const repairs = d.repairs || [];
+    const chips = document.getElementById('r-chips');
+    const tables = document.getElementById('r-estimate-tables');
+    const cats_in_repair = [...new Set(repairs.map(r => r.category))];
+    chips.innerHTML = cats_in_repair.map(c => `<span class="chip">${escHtml(c)}</span>`).join('');
+    let grandTotal = 0;
+    if (repairs.length > 0) {
+      tables.innerHTML = cats_in_repair.map(cat => {
+        const catItems = repairs.filter(r => r.category === cat);
+        const catTotal = catItems.reduce((s, r) => s + (Number(r.est_cost_max)||Number(r.est_cost_min)||0), 0);
+        grandTotal += catTotal;
+        return `<table class="est">
+          <thead><tr><th colspan="3">${escHtml(cat)}</th></tr>
+          <tr><th>Component</th><th>Description</th><th>Est. Cost</th></tr></thead>
+          <tbody>
+            ${catItems.map(r => `<tr>
+              <td>${escHtml(r.component)}</td>
+              <td>${escHtml(r.description||'')}</td>
+              <td>₹${Number(r.est_cost_min||0).toLocaleString('en-IN')}${r.est_cost_max&&r.est_cost_max!==r.est_cost_min?' – ₹'+Number(r.est_cost_max).toLocaleString('en-IN'):''}</td>
+            </tr>`).join('')}
+            <tr class="cat-total"><td colspan="2">Category Total</td><td>₹${catTotal.toLocaleString('en-IN')}</td></tr>
+          </tbody>
+        </table>`;
+      }).join('');
+      document.getElementById('r-grand-total').textContent = '₹' + grandTotal.toLocaleString('en-IN');
+    } else {
+      tables.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No repair estimates added yet.</p>';
+    }
+
+    // Service History
+    const services = d.service_history || [];
+    const tbody = document.getElementById('svc-tbody');
+    if (services.length > 0) {
+      tbody.innerHTML = services.map(s => `<tr>
+        <td>${fmt(s.service_date)}</td>
+        <td>${escHtml(s.dealer_name||s.service_center||'—')}</td>
+        <td>${s.odometer_km ? Number(s.odometer_km).toLocaleString('en-IN') + ' km' : '—'}</td>
+        <td>${fmt(s.service_type)}</td>
+        <td>${escHtml(s.description||'—')}</td>
+        <td>₹${s.cost ? Number(s.cost).toLocaleString('en-IN') : '—'}</td>
+      </tr>`).join('');
+    }
+
+    // Documents
+    const docs = d.documents || [];
+    const docGrid = document.getElementById('doc-grid');
+    if (docs.length > 0) {
+      docGrid.innerHTML = docs.map(doc => `
+        <div class="doc-card">
+          <div class="doc-icon">📄</div>
+          <div class="doc-info">
+            <div class="doc-name">${escHtml(doc.file_name||doc.doc_type||'Document')}</div>
+            <div class="doc-type">${escHtml(doc.doc_type||'')}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Hero Photos
+    const heroPhotos = d.hero_photos || {};
+    const heroGallery = document.getElementById('hero-gallery');
+    const sides = ['Front', 'Side (Driver)', 'Rear', 'Side (Passenger)'];
+    const keys  = ['front', 'side_driver', 'rear', 'side_passenger'];
+    heroGallery.innerHTML = sides.map((side, i) => {
+      const url = heroPhotos[keys[i]];
+      const content = url
+        ? `<img src="${url}" style="width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #EEE7FB;">`
+        : `<div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">${side}</div>`;
+      return `<div class="g-item">${content}<div class="cap">${side}</div></div>`;
+    }).join('');
+
+    // Checkpoints
+    const checkpointData = d.checklist || {};
+    const sections = document.getElementById('checkpoint-sections');
+    sections.innerHTML = Object.keys(checkpointData).map(cat => {
+      const items = checkpointData[cat] || [];
+      if (!items.length) return '';
+      return `<div class="cp-section">
+        <div class="cp-title">${escHtml(cat)}<span class="n">${items.length} checks</span></div>
+        <table class="cp">
+          <tr><th>Item</th><th>Status</th><th>Notes</th></tr>
+          ${items.map(item => `
+            <tr>
+              <td>${escHtml(item.item_name)}</td>
+              <td class="ans ${ansClass(item.answer)}">${escHtml(item.answer||'N/A')}</td>
+              <td class="note">${escHtml(item.remarks||item.note||'')}</td>
+            </tr>
+            ${item.photos&&item.photos.length?`<tr><td colspan="3" style="padding:0"><div class="cp-photos">${item.photos.map(p=>`<img src="${p}" alt="photo">`).join('')}</div></td></tr>`:''}
+          `).join('')}
+        </table>
+      </div>`;
+    }).join('');
+
+    // Remarks
+    document.getElementById('r-inspector-notes').textContent   = fmt(d.inspector_notes);
+    document.getElementById('r-admin-remarks').textContent     = fmt(d.admin_remarks);
+    document.getElementById('r-final-recommendation').textContent = fmt(d.recommendation);
+    document.getElementById('r-report-id').textContent        = fmt(d.booking_ref);
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function verdictClass(v) {
+    if (!v) return '';
+    const vl = v.toLowerCase();
+    if (vl.includes('excellent') || vl.includes('buy') || vl.includes('good')) return '';
+    if (vl.includes('fair') || vl.includes('minor') || vl.includes('caution')) return 'amber';
+    if (vl.includes('poor') || vl.includes('avoid') || vl.includes('critical')) return 'red';
+    return '';
+  }
+  function dotClass(s) {
+    if (!s) return 'dot-g';
+    const sl = s.toLowerCase();
+    if (sl === 'good' || sl === 'pass' || sl === 'ok') return 'dot-g';
+    if (sl === 'attention' || sl === 'warn' || sl === 'caution') return 'dot-a';
+    if (sl === 'critical' || sl === 'fail' || sl === 'bad') return 'dot-r';
+    return 'dot-g';
+  }
+  function ansClass(a) {
+    if (!a) return 'ans-na';
+    const al = a.toLowerCase();
+    if (al === 'pass' || al === 'ok' || al === 'good') return 'ans-pass';
+    if (al === 'fail' || al === 'bad') return 'ans-fail';
+    if (al.includes('warn') || al.includes('caution') || al.includes('scratch') || al.includes('dent')) return 'ans-warn';
+    return 'ans-na';
+  }
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Live sync via BroadcastChannel ───────────────────────────
+  let bc;
+  try {
+    bc = new BroadcastChannel(CHANNEL_NAME);
+    bc.onmessage = e => { if (e.data && e.data.type === 'REPORT_UPDATE') renderReport(e.data.payload); };
+  } catch(e) {}
+
+  // ── Load from localStorage on open ───────────────────────────
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) renderReport(JSON.parse(raw));
+    } catch(e) {}
+  }
+  loadFromStorage();
+
+  // ── Print mode triggered from URL param ──────────────────────
+  window.addEventListener('load', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('print') === '1') {
+      setTimeout(() => window.print(), 800);
+    }
+  });
+</script>
+</body>
+</html>
