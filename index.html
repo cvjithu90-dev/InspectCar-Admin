@@ -1612,7 +1612,7 @@
         // ==========================================
 
         // --- LOGIN ---
-        window.handleSignIn = async function(e) {
+        async function handleSignIn(e) {
             if (e) e.preventDefault();
             
             const emailInput = document.getElementById('login-email');
@@ -1663,7 +1663,8 @@
                     submitBtn.textContent = 'Sign In';
                 }
             }
-        };
+        }
+        window.handleSignIn = handleSignIn;
 
         function setupLoginForm() {
             const form = document.getElementById('login-form');
