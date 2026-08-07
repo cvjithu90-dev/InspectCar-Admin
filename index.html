@@ -668,6 +668,38 @@
                 <div id="detail-payment-badge"></div>
             </div>
 
+            <!-- Change Package & Discount Row -->
+            <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; padding:14px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.07);">
+
+                <!-- Change Package -->
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:6px;"><i class="fas fa-box" style="margin-right:4px;"></i> Change Package</label>
+                    <div style="display:flex; gap:8px;">
+                        <select id="pkg-change-select" style="flex:1; background:#0f0f1a; border:1px solid rgba(99,102,241,0.4); border-radius:8px; color:#e5e7eb; padding:7px 10px; font-size:13px; outline:none;">
+                            <option value="Expert-Drive" data-price="2699">Expert-Drive (₹2,699)</option>
+                            <option value="Lux-Drive" data-price="3999">Lux-Drive (₹3,999)</option>
+                            <option value="Pre-Drive" data-price="1999">Pre-Drive (₹1,999)</option>
+                        </select>
+                        <button id="btn-apply-pkg" style="padding:7px 14px; background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; font-size:12px; font-weight:700; border:none; border-radius:8px; cursor:pointer; white-space:nowrap;">
+                            <i class="fas fa-check"></i> Apply
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Discount -->
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:6px;"><i class="fas fa-tag" style="margin-right:4px;"></i> Apply Discount (₹)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="number" id="discount-amount-input" placeholder="e.g. 200" min="0"
+                            style="flex:1; background:#0f0f1a; border:1px solid rgba(16,185,129,0.4); border-radius:8px; color:#34d399; padding:7px 10px; font-size:14px; font-weight:700; outline:none; min-width:0;" />
+                        <button id="btn-apply-discount" style="padding:7px 14px; background:linear-gradient(135deg,#059669,#047857); color:#fff; font-size:12px; font-weight:700; border:none; border-radius:8px; cursor:pointer; white-space:nowrap;">
+                            <i class="fas fa-check"></i> Apply
+                        </button>
+                    </div>
+                    <div id="discount-current-label" style="font-size:11px; color:#6b7280; margin-top:4px;"></div>
+                </div>
+            </div>
+
             <div class="grid-3 gap-4 mb-4 text-sm">
                 <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div class="text-secondary text-xs mb-1">Total Package Price</div>
@@ -1933,6 +1965,82 @@
                     renderBookingDetail();
                 }
             };
+
+            // --- Change Package: pre-select current package ---
+            const pkgChangeSelect = $('#pkg-change-select');
+            if (pkgChangeSelect && b.package_name) {
+                const opts = pkgChangeSelect.options;
+                for (let i = 0; i < opts.length; i++) {
+                    if (opts[i].value === b.package_name || b.package_name.includes(opts[i].value) || opts[i].value.includes(b.package_name.split(' ')[0])) {
+                        pkgChangeSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // --- Apply Package Change ---
+            const btnApplyPkg = $('#btn-apply-pkg');
+            if (btnApplyPkg) {
+                btnApplyPkg.onclick = async () => {
+                    const sel = $('#pkg-change-select');
+                    const newPkg = sel.value;
+                    const newPrice = parseInt(sel.options[sel.selectedIndex].dataset.price);
+                    if (!confirm(`Change package to "${newPkg}" (₹${newPrice.toLocaleString('en-IN')})? This will update the booking total.`)) return;
+                    const { error } = await client.from('bookings').update({
+                        package_name: newPkg,
+                        base_price: newPrice,
+                        total_price: newPrice
+                    }).eq('id', id);
+                    if (error) {
+                        showToast('Failed to update package: ' + error.message, 'error');
+                    } else {
+                        showToast(`✅ Package changed to ${newPkg} (₹${newPrice.toLocaleString('en-IN')})`, 'success');
+                        renderBookingDetail();
+                    }
+                };
+            }
+
+            // --- Apply Discount ---
+            const discountInput = $('#discount-amount-input');
+            const discountLabel = $('#discount-current-label');
+            // Show existing discount from notes if any
+            const existingDiscountMatch = (b.notes || '').match(/DISCOUNT:\s*₹([\d,]+)/);
+            if (existingDiscountMatch && discountLabel) {
+                discountLabel.textContent = `Current discount: ₹${existingDiscountMatch[1]}`;
+                if (discountInput) discountInput.value = existingDiscountMatch[1].replace(/,/g, '');
+            }
+
+            const btnApplyDiscount = $('#btn-apply-discount');
+            if (btnApplyDiscount) {
+                btnApplyDiscount.onclick = async () => {
+                    const discAmt = parseFloat(discountInput.value);
+                    if (isNaN(discAmt) || discAmt < 0) {
+                        showToast('Please enter a valid discount amount (0 or more)', 'error');
+                        return;
+                    }
+                    // Remove any existing discount note, then append new one
+                    let currentNotes = (b.notes || '').replace(/\s*\|\s*DISCOUNT:\s*₹[\d,]+/g, '').trim();
+                    const newNotes = discAmt > 0
+                        ? `${currentNotes} | DISCOUNT: ₹${discAmt.toLocaleString('en-IN')}`
+                        : currentNotes;
+                    // Update discount in DB via total_price (total - discount)
+                    const originalTotal = b.base_price || b.total_price || 0;
+                    const discountedTotal = Math.max(0, originalTotal - discAmt);
+                    const { error } = await client.from('bookings').update({
+                        total_price: discountedTotal,
+                        notes: newNotes
+                    }).eq('id', id);
+                    if (error) {
+                        showToast('Failed to apply discount: ' + error.message, 'error');
+                    } else {
+                        const msg = discAmt > 0
+                            ? `✅ Discount of ₹${discAmt.toLocaleString('en-IN')} applied. New total: ₹${discountedTotal.toLocaleString('en-IN')}`
+                            : '✅ Discount removed. Original price restored.';
+                        showToast(msg, 'success');
+                        renderBookingDetail();
+                    }
+                };
+            }
 
             $('#btn-save-notes').onclick = async () => {
                 const notes = $('#detail-notes').value;
