@@ -1880,10 +1880,9 @@
                         const inputs = getCustomPayInputs();
                         if (!inputs) return;
                         const { amt: customAmt, desc: customDesc } = inputs;
-                        // Build a Razorpay payment link URL (short link)
-                        const RAZORPAY_KEY = window.RAZORPAY_KEY_ID || 'rzp_live_TJRDVu6qlB1ZbO';
-                        // Compose a standard deep-link / URL for Razorpay checkout (hosted)
-                        const payUrl = `https://rzp.io/l/InspectCar?key=${RAZORPAY_KEY}&amount=${Math.round(customAmt * 100)}&name=${encodeURIComponent('InspectCar')}&description=${encodeURIComponent(customDesc)}&prefill[name]=${encodeURIComponent(b.customer_name || '')}&prefill[contact]=${encodeURIComponent(b.customer_phone || '')}`;
+
+                        // Use the same inspectcar.in pay-balance URL format
+                        const payUrl = `https://inspectcar.in/#pay-balance?ref=${b.booking_ref}&amt=${Math.round(customAmt)}&name=${encodeURIComponent(b.customer_name || 'Customer')}&desc=${encodeURIComponent(customDesc)}`;
                         const customerName = b.customer_name ? b.customer_name.split(' ')[0] : 'there';
                         const waText = encodeURIComponent(
                             `Hi ${customerName} 👋\n\n` +
