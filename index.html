@@ -697,6 +697,34 @@
                 <button id="btn-copy-payment-link" class="btn btn-secondary text-xs" style="padding: 6px 12px; cursor: pointer;">
                     <i class="fas fa-copy"></i> Copy Payment Link
                 </button>
+                <button id="btn-custom-payment" class="btn text-xs" style="padding: 6px 12px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 6px;">
+                    <i class="fas fa-sliders-h"></i> Custom Payment
+                </button>
+            </div>
+        </div>
+
+        <!-- Custom Payment Modal -->
+        <div id="modal-custom-payment" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center;">
+            <div class="card" style="width:420px; max-width:92vw; background: var(--bg-secondary); border: 1px solid rgba(245,158,11,0.4); border-radius: 16px; padding: 28px;">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 style="margin:0; color:#f59e0b;"><i class="fas fa-sliders-h" style="margin-right:8px;"></i>Custom Payment</h3>
+                    <button id="btn-close-custom-payment" style="background:none; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer; line-height:1;">✕</button>
+                </div>
+                <p class="text-secondary text-sm mb-4">Enter the exact amount you want to collect from the customer. This will open a Razorpay checkout window.</p>
+                <div class="form-group mb-4">
+                    <label class="text-sm text-secondary block mb-2">Amount (₹) *</label>
+                    <input type="number" id="custom-payment-amount" class="form-control" placeholder="e.g. 500" min="1" style="font-size:20px; font-weight:700; text-align:center; color:#f59e0b; background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.4);" />
+                </div>
+                <div class="form-group mb-5">
+                    <label class="text-sm text-secondary block mb-2">Description (Optional)</label>
+                    <input type="text" id="custom-payment-desc" class="form-control" placeholder="e.g. Additional charges, Addon fee..." />
+                </div>
+                <div class="flex gap-3">
+                    <button id="btn-launch-custom-payment" class="btn" style="flex:1; background: linear-gradient(135deg, #f59e0b, #d97706); color:#fff; font-weight:700; border:none; padding:10px;">
+                        <i class="fas fa-lock"></i> Collect via Razorpay
+                    </button>
+                    <button id="btn-cancel-custom-payment" class="btn btn-secondary" style="padding:10px 18px;">Cancel</button>
+                </div>
             </div>
         </div>
 
@@ -1744,6 +1772,80 @@
                         showToast(`Payment Link: ${payBalanceUrl}`, 'info');
                     });
                 };
+            }
+
+            // --- Custom Payment button ---
+            const btnCustomPay = $('#btn-custom-payment');
+            const modalCustomPay = $('#modal-custom-payment');
+            if (btnCustomPay && modalCustomPay) {
+                // Open modal
+                btnCustomPay.onclick = () => {
+                    $('#custom-payment-amount').value = '';
+                    $('#custom-payment-desc').value = '';
+                    modalCustomPay.style.display = 'flex';
+                };
+                // Close buttons
+                const closeModal = () => { modalCustomPay.style.display = 'none'; };
+                const btnCloseCustom = $('#btn-close-custom-payment');
+                const btnCancelCustom = $('#btn-cancel-custom-payment');
+                if (btnCloseCustom) btnCloseCustom.onclick = closeModal;
+                if (btnCancelCustom) btnCancelCustom.onclick = closeModal;
+                // Close on backdrop click
+                modalCustomPay.addEventListener('click', (e) => {
+                    if (e.target === modalCustomPay) closeModal();
+                });
+
+                // Launch Razorpay with custom amount
+                const btnLaunchCustom = $('#btn-launch-custom-payment');
+                if (btnLaunchCustom) {
+                    btnLaunchCustom.onclick = () => {
+                        const customAmt = parseFloat($('#custom-payment-amount').value);
+                        const customDesc = ($('#custom-payment-desc').value || '').trim() || `Custom Payment for Booking ${b.booking_ref}`;
+                        if (!customAmt || customAmt < 1) {
+                            showToast('Please enter a valid amount (minimum ₹1)', 'error');
+                            return;
+                        }
+                        if (typeof Razorpay === 'undefined') {
+                            alert('Razorpay Checkout SDK is loading. Please try again.');
+                            return;
+                        }
+                        const RAZORPAY_KEY = window.RAZORPAY_KEY_ID || 'rzp_live_TJRDVu6qlB1ZbO';
+                        const rzpOptions = {
+                            key: RAZORPAY_KEY,
+                            amount: Math.round(customAmt * 100),
+                            currency: 'INR',
+                            name: 'InspectCar',
+                            description: customDesc,
+                            image: 'images/Logo.webp',
+                            prefill: {
+                                name: b.customer_name || '',
+                                email: b.customer_email || '',
+                                contact: b.customer_phone || ''
+                            },
+                            theme: { color: '#f59e0b' },
+                            handler: async function (response) {
+                                const paymentId = response.razorpay_payment_id;
+                                const updatedNotes = (b.notes || '') + ` | Custom Payment: ₹${customAmt} — "${customDesc}" (Razorpay Ref: ${paymentId})`;
+                                const { error } = await client.from('bookings').update({
+                                    notes: updatedNotes
+                                }).eq('id', id);
+                                closeModal();
+                                if (!error) {
+                                    showToast(`✅ Custom payment of ₹${customAmt.toLocaleString('en-IN')} collected successfully!`, 'success');
+                                    renderBookingDetail();
+                                } else {
+                                    showToast('Payment received but failed to save note. Check manually.', 'error');
+                                }
+                            }
+                        };
+                        const rzp = new Razorpay(rzpOptions);
+                        rzp.on('payment.failed', function() {
+                            showToast('Payment failed or was cancelled.', 'error');
+                        });
+                        closeModal();
+                        rzp.open();
+                    };
+                }
             }
 
             // Setup Inspectors Dropdown
