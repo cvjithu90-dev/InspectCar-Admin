@@ -704,29 +704,47 @@
         </div>
 
         <!-- Custom Payment Modal -->
-        <div id="modal-custom-payment" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center;">
-            <div class="card" style="width:420px; max-width:92vw; background: var(--bg-secondary); border: 1px solid rgba(245,158,11,0.4); border-radius: 16px; padding: 28px;">
-                <div class="flex justify-between items-center mb-5">
-                    <h3 style="margin:0; color:#f59e0b;"><i class="fas fa-sliders-h" style="margin-right:8px;"></i>Custom Payment</h3>
-                    <button id="btn-close-custom-payment" style="background:none; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer; line-height:1;">✕</button>
+        <div id="modal-custom-payment" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
+            <div style="width:440px; max-width:94vw; background:#1a1a2e; border:1px solid rgba(245,158,11,0.5); border-radius:16px; padding:32px; box-shadow:0 24px 60px rgba(0,0,0,0.9);">
+                <!-- Header -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                    <h3 style="margin:0; color:#f59e0b; font-size:18px;"><i class="fas fa-sliders-h" style="margin-right:8px;"></i>Custom Payment</h3>
+                    <button id="btn-close-custom-payment" style="background:rgba(255,255,255,0.08); border:none; color:#ccc; font-size:16px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">✕</button>
                 </div>
-                <p class="text-secondary text-sm mb-4">Enter the exact amount you want to collect from the customer. This will open a Razorpay checkout window.</p>
-                <div class="form-group mb-4">
-                    <label class="text-sm text-secondary block mb-2">Amount (₹) *</label>
-                    <input type="number" id="custom-payment-amount" class="form-control" placeholder="e.g. 500" min="1" style="font-size:20px; font-weight:700; text-align:center; color:#f59e0b; background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.4);" />
+                <p style="color:#9ca3af; font-size:13px; margin-bottom:20px; line-height:1.5;">Enter the amount and an optional description. You can collect via Razorpay or share a payment link with the customer on WhatsApp.</p>
+
+                <!-- Amount -->
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:12px; color:#9ca3af; display:block; margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Amount (₹) *</label>
+                    <input type="number" id="custom-payment-amount" placeholder="e.g. 500" min="1"
+                        style="width:100%; box-sizing:border-box; font-size:26px; font-weight:800; text-align:center; color:#f59e0b; background:#0f0f1a; border:2px solid rgba(245,158,11,0.5); border-radius:10px; padding:14px; outline:none;" />
                 </div>
-                <div class="form-group mb-5">
-                    <label class="text-sm text-secondary block mb-2">Description (Optional)</label>
-                    <input type="text" id="custom-payment-desc" class="form-control" placeholder="e.g. Additional charges, Addon fee..." />
+
+                <!-- Description -->
+                <div style="margin-bottom:24px;">
+                    <label style="font-size:12px; color:#9ca3af; display:block; margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Description (Optional)</label>
+                    <input type="text" id="custom-payment-desc" placeholder="e.g. Additional charges, Addon fee..."
+                        style="width:100%; box-sizing:border-box; font-size:14px; color:#e5e7eb; background:#0f0f1a; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:10px 14px; outline:none;" />
                 </div>
-                <div class="flex gap-3">
-                    <button id="btn-launch-custom-payment" class="btn" style="flex:1; background: linear-gradient(135deg, #f59e0b, #d97706); color:#fff; font-weight:700; border:none; padding:10px;">
-                        <i class="fas fa-lock"></i> Collect via Razorpay
+
+                <!-- Action Buttons -->
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button id="btn-launch-custom-payment"
+                        style="width:100%; padding:13px; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; font-weight:700; font-size:14px; border:none; border-radius:8px; cursor:pointer; letter-spacing:.03em;">
+                        <i class="fas fa-lock"></i>&nbsp; Collect via Razorpay
                     </button>
-                    <button id="btn-cancel-custom-payment" class="btn btn-secondary" style="padding:10px 18px;">Cancel</button>
+                    <button id="btn-whatsapp-custom-payment"
+                        style="width:100%; padding:13px; background:#25D366; color:#fff; font-weight:700; font-size:14px; border:none; border-radius:8px; cursor:pointer; letter-spacing:.03em;">
+                        <i class="fab fa-whatsapp"></i>&nbsp; Share Payment Link on WhatsApp
+                    </button>
+                    <button id="btn-cancel-custom-payment"
+                        style="width:100%; padding:11px; background:rgba(255,255,255,0.06); color:#9ca3af; font-size:13px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; cursor:pointer;">
+                        Cancel
+                    </button>
                 </div>
             </div>
         </div>
+
 
         <div class="card mb-4">
             <h3 class="mb-4">Management</h3>
@@ -1795,16 +1813,24 @@
                     if (e.target === modalCustomPay) closeModal();
                 });
 
+                // Helper: validate inputs and return {amt, desc} or null
+                const getCustomPayInputs = () => {
+                    const amt = parseFloat($('#custom-payment-amount').value);
+                    const desc = ($('#custom-payment-desc').value || '').trim() || `Custom Payment for Booking ${b.booking_ref}`;
+                    if (!amt || amt < 1) {
+                        showToast('Please enter a valid amount (minimum ₹1)', 'error');
+                        return null;
+                    }
+                    return { amt, desc };
+                };
+
                 // Launch Razorpay with custom amount
                 const btnLaunchCustom = $('#btn-launch-custom-payment');
                 if (btnLaunchCustom) {
                     btnLaunchCustom.onclick = () => {
-                        const customAmt = parseFloat($('#custom-payment-amount').value);
-                        const customDesc = ($('#custom-payment-desc').value || '').trim() || `Custom Payment for Booking ${b.booking_ref}`;
-                        if (!customAmt || customAmt < 1) {
-                            showToast('Please enter a valid amount (minimum ₹1)', 'error');
-                            return;
-                        }
+                        const inputs = getCustomPayInputs();
+                        if (!inputs) return;
+                        const { amt: customAmt, desc: customDesc } = inputs;
                         if (typeof Razorpay === 'undefined') {
                             alert('Razorpay Checkout SDK is loading. Please try again.');
                             return;
@@ -1844,6 +1870,36 @@
                         });
                         closeModal();
                         rzp.open();
+                    };
+                }
+
+                // Share custom payment link via WhatsApp
+                const btnWaCustom = $('#btn-whatsapp-custom-payment');
+                if (btnWaCustom) {
+                    btnWaCustom.onclick = () => {
+                        const inputs = getCustomPayInputs();
+                        if (!inputs) return;
+                        const { amt: customAmt, desc: customDesc } = inputs;
+                        // Build a Razorpay payment link URL (short link)
+                        const RAZORPAY_KEY = window.RAZORPAY_KEY_ID || 'rzp_live_TJRDVu6qlB1ZbO';
+                        // Compose a standard deep-link / URL for Razorpay checkout (hosted)
+                        const payUrl = `https://rzp.io/l/InspectCar?key=${RAZORPAY_KEY}&amount=${Math.round(customAmt * 100)}&name=${encodeURIComponent('InspectCar')}&description=${encodeURIComponent(customDesc)}&prefill[name]=${encodeURIComponent(b.customer_name || '')}&prefill[contact]=${encodeURIComponent(b.customer_phone || '')}`;
+                        const customerName = b.customer_name ? b.customer_name.split(' ')[0] : 'there';
+                        const waText = encodeURIComponent(
+                            `Hi ${customerName} 👋\n\n` +
+                            `*InspectCar – Payment Request*\n\n` +
+                            `📋 *Booking:* ${b.booking_ref}\n` +
+                            `💰 *Amount:* ₹${customAmt.toLocaleString('en-IN')}\n` +
+                            `📝 *For:* ${customDesc}\n\n` +
+                            `Please complete your payment securely using the link below:\n` +
+                            `${payUrl}\n\n` +
+                            `Thank you! 🚗`
+                        );
+                        const waPhone = (b.customer_phone || '').replace(/\D/g, '');
+                        const waFullUrl = `https://wa.me/91${waPhone.slice(-10)}?text=${waText}`;
+                        closeModal();
+                        window.open(waFullUrl, '_blank');
+                        showToast('WhatsApp opened with payment link!', 'success');
                     };
                 }
             }
