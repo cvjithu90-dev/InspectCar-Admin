@@ -3180,8 +3180,64 @@ function buildStep4() {
         '<tbody id="neg-table-body">' + buildNegRows() + '</tbody></table>' +
         '<button class="wz-add-row-btn" onclick="wzAddNegRow()">+ Add Negotiation Item</button></div>' +
         '<div class="wz-card"><div class="wz-card-title">12-Category Health Breakdown</div>' +
-        (catsHtml || '<p style="color:var(--text-secondary);">No categories loaded.</p>') + '</div>';
+        (catsHtml || '<p style="color:var(--text-secondary);">No categories loaded.</p>') + '</div>' +
+        buildTyreDataCard();
 }
+
+function buildTyreDataCard() {
+    const d = wz ? wz.draft : {};
+    const tyres = d.tyre_data || {
+        fl: {}, fr: {}, rl: {}, rr: {}, spare: {}
+    };
+    const positions = [
+        { key: 'fl', label: '🛞 Front Left (FL)' },
+        { key: 'fr', label: '🛞 Front Right (FR)' },
+        { key: 'rl', label: '🛞 Rear Left (RL)' },
+        { key: 'rr', label: '🛞 Rear Right (RR)' }
+    ];
+    const treadOpts = ['','New (>8mm)','Good (5–8mm)','Fair (3–5mm)','Worn (1–3mm)','Bald (<1mm)','Uneven Wear'];
+    const sidewallOpts = ['','Good','Minor Scuffs','Cracked','Bulge','Cut/Damage'];
+
+    const tyreRows = positions.map(function(pos) {
+        const t = tyres[pos.key] || {};
+        const treadSelOpts = treadOpts.map(function(o) {
+            return '<option value="' + o + '"' + (t.tread_condition===o?' selected':'') + '>' + (o||'Select...') + '</option>';
+        }).join('');
+        const sideSelOpts = sidewallOpts.map(function(o) {
+            return '<option value="' + o + '"' + (t.sidewall_condition===o?' selected':'') + '>' + (o||'Select...') + '</option>';
+        }).join('');
+        return '<div class="wz-card" style="margin-bottom:10px;background:var(--bg-color);border:1px solid rgba(245,158,11,0.25);">' +
+            '<div class="wz-card-title" style="color:#f59e0b;">' + pos.label + '</div>' +
+            '<div class="wz-field-grid">' +
+            '<div class="wz-field"><label>Brand / Make</label><input type="text" value="' + escW(t.tyre_make||'') + '" placeholder="e.g. MRF, CEAT" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_make\',this.value)"></div>' +
+            '<div class="wz-field"><label>Model / Pattern</label><input type="text" value="' + escW(t.tyre_model||'') + '" placeholder="e.g. ZLX, Milaze X3" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_model\',this.value)"></div>' +
+            '<div class="wz-field"><label>Size</label><input type="text" value="' + escW(t.tyre_size||'') + '" placeholder="e.g. 195/65R15" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_size\',this.value)"></div>' +
+            '<div class="wz-field"><label>DOT Mfg. Week</label><input type="number" value="' + escW(t.mfg_week||'') + '" placeholder="e.g. 32" min="1" max="53" oninput="wzSetTyre(\'' + pos.key + '\',\'mfg_week\',this.value)"></div>' +
+            '<div class="wz-field"><label>DOT Mfg. Year</label><input type="number" value="' + escW(t.mfg_year||'') + '" placeholder="e.g. 2021" min="2000" max="2030" oninput="wzSetTyre(\'' + pos.key + '\',\'mfg_year\',this.value)"></div>' +
+            '<div class="wz-field"><label>Tread Depth (mm)</label><input type="number" value="' + escW(t.tread_depth||'') + '" placeholder="e.g. 4.5" step="0.5" min="0" max="12" oninput="wzSetTyre(\'' + pos.key + '\',\'tread_depth\',this.value)"></div>' +
+            '<div class="wz-field wz-field-full"><label>Tread Condition</label><select onchange="wzSetTyre(\'' + pos.key + '\',\'tread_condition\',this.value)">' + treadSelOpts + '</select></div>' +
+            '<div class="wz-field wz-field-full"><label>Sidewall Condition</label><select onchange="wzSetTyre(\'' + pos.key + '\',\'sidewall_condition\',this.value)">' + sideSelOpts + '</select></div>' +
+            '<div class="wz-field wz-field-full"><label>Admin Notes</label><input type="text" value="' + escW(t.note||'') + '" placeholder="Additional observations..." oninput="wzSetTyre(\'' + pos.key + '\',\'note\',this.value)"></div>' +
+            '</div></div>';
+    }).join('');
+
+    const spareT = tyres.spare || {};
+    const spareCondOpts = ['','Good','Fair','Worn','Flat','Missing'].map(function(o) {
+        return '<option value="' + o + '"' + (spareT.spare_condition===o?' selected':'') + '>' + (o||'Select...') + '</option>';
+    }).join('');
+    const spareCard = '<div class="wz-card" style="background:var(--bg-color);border:1px solid rgba(99,102,241,0.25);">' +
+        '<div class="wz-card-title" style="color:#818cf8;">🔧 Spare Tyre</div>' +
+        '<div class="wz-field-grid">' +
+        '<div class="wz-field"><label>Condition</label><select onchange="wzSetTyre(\'spare\',\'spare_condition\',this.value)">' + spareCondOpts + '</select></div>' +
+        '<div class="wz-field"><label>Tyre Size (if visible)</label><input type="text" value="' + escW(spareT.tyre_size||'') + '" placeholder="e.g. 195/65R15" oninput="wzSetTyre(\'spare\',\'tyre_size\',this.value)"></div>' +
+        '<div class="wz-field wz-field-full"><label>Admin Summary / Notes</label><textarea rows="2" oninput="wzSetTyreSummary(this.value)" style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 11px;border-radius:8px;font-size:12px;font-family:inherit;">' + escW(d.tyre_summary||'') + '</textarea></div>' +
+        '</div></div>';
+
+    return '<div class="wz-card" style="border:1px solid rgba(245,158,11,0.3);">' +
+        '<div class="wz-card-title">🛞 Tyre Data <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">– auto-filled from inspector; edit as needed</span></div>' +
+        '<button class="wz-api-btn" style="margin-bottom:12px;" onclick="wzAutoLoadTyreData()"><i class="fas fa-sync"></i> Auto-Load from Inspector Data</button>' +
+        tyreRows + spareCard + '</div>';
+
 
 function buildNegRows() {
     const negs = (wz && wz.draft && wz.draft.negotiations) ? wz.draft.negotiations : [];
@@ -3384,6 +3440,45 @@ window.wzUpdateCategory = function(idx, field, val) {
     if (!wz || !wz.draft || !wz.draft.categories || !wz.draft.categories[idx]) return;
     wz.draft.categories[idx][field] = val;
     updateWzPreview();
+};
+
+window.wzSetTyre = function(pos, field, val) {
+    if (!wz || !wz.draft) return;
+    if (!wz.draft.tyre_data) wz.draft.tyre_data = { fl:{}, fr:{}, rl:{}, rr:{}, spare:{} };
+    if (!wz.draft.tyre_data[pos]) wz.draft.tyre_data[pos] = {};
+    wz.draft.tyre_data[pos][field] = val;
+    updateWzPreview();
+};
+
+window.wzSetTyreSummary = function(val) {
+    if (!wz || !wz.draft) return;
+    wz.draft.tyre_summary = val;
+    updateWzPreview();
+};
+
+// Auto-load tyre data from inspector submissions (Tyre Data category)
+window.wzAutoLoadTyreData = function() {
+    if (!wz || !wz.draft) return;
+    const checklist = wz.draft.checklist || {};
+    const tyreCategory = Object.keys(checklist).find(k => k.toLowerCase().includes('tyre data'));
+    if (!tyreCategory) {
+        showToast('No Tyre Data found from inspector yet.', 'error');
+        return;
+    }
+    const items = checklist[tyreCategory] || [];
+    if (!wz.draft.tyre_data) wz.draft.tyre_data = { fl:{}, fr:{}, rl:{}, rr:{}, spare:{} };
+    const posMap = { fl: 'Front Left', fr: 'Front Right', rl: 'Rear Left', rr: 'Rear Right', spare: 'Spare' };
+    let loaded = 0;
+    Object.keys(posMap).forEach(function(posKey) {
+        const label = posMap[posKey];
+        const match = items.find(function(i) { return i.item_name && i.item_name.toLowerCase().includes(label.toLowerCase()); });
+        if (match) {
+            const fields = ['tyre_make','tyre_model','tyre_size','mfg_week','mfg_year','tread_depth','tread_condition','sidewall_condition','spare_condition','note'];
+            fields.forEach(function(f) { if (match[f]) { wz.draft.tyre_data[posKey][f] = match[f]; loaded++; } });
+        }
+    });
+    goToWzStep(wz.currentStep);
+    showToast(loaded > 0 ? '✅ Tyre data loaded from inspector (' + loaded + ' fields)' : '⚠️ Inspector tyre fields not filled yet.', loaded > 0 ? 'success' : 'error');
 };
 
 window.wzUpdateChecklistItem = function(cat, itemIdx, field, val) {
