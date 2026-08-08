@@ -615,6 +615,33 @@ table.cp td.note { color: #8A8296; }
 </div>
 
 <!-- ============================================================
+     TYRE DATA PAGE
+============================================================ -->
+<div class="page" id="pg-tyre">
+  <div class="hdr">
+    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+    <div class="hdr-right">Tyre Analysis Report<br/>Tread, Age &amp; Condition Assessment</div>
+  </div>
+
+  <div class="pill-purple" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">🛞 Tyre Data</div>
+  <div class="section-title">Tyre Specification &amp; Condition</div>
+
+  <div id="tyre-table-container">
+    <!-- Populated dynamically -->
+  </div>
+
+  <div style="margin-top:16px;background:#FAF8FF;border:1px solid #EFE6FF;border-radius:12px;padding:14px;">
+    <div class="subhead" style="margin-top:0;">Overall Tyre Assessment</div>
+    <p id="r-tyre-summary" style="font-size:10.5px;color:#514A63;line-height:1.7;">—</p>
+  </div>
+
+  <div class="footer">
+    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+    <div>Tyre Report</div>
+  </div>
+</div>
+
+<!-- ============================================================
      PAGE 8: ADMIN REMARKS & BACK COVER
 ============================================================ -->
 <div class="page" id="pg-remarks" style="min-height: auto; padding-bottom: 30px;">
@@ -859,6 +886,77 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('r-admin-remarks').textContent     = fmt(d.admin_remarks);
     document.getElementById('r-final-recommendation').textContent = fmt(d.recommendation);
     document.getElementById('r-report-id').textContent        = fmt(d.booking_ref);
+
+    // Tyre Data Page
+    const tyreData = d.tyre_data || {};
+    const tyreChecklist = (d.checklist && d.checklist['Tyre Data']) ? d.checklist['Tyre Data'] : [];
+    // Merge inspector submission tyre fields into position objects
+    const tyrePositions = [
+      { key: 'fl', label: 'Front Left (FL)', item: 'Tyre — Front Left (FL)' },
+      { key: 'fr', label: 'Front Right (FR)', item: 'Tyre — Front Right (FR)' },
+      { key: 'rl', label: 'Rear Left (RL)', item: 'Tyre — Rear Left (RL)' },
+      { key: 'rr', label: 'Rear Right (RR)', item: 'Tyre — Rear Right (RR)' }
+    ];
+    const tContainer = document.getElementById('tyre-table-container');
+    if (tContainer) {
+      const posRows = tyrePositions.map(pos => {
+        // Prefer admin-edited tyre_data, fall back to inspector answers
+        const adminT = tyreData[pos.key] || {};
+        const inspT = tyreChecklist.find(i => i.item_name === pos.item) || {};
+        const t = Object.assign({}, inspT, adminT); // admin overrides inspector
+        const condColor = (c) => {
+          if (!c) return '#6b7280';
+          if (c.includes('New') || c.includes('Good')) return '#059669';
+          if (c.includes('Fair')) return '#d97706';
+          if (c.includes('Worn') || c.includes('Uneven')) return '#dc2626';
+          if (c.includes('Bald')) return '#991b1b';
+          return '#6b7280';
+        };
+        return `<tr>
+          <td style="font-weight:700;color:#241D33;">${pos.label}</td>
+          <td>${escHtml(t.tyre_make||'—')} ${escHtml(t.tyre_model||'')}</td>
+          <td>${escHtml(t.tyre_size||'—')}</td>
+          <td>${t.mfg_week && t.mfg_year ? 'W' + escHtml(String(t.mfg_week)) + '/' + escHtml(String(t.mfg_year)) : '—'}</td>
+          <td>${t.tread_depth ? escHtml(String(t.tread_depth)) + ' mm' : '—'}</td>
+          <td style="color:${condColor(t.tread_condition)};font-weight:600;">${escHtml(t.tread_condition||'—')}</td>
+          <td style="color:${condColor(t.sidewall_condition)};">${escHtml(t.sidewall_condition||'—')}</td>
+        </tr>`;
+      }).join('');
+      // Spare tyre
+      const spareAdmin = tyreData.spare || {};
+      const spareInsp = tyreChecklist.find(i => i.item_name && i.item_name.includes('Spare')) || {};
+      const spare = Object.assign({}, spareInsp, spareAdmin);
+      const spareCondColor = spare.spare_condition === 'Good' ? '#059669' : spare.spare_condition === 'Fair' ? '#d97706' : spare.spare_condition ? '#dc2626' : '#6b7280';
+      tContainer.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:14px;">
+          <thead>
+            <tr style="background:#F3F0FF;">
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">Position</th>
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">Brand / Model</th>
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">Size</th>
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">DOT (Wk/Yr)</th>
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">Tread</th>
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">Tread Condition</th>
+              <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #D6C9F5;color:#5B21B6;">Sidewall</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${posRows}
+          </tbody>
+        </table>
+        <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px;display:flex;align-items:center;gap:14px;">
+          <div style="font-size:22px;">🔧</div>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#92400E;margin-bottom:2px;">Spare Tyre</div>
+            <div style="font-size:10.5px;color:#241D33;">
+              Condition: <b style="color:${spareCondColor}">${escHtml(spare.spare_condition||'Not Checked')}</b>
+              ${spare.tyre_size ? ' &nbsp;|&nbsp; Size: <b>' + escHtml(spare.tyre_size) + '</b>' : ''}
+              ${spare.note ? ' &nbsp;|&nbsp; ' + escHtml(spare.note) : ''}
+            </div>
+          </div>
+        </div>`;
+    }
+    document.getElementById('r-tyre-summary').textContent = fmt(d.tyre_summary, 'No overall tyre assessment added by admin.');
   }
 
   // ── Helpers ──────────────────────────────────────────────────

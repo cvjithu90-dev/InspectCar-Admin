@@ -3131,24 +3131,44 @@ function buildStep3() {
         '<div class="wz-step-desc">Review and edit every checklist item submitted by the inspector. Click a category to expand it.</div></div>' +
         allCats.map(function(cat) {
             const items = checklist[cat] || [];
+            const isTyreCat = cat.toLowerCase().includes('tyre data');
             const itemRows = items.map(function(item, ii) {
-                const statusOpts = ['Pass','Fail','Scratch','Dent','Rust','Worn','NA'].map(function(s) {
+                // Status options aligned with Inspector App
+                const statusOpts = ['Pass','Warn','Fail','N/A'].map(function(s) {
                     return '<option value="' + s + '"' + (item.answer===s?' selected':'') + '>' + s + '</option>';
                 }).join('');
-                const sevOpts = ['low','medium','high'].map(function(s) {
+                const sevOpts = ['low','medium','high','critical'].map(function(s) {
                     return '<option value="' + s + '"' + (item.severity===s?' selected':'') + '>' + s + '</option>';
                 }).join('');
                 const photosHtml = (item.photos && item.photos.length) ?
                     '<div class="wz-photo-grid">' + item.photos.map(function(p, pi) {
                         return '<div class="wz-photo-thumb"><img src="' + p + '"><button class="wz-photo-del" onclick="wzDeleteChecklistPhoto(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',' + pi + ')">✕</button></div>';
                     }).join('') + '</div>' : '';
+                // Extra fields (paint thickness / OBD)
+                const extraFields = (item.paint_thickness ? '<span style="font-size:10px;color:#818cf8;margin-left:6px;">🎨 ' + escW(item.paint_thickness) + ' µm</span>' : '') +
+                    (item.obd_value ? '<span style="font-size:10px;color:#34d399;margin-left:6px;">⚙ ' + escW(item.obd_value) + '</span>' : '');
+                // Tyre-specific data row
+                let tyreDataHtml = '';
+                if (isTyreCat && !item.item_name?.includes('Spare')) {
+                    tyreDataHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;padding:6px;background:rgba(245,158,11,0.05);border-radius:6px;">' +
+                        (item.tyre_make ? '<span style="font-size:10px;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 6px;border-radius:4px;">🛞 ' + escW(item.tyre_make) + ' ' + escW(item.tyre_model||'') + '</span>' : '') +
+                        (item.tyre_size ? '<span style="font-size:10px;color:#9ca3af;">Size: ' + escW(item.tyre_size) + '</span>' : '') +
+                        (item.mfg_week && item.mfg_year ? '<span style="font-size:10px;color:#9ca3af;">DOT: W' + escW(item.mfg_week) + '/' + escW(item.mfg_year) + '</span>' : '') +
+                        (item.tread_depth ? '<span style="font-size:10px;color:#9ca3af;">Tread: ' + escW(item.tread_depth) + 'mm</span>' : '') +
+                        (item.tread_condition ? '<span style="font-size:10px;color:#fbbf24;">' + escW(item.tread_condition) + '</span>' : '') +
+                        (item.sidewall_condition ? '<span style="font-size:10px;color:#9ca3af;">Sidewall: ' + escW(item.sidewall_condition) + '</span>' : '') +
+                        '</div>';
+                }
+                if (isTyreCat && item.item_name?.includes('Spare')) {
+                    tyreDataHtml = item.spare_condition ? '<span style="font-size:10px;color:#818cf8;margin-left:6px;">Condition: ' + escW(item.spare_condition) + '</span>' : '';
+                }
                 return '<div class="wz-checklist-item">' +
                     '<div class="wz-checklist-row">' +
-                    '<div class="wz-checklist-name">' + escW(item.item_name) + '</div>' +
+                    '<div class="wz-checklist-name">' + escW(item.item_name) + extraFields + '</div>' +
                     '<select class="wz-status-select" onchange="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'answer\',this.value)">' + statusOpts + '</select>' +
                     '<input type="text" placeholder="Notes..." value="' + escW(item.note||'') + '" oninput="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'note\',this.value)" style="flex:2;min-width:120px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 8px;border-radius:6px;font-size:11px;">' +
                     '<select onchange="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'severity\',this.value)" style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 7px;border-radius:6px;font-size:11px;">' + sevOpts + '</select>' +
-                    '</div>' + photosHtml + '</div>';
+                    '</div>' + tyreDataHtml + photosHtml + '</div>';
             }).join('');
             return '<div class="wz-card" style="margin-bottom:10px;">' +
                 '<div class="wz-card-title" style="cursor:pointer;user-select:none;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">' +
