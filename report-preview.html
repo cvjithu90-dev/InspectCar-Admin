@@ -846,24 +846,38 @@ table.cp td.note { color: #8A8296; }
         </div>`).join('');
     }
 
-    // Hero Photos
+    // Hero Photos — prefer admin-uploaded, fall back to inspector baseline photos
     const heroPhotos = d.hero_photos || {};
     const heroGallery = document.getElementById('hero-gallery');
-    const sides = ['Front', 'Side (Driver)', 'Rear', 'Side (Passenger)'];
-    const keys  = ['front', 'side_driver', 'rear', 'side_passenger'];
-    heroGallery.innerHTML = sides.map((side, i) => {
-      const url = heroPhotos[keys[i]];
+    // Inspector baseline photos are stored in checklist as 'Baseline Photos & Docs' category
+    const baselineCat = d.checklist && (d.checklist['Baseline Photos & Docs'] || d.checklist['Baseline Photos & Docs']);
+    const baselineExtItem = baselineCat && baselineCat.find(i => i.item_name === 'Exterior Baseline Photos');
+    // sub-key photos stored with key 'Exterior Baseline Photos_front' etc. in answers
+    const getBaselinePhoto = (slot) => {
+      const key = 'Exterior Baseline Photos_' + slot;
+      const subItem = baselineCat && baselineCat.find(i => i.item_name === key);
+      return subItem && subItem.photos && subItem.photos[0];
+    };
+    const heroSlots = [
+      { label: 'Front',           adminKey: 'front',          inspKey: 'front' },
+      { label: 'Side (Driver)',    adminKey: 'side_driver',    inspKey: 'left' },
+      { label: 'Rear',            adminKey: 'rear',           inspKey: 'rear' },
+      { label: 'Side (Passenger)',adminKey: 'side_passenger', inspKey: 'right' }
+    ];
+    heroGallery.innerHTML = heroSlots.map(slot => {
+      const url = heroPhotos[slot.adminKey] || getBaselinePhoto(slot.inspKey);
       const content = url
         ? `<img src="${url}" style="width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #EEE7FB;">`
-        : `<div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">${side}</div>`;
-      return `<div class="g-item">${content}<div class="cap">${side}</div></div>`;
+        : `<div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">${slot.label}</div>`;
+      return `<div class="g-item">${content}<div class="cap">${slot.label}</div></div>`;
     }).join('');
 
     // Checkpoints
     const checkpointData = d.checklist || {};
     const sections = document.getElementById('checkpoint-sections');
     sections.innerHTML = Object.keys(checkpointData).map(cat => {
-      const items = checkpointData[cat] || [];
+      // Filter out baseline photo sub-keys (Exterior Baseline Photos_front etc.)
+      const items = (checkpointData[cat] || []).filter(i => !i.item_name || !i.item_name.includes('Exterior Baseline Photos_'));
       if (!items.length) return '';
       return `<div class="cp-section">
         <div class="cp-title">${escHtml(cat)}<span class="n">${items.length} checks</span></div>
