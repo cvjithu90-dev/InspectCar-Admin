@@ -2113,7 +2113,9 @@
                 if(pkg.includes('Pre') || pkg.includes('PDI') || pkg.includes('Quick')) price = 1999;
 
                 const inspector_id = $('#nb-inspector').value || null;
-                const status = inspector_id ? 'assigned' : 'pending';
+                // Admin-created bookings are ALWAYS real reservations — use 'confirmed'.
+                // 'assigned' = inspector allocated, 'confirmed' = slot locked (no inspector yet)
+                const status = inspector_id ? 'assigned' : 'confirmed';
                 
                 const yearStr = new Date().getFullYear().toString().slice(-2);
                 const rand = Math.floor(1000 + Math.random() * 9000);
