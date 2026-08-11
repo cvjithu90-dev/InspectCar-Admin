@@ -646,7 +646,12 @@
                         </div>
                         <div>
                             <label class="text-secondary text-xs block mb-1">Year</label>
-                            <input type="number" id="edit-vehicle-year" class="form-control text-sm" />
+                            <input type="number" id="edit-vehicle-year" class="form-control text-sm"
+                              min="2000" placeholder="e.g. 2024" />
+                            <script>
+                              // Keep max in sync with the real current year + 1
+                              document.getElementById('edit-vehicle-year').max = new Date().getFullYear() + 1;
+                            </script>
                         </div>
                         <div>
                             <label class="text-secondary text-xs block mb-1">Reg Number</label>
@@ -854,7 +859,22 @@
                         <div class="grid-2">
                             <div class="form-group">
                                 <label>Year</label>
-                                <input type="number" id="nb-year" class="form-control" min="2000" max="2025" required>
+                                <select id="nb-year" class="form-control" required>
+                                    <!-- Dynamically populated -->
+                                </select>
+                                <script>
+                                  (function() {
+                                    const sel = document.getElementById('nb-year');
+                                    const curYear = new Date().getFullYear();
+                                    for (let y = curYear + 1; y >= 2000; y--) {
+                                      const opt = document.createElement('option');
+                                      opt.value = y;
+                                      opt.textContent = y === 2000 ? '2000 & Older' : String(y);
+                                      if (y === curYear) opt.selected = true;
+                                      sel.appendChild(opt);
+                                    }
+                                  })();
+                                </script>
                             </div>
                             <div class="form-group">
                                 <label>Reg Number</label>
