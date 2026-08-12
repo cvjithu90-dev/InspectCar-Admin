@@ -647,11 +647,7 @@
                         <div>
                             <label class="text-secondary text-xs block mb-1">Year</label>
                             <input type="number" id="edit-vehicle-year" class="form-control text-sm"
-                              min="2000" placeholder="e.g. 2024" />
-                            <script>
-                              // Keep max in sync with the real current year + 1
-                              document.getElementById('edit-vehicle-year').max = new Date().getFullYear() + 1;
-                            </script>
+                              min="1990" placeholder="e.g. 2026" />
                         </div>
                         <div>
                             <label class="text-secondary text-xs block mb-1">Reg Number</label>
@@ -859,22 +855,7 @@
                         <div class="grid-2">
                             <div class="form-group">
                                 <label>Year</label>
-                                <select id="nb-year" class="form-control" required>
-                                    <!-- Dynamically populated -->
-                                </select>
-                                <script>
-                                  (function() {
-                                    const sel = document.getElementById('nb-year');
-                                    const curYear = new Date().getFullYear();
-                                    for (let y = curYear + 1; y >= 2000; y--) {
-                                      const opt = document.createElement('option');
-                                      opt.value = y;
-                                      opt.textContent = y === 2000 ? '2000 & Older' : String(y);
-                                      if (y === curYear) opt.selected = true;
-                                      sel.appendChild(opt);
-                                    }
-                                  })();
-                                </script>
+                                <input type="number" id="nb-year" class="form-control" placeholder="e.g. 2026" min="1990" max="2035" required>
                             </div>
                             <div class="form-group">
                                 <label>Reg Number</label>
@@ -1637,7 +1618,10 @@
             // Pre-fill Vehicle Edit Inputs
             if($('#edit-vehicle-brand')) $('#edit-vehicle-brand').value = b.vehicle_brand || '';
             if($('#edit-vehicle-model')) $('#edit-vehicle-model').value = b.vehicle_model || '';
-            if($('#edit-vehicle-year')) $('#edit-vehicle-year').value = b.vehicle_year || '';
+            if($('#edit-vehicle-year')) {
+                $('#edit-vehicle-year').value = b.vehicle_year || '';
+                $('#edit-vehicle-year').max = new Date().getFullYear() + 1;
+            }
             if($('#edit-vehicle-reg')) $('#edit-vehicle-reg').value = b.vehicle_reg || '';
 
             // Customer Edit Event Handlers
@@ -2095,6 +2079,12 @@
 
         // --- NEW BOOKING ---
         async function renderNewBooking() {
+            const curYear = new Date().getFullYear();
+            if ($('#nb-year')) {
+                $('#nb-year').value = curYear;
+                $('#nb-year').max = curYear + 1;
+            }
+
             const inspectors = await fetchInspectors();
             const select = $('#nb-inspector');
             select.innerHTML = '<option value="">-- Leave Pending --</option>';
