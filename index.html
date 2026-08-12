@@ -2884,6 +2884,19 @@ async function loadWzAnswers() {
                 p.item_name && p.item_name.trim().toLowerCase() === ans.item_name.trim().toLowerCase()
             ).map(p => p.photo_url);
 
+            // Tyre-specific fields to carry over
+            const tyreFields = {
+                tyre_make: ans.tyre_make || '',
+                tyre_model: ans.tyre_model || '',
+                tyre_size: ans.tyre_size || '',
+                mfg_week: ans.mfg_week || '',
+                mfg_year: ans.mfg_year || '',
+                tread_depth: ans.tread_depth || '',
+                tread_condition: ans.tread_condition || '',
+                sidewall_condition: ans.sidewall_condition || '',
+                spare_condition: ans.spare_condition || ''
+            };
+
             if (item) {
                 // Update item with DB data from inspector
                 if (ans.answer) item.answer = ans.answer;
@@ -2891,6 +2904,8 @@ async function loadWzAnswers() {
                 if (ans.remarks) item.note = ans.remarks;
                 if (ans.paint_thickness) item.paint_thickness = ans.paint_thickness;
                 if (ans.obd_value) item.obd_value = ans.obd_value;
+                // Merge tyre fields
+                Object.keys(tyreFields).forEach(f => { if (tyreFields[f]) item[f] = tyreFields[f]; });
                 if (itemPhotos.length > 0) {
                     item.photos = Array.from(new Set([...(item.photos || []), ...itemPhotos]));
                 }
@@ -2902,7 +2917,8 @@ async function loadWzAnswers() {
                     note: ans.remarks || '',
                     paint_thickness: ans.paint_thickness || '',
                     obd_value: ans.obd_value || '',
-                    photos: itemPhotos
+                    photos: itemPhotos,
+                    ...tyreFields
                 });
             }
         });
@@ -3192,6 +3208,22 @@ function buildStep3() {
 
 function buildStep4() {
     const d = wz.draft;
+    // Auto-populate tyre data from inspector checklist if not already set
+    const checklist = d.checklist || {};
+    const tyreCatKey = Object.keys(checklist).find(k => k.toLowerCase().includes('tyre data'));
+    if (tyreCatKey && (!d.tyre_data || Object.values(d.tyre_data).every(t => !t || Object.keys(t).length === 0))) {
+        const items = checklist[tyreCatKey] || [];
+        if (!d.tyre_data) d.tyre_data = { fl:{}, fr:{}, rl:{}, rr:{}, spare:{} };
+        const posMap = { fl: 'front left', fr: 'front right', rl: 'rear left', rr: 'rear right', spare: 'spare' };
+        const tyreFields = ['tyre_make','tyre_model','tyre_size','mfg_week','mfg_year','tread_depth','tread_condition','sidewall_condition','spare_condition'];
+        Object.keys(posMap).forEach(function(posKey) {
+            const label = posMap[posKey];
+            const match = items.find(function(i) { return i.item_name && i.item_name.toLowerCase().includes(label); });
+            if (match) {
+                tyreFields.forEach(function(f) { if (match[f]) d.tyre_data[posKey][f] = match[f]; });
+            }
+        });
+    }
     const cats = d.categories || [];
     const catsHtml = cats.map(function(c, i) {
         const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'🟡 Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
