@@ -2939,10 +2939,8 @@ async function loadWzAnswers() {
             }
         });
 
-        // Auto-populate hero exterior photos if missing
-        if (!wz.draft.hero_photos || Object.keys(wz.draft.hero_photos).length === 0) {
-            autoPopulateHeroPhotos(photos || []);
-        }
+        // Auto-populate hero exterior photos (fill any missing slots from inspector photos)
+        autoPopulateHeroPhotos(photos || []);
 
         // Auto-calculate score if not set
         if (!wz.draft.ai_score && answers && answers.length > 0) {
@@ -2953,6 +2951,24 @@ async function loadWzAnswers() {
 
 function autoPopulateHeroPhotos(photos) {
     if (!wz.draft.hero_photos) wz.draft.hero_photos = {};
+    // First pass: prioritise Exterior Baseline Photo slots from inspector
+    // item_name patterns: "Exterior Baseline Photos – Front View", "– Rear View", "– Left Side View", "– Right Side View"
+    (photos || []).forEach(p => {
+        const name = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+        const isBaseline = name.includes('exterior baseline');
+        if (isBaseline) {
+            if (name.includes('front') && !wz.draft.hero_photos.front) {
+                wz.draft.hero_photos.front = p.photo_url;
+            } else if (name.includes('rear') && !wz.draft.hero_photos.rear) {
+                wz.draft.hero_photos.rear = p.photo_url;
+            } else if (name.includes('left') && !wz.draft.hero_photos.side_driver) {
+                wz.draft.hero_photos.side_driver = p.photo_url;
+            } else if (name.includes('right') && !wz.draft.hero_photos.side_passenger) {
+                wz.draft.hero_photos.side_passenger = p.photo_url;
+            }
+        }
+    });
+    // Second pass: fall back to any photo with front/rear/left/right in name
     (photos || []).forEach(p => {
         const str = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
         if (str.includes('front') && !wz.draft.hero_photos.front) {
