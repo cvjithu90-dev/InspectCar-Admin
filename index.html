@@ -157,6 +157,7 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
+        .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
@@ -457,7 +458,7 @@
         </div>
         <div class="main-content">
             <div class="topbar">
-                <div id="header-greeting" class="font-bold">Good Morning, Admin</div>
+                <div id="header-greeting" class="font-bold">Hello, Admin</div>
                 <div id="header-date" class="text-sm text-secondary"></div>
             </div>
             <div id="page-container" class="page-content">
@@ -476,7 +477,15 @@
             </div>
         </div>
         
-        <div class="grid-4 mb-4">
+        <div class="grid-5 mb-4">
+            <div class="card stat-card">
+                <span class="stat-title">Total Revenue</span>
+                <span class="stat-value text-success" id="dash-total-revenue">-</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-title">Revenue This Month</span>
+                <span class="stat-value text-success" id="dash-revenue">-</span>
+            </div>
             <div class="card stat-card">
                 <span class="stat-title">Total Bookings</span>
                 <span class="stat-value" id="dash-total-bookings">-</span>
@@ -488,10 +497,6 @@
             <div class="card stat-card">
                 <span class="stat-title">Pending Assignment</span>
                 <span class="stat-value text-warning" id="dash-pending-bookings">-</span>
-            </div>
-            <div class="card stat-card">
-                <span class="stat-title">Revenue This Month</span>
-                <span class="stat-value text-success" id="dash-revenue">-</span>
             </div>
         </div>
 
@@ -1321,6 +1326,7 @@
                 if (pageContainer && viewTpl) {
                     pageContainer.innerHTML = viewTpl.innerHTML;
                     updateNavActiveState(path);
+                    updateHeader();
                     if (typeof renderLogic === 'function') {
                         try {
                             await renderLogic();
@@ -1344,7 +1350,15 @@
             const today = new Date();
             const dateString = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             if($('#header-date')) $('#header-date').textContent = dateString;
-            if($('#header-greeting') && state.profile) $('#header-greeting').textContent = `Good Morning, ${state.profile.full_name.split(' ')[0]}`;
+            
+            const hour = today.getHours();
+            let timeGreeting = 'Hello';
+            if (hour >= 5 && hour < 12) timeGreeting = 'Good Morning';
+            else if (hour >= 12 && hour < 17) timeGreeting = 'Good Afternoon';
+            else if (hour >= 17 && hour < 22) timeGreeting = 'Good Evening';
+
+            const name = (state && state.profile && state.profile.full_name) ? state.profile.full_name.split(' ')[0] : 'Admin';
+            if($('#header-greeting')) $('#header-greeting').textContent = `${timeGreeting}, ${name}`;
         }
 
         function updateNavActiveState(currentPath) {
@@ -1461,15 +1475,20 @@
             
             const { count: pendingBookings } = await client.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending');
             
+            // Total All-Time Revenue (excluding cancelled)
+            const { data: allRevData } = await client.from('bookings').select('total_price, base_price').neq('status', 'cancelled');
+            const totalAllRev = allRevData ? allRevData.reduce((sum, b) => sum + (Number(b.total_price) || Number(b.base_price) || 0), 0) : 0;
+
             // Monthly revenue
             const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-            const { data: revData } = await client.from('bookings').select('total_price').gte('created_at', firstDay).neq('status', 'cancelled');
-            const totalRev = revData ? revData.reduce((sum, b) => sum + (Number(b.total_price) || 0), 0) : 0;
+            const { data: revData } = await client.from('bookings').select('total_price, base_price').gte('created_at', firstDay).neq('status', 'cancelled');
+            const totalMonthRev = revData ? revData.reduce((sum, b) => sum + (Number(b.total_price) || Number(b.base_price) || 0), 0) : 0;
 
+            if($('#dash-total-revenue')) $('#dash-total-revenue').textContent = formatCurrency(totalAllRev);
+            if($('#dash-revenue')) $('#dash-revenue').textContent = formatCurrency(totalMonthRev);
             if($('#dash-total-bookings')) $('#dash-total-bookings').textContent = totalBookings || 0;
             if($('#dash-today-bookings')) $('#dash-today-bookings').textContent = todayBookings || 0;
             if($('#dash-pending-bookings')) $('#dash-pending-bookings').textContent = pendingBookings || 0;
-            if($('#dash-revenue')) $('#dash-revenue').textContent = formatCurrency(totalRev);
 
             // Live Feed
             const { data: recent } = await client.from('bookings').select('*').order('created_at', { ascending: false }).limit(5);
