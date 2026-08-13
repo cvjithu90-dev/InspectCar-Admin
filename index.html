@@ -3907,7 +3907,7 @@ window.wzParseSvcRecords = function(rawText) {
                 service_date: normDate(allDateMatches[0]),
                 odometer_km:  odoFb ? odoFb[1].replace(/,/g,'') : '',
                 service_type: classifySvc(rawText),
-                dealer_name:  dealerFb ? dealerFb[1].trim() : '',
+                dealer_name:  dlrFb ? dlrFb[1].trim() : '',
                 description:  '',
                 cost:         amtFb ? amtFb[1].replace(/,/g,'') : ''
             });
