@@ -4158,7 +4158,7 @@ Please generate:
 2. "engine_calibration": 1-2 sentences OBD & engine diagnostic summary.
 3. "tyre_analysis_text": 1-2 sentences tyre wear analysis summary.
 4. "summary": 2-3 sentences Executive Summary for the buyer.
-5. "recommendation": 1 sentence final buying recommendation.
+5. "recommendation": 1 concise sentence buying recommendation for customer (e.g., "Recommended to buy with price negotiation"). Do NOT include price figures or market valuation ranges here.
 
 Return ONLY valid JSON format:
 {
@@ -4312,7 +4312,9 @@ function buildPreviewPayload() {
         inspection_date:d.inspection_date, completed_date:d.completed_date,
         package_name:d.package_name, area:d.area, location_type:d.location_type,
         inspector_name:d.inspector_name, inspector_notes:d.inspector_notes,
-        admin_remarks:d.admin_remarks, categories:d.categories||[],
+        admin_remarks:d.admin_remarks, engine_calibration:d.engine_calibration,
+        tyre_analysis_text:d.tyre_analysis_text, service_history_note:d.service_history_note,
+        market_price_analysis:d.market_price_analysis, categories:d.categories||[],
         negotiations:d.negotiations||[], repairs:d.repairs||[],
         service_history:d.service_history||[], documents:d.documents||[],
         hero_photos:d.hero_photos||{}, checklist:d.checklist||{}

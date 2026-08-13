@@ -796,6 +796,12 @@ table.cp td.note { color: #8A8296; }
       document.getElementById('n-total').textContent = '₹0';
     }
 
+    // Additional AI Checks
+    if (document.getElementById('n-engine-cal')) document.getElementById('n-engine-cal').textContent = fmt(d.engine_calibration, 'No active or pending diagnostic trouble codes found.');
+    if (document.getElementById('n-tyre-analysis')) document.getElementById('n-tyre-analysis').textContent = fmt(d.tyre_analysis_text, 'Tyre condition assessment based on inspection data.');
+    if (document.getElementById('n-service-history-note')) document.getElementById('n-service-history-note').textContent = fmt(d.service_history_note, 'Full service history captured separately — see Service History section.');
+    if (document.getElementById('n-market')) document.getElementById('n-market').textContent = fmt(d.market_price_analysis, 'Market price analysis pending.');
+
     // Repair Estimates
     const repairs = d.repairs || [];
     const chips = document.getElementById('r-chips');
