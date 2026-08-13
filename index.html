@@ -3776,7 +3776,7 @@ window.wzSvcHandleDrop = function(e) {
     if (files.length) wzSvcHandleFiles(files);
 };
 
-window.wzSvcHandleFiles = function(fileList) {
+window.wzSvcHandleFiles = async function(fileList) {
     const files = Array.from(fileList);
     if (!files.length) return;
     const processing = document.getElementById('svc-pdf-processing');
@@ -3785,35 +3785,79 @@ window.wzSvcHandleFiles = function(fileList) {
     if (processing) processing.style.display = 'block';
     if (uploadArea) uploadArea.style.opacity = '0.4';
 
-    var idx = 0;
-    function processNext() {
-        if (idx >= files.length) {
-            if (processing) processing.style.display = 'none';
-            if (uploadArea) uploadArea.style.opacity = '1';
-            // Refresh step UI to show populated rows
-            goToWzStep(5);
-            return;
-        }
-        var file = files[idx++];
-        if (msgEl) msgEl.textContent = 'Reading: ' + file.name + ' (' + idx + '/' + files.length + ')\u2026';
-        wzExtractPdfText(file).then(function(text) {
-            var records = wzParseSvcRecords(text);
+    for (let idx = 0; idx < files.length; idx++) {
+        const file = files[idx];
+        if (msgEl) msgEl.textContent = `Analyzing with Gemini AI: ${file.name} (${idx + 1}/${files.length})\u2026`;
+        try {
+            const rawText = await wzExtractPdfText(file);
+            let parsed = null;
+            try {
+                parsed = await wzParseSvcWithGemini(rawText);
+            } catch (aiErr) {
+                console.warn('Gemini AI PDF parse failed, falling back to multi-rule regex:', aiErr);
+            }
+
             if (!wz.draft.service_history) wz.draft.service_history = [];
-            records.forEach(function(rec) {
-                // Dedup by date+odo
-                var key = (rec.service_date||'') + '|' + (rec.odometer_km||'');
-                var exists = wz.draft.service_history.some(function(r) {
-                    return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
+
+            if (parsed && parsed.records && parsed.records.length > 0) {
+                parsed.records.forEach(function(rec) {
+                    var key = (rec.service_date||'') + '|' + (rec.odometer_km||'');
+                    var exists = wz.draft.service_history.some(function(r) {
+                        return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
+                    });
+                    if (!exists) wz.draft.service_history.push(rec);
                 });
-                if (!exists) wz.draft.service_history.push(rec);
-            });
-            processNext();
-        }).catch(function(err) {
-            console.error('PDF read error:', err);
-            processNext();
-        });
+                if (parsed.summary) {
+                    wz.draft.service_history_note = parsed.summary;
+                }
+                showToast(`✨ Captured ${parsed.records.length} service records & AI summary!`, 'success');
+            } else {
+                var records = wzParseSvcRecords(rawText);
+                records.forEach(function(rec) {
+                    var key = (rec.service_date||'') + '|' + (rec.odometer_km||'');
+                    var exists = wz.draft.service_history.some(function(r) {
+                        return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
+                    });
+                    if (!exists) wz.draft.service_history.push(rec);
+                });
+                showToast(`Captured ${records.length} records from PDF`, 'info');
+            }
+        } catch (err) {
+            console.error('PDF error:', err);
+            showToast('Could not read PDF: ' + err.message, 'error');
+        }
     }
-    processNext();
+
+    if (processing) processing.style.display = 'none';
+    if (uploadArea) uploadArea.style.opacity = '1';
+    goToWzStep(5);
+};
+
+window.wzParseSvcWithGemini = async function(pdfText) {
+    const prompt = `You are an expert car service history parser for InspectCar.
+Extract all service history records from this raw text extracted from a vehicle service history PDF report and generate a 2-3 sentence executive summary.
+
+Return valid JSON format ONLY:
+{
+  "summary": "2-3 sentences executive summary of the service history (mention total visits, date range, mileage range, total spend if present, and maintenance status).",
+  "records": [
+    {
+      "service_date": "YYYY-MM-DD",
+      "dealer_name": "Dealer or Workshop Name (e.g., Hyundai Authorized Service)",
+      "odometer_km": 93208,
+      "service_type": "free service | paid service | running repair | periodic | accidental | warranty",
+      "description": "Short description of service type or work done",
+      "cost": 0
+    }
+  ]
+}
+
+Raw Text from PDF:
+${pdfText}`;
+
+    const jsonText = await callGeminiAI(prompt);
+    const cleanJson = jsonText.replace(/```json\s*|\s*```/g, '').trim();
+    return JSON.parse(cleanJson);
 };
 
 window.wzExtractPdfText = function(file) {
@@ -3953,7 +3997,7 @@ window.wzParseSvcRecords = function(rawText) {
 
     // Extract global dealer/make if available at top of PDF
     var globalDealer = '';
-    var makeMatch = rawText.match(/Make[:\s]+([A-Za-z0-9\s&.,']+)/i);
+    var makeMatch = rawText.match(/Make[:\s]+([A-Za-z0-9]+)/i);
     if (makeMatch) globalDealer = makeMatch[1].trim() + ' Authorized Service';
 
     // ── Process line by line ──────────────────────────────────
@@ -3964,13 +4008,16 @@ window.wzParseSvcRecords = function(rawText) {
 
         // Skip lines that are purely headers (must NOT contain a date)
         var isHeaderOnly = /visit\s*no|workshop\s*visit|odometer\s*reading|service\s*type/i.test(line) &&
-                           !/(\d{1,2}[-\/][A-Za-z]{3,}[-\/]\d{2,4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i.test(line);
+                           !/(\d{1,2}[\s\-\/][A-Za-z]{3,}[\s\-\/]\d{2,4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i.test(line);
         if (isHeaderOnly) continue;
 
         // Find date in this line
         var dateRaw = '';
+        var matchSpace = line.match(/\b(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[a-z]*\s+\d{2,4})\b/i);
         var matchA = line.match(/(\d{1,2}[-\/](?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[-\/]\d{2,4})(?:\s+\d{1,2}:\d{2})?/i);
-        if (matchA) {
+        if (matchSpace) {
+            dateRaw = matchSpace[1];
+        } else if (matchA) {
             dateRaw = matchA[1];
         } else {
             var matchB = line.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/);

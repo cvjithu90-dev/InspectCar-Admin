@@ -854,17 +854,19 @@ table.cp td.note { color: #8A8296; }
       const odos = services.map(s => Number(s.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>a-b);
       const totalCost = services.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
 
-      let summary = `This vehicle has <b>${count} recorded service visit${count > 1 ? 's' : ''}</b> on file`;
-      if (dates.length > 0) {
-        summary += ` ranging from <b>${fmt(dates[0])}</b> to <b>${fmt(dates[dates.length - 1])}</b>`;
+      let summary = d.service_history_note || `This vehicle has <b>${count} recorded service visit${count > 1 ? 's' : ''}</b> on file`;
+      if (!d.service_history_note) {
+        if (dates.length > 0) {
+          summary += ` ranging from <b>${fmt(dates[0])}</b> to <b>${fmt(dates[dates.length - 1])}</b>`;
+        }
+        if (odos.length > 0) {
+          summary += `. Odometer readings span from <b>${odos[0].toLocaleString('en-IN')} km</b> up to <b>${odos[odos.length - 1].toLocaleString('en-IN')} km</b>`;
+        }
+        if (totalCost > 0) {
+          summary += `, with total recorded maintenance cost of <b>₹${totalCost.toLocaleString('en-IN')}</b>`;
+        }
+        summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.`;
       }
-      if (odos.length > 0) {
-        summary += `. Odometer readings span from <b>${odos[0].toLocaleString('en-IN')} km</b> up to <b>${odos[odos.length - 1].toLocaleString('en-IN')} km</b>`;
-      }
-      if (totalCost > 0) {
-        summary += `, with total recorded maintenance cost of <b>₹${totalCost.toLocaleString('en-IN')}</b>`;
-      }
-      summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.`;
 
       if (summaryText) summaryText.innerHTML = summary;
       if (summaryBox) summaryBox.style.display = 'block';
