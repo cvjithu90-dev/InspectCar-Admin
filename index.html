@@ -657,6 +657,16 @@
                               min="1990" placeholder="e.g. 2026" />
                         </div>
                         <div>
+                            <label class="text-secondary text-xs block mb-1">Fuel Type</label>
+                            <select id="edit-vehicle-fuel" class="form-control text-sm">
+                                <option value="Petrol">Petrol</option>
+                                <option value="Diesel">Diesel</option>
+                                <option value="CNG">CNG</option>
+                                <option value="Electric">Electric</option>
+                                <option value="Hybrid">Hybrid</option>
+                            </select>
+                        </div>
+                        <div style="grid-column: span 2;">
                             <label class="text-secondary text-xs block mb-1">Reg Number</label>
                             <input type="text" id="edit-vehicle-reg" class="form-control text-sm" />
                         </div>
@@ -859,10 +869,20 @@
                             <label>Brand & Model</label>
                             <input type="text" id="nb-vehicle" class="form-control" placeholder="e.g. Hyundai i20" required>
                         </div>
-                        <div class="grid-2">
+                        <div class="grid-3">
                             <div class="form-group">
                                 <label>Year</label>
                                 <input type="number" id="nb-year" class="form-control" placeholder="e.g. 2026" min="1990" max="2035" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Fuel Type</label>
+                                <select id="nb-fuel" class="form-control" required>
+                                    <option value="Petrol" selected>Petrol</option>
+                                    <option value="Diesel">Diesel</option>
+                                    <option value="CNG">CNG</option>
+                                    <option value="Electric">Electric</option>
+                                    <option value="Hybrid">Hybrid</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label>Reg Number</label>
@@ -1643,6 +1663,7 @@
                 $('#edit-vehicle-year').value = b.vehicle_year || '';
                 $('#edit-vehicle-year').max = new Date().getFullYear() + 1;
             }
+            if($('#edit-vehicle-fuel')) $('#edit-vehicle-fuel').value = b.vehicle_fuel || 'Petrol';
             if($('#edit-vehicle-reg')) $('#edit-vehicle-reg').value = b.vehicle_reg || '';
 
             // Customer Edit Event Handlers
@@ -1706,12 +1727,14 @@
                     const vBrand = $('#edit-vehicle-brand').value.trim();
                     const vModel = $('#edit-vehicle-model').value.trim();
                     const vYear = $('#edit-vehicle-year').value.trim();
+                    const vFuel = $('#edit-vehicle-fuel') ? $('#edit-vehicle-fuel').value : 'Petrol';
                     const vReg = $('#edit-vehicle-reg').value.trim();
 
                     const { error } = await client.from('bookings').update({
                         vehicle_brand: vBrand,
                         vehicle_model: vModel,
                         vehicle_year: vYear,
+                        vehicle_fuel: vFuel,
                         vehicle_reg: vReg || null
                     }).eq('id', id);
 
@@ -2140,6 +2163,7 @@
                     vehicle_brand: $('#nb-vehicle').value.split(' ')[0],
                     vehicle_model: $('#nb-vehicle').value.split(' ').slice(1).join(' ') || '',
                     vehicle_year: $('#nb-year').value,
+                    vehicle_fuel: $('#nb-fuel') ? $('#nb-fuel').value : 'Petrol',
                     vehicle_reg: $('#nb-reg').value,
                     package_name: pkg,
                     base_price: price,
@@ -2854,7 +2878,7 @@ async function loadWzBooking() {
                 booking_ref: data.booking_ref, customer_name: data.customer_name,
                 customer_phone: data.customer_phone, vehicle_brand: data.vehicle_brand,
                 vehicle_model: data.vehicle_model, vehicle_year: data.vehicle_year,
-                vehicle_fuel: data.vehicle_fuel, vehicle_reg: data.vehicle_reg,
+                vehicle_fuel: data.vehicle_fuel || 'Petrol', vehicle_reg: data.vehicle_reg,
                 package_name: data.package_name, inspection_date: data.inspection_date,
                 area: data.area, location_type: data.location_type,
                 inspector_name: data.profiles?.full_name || '',
@@ -3103,6 +3127,7 @@ function escW(s) { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/"/
 
 function buildStep1() {
     const d = wz.draft;
+    if (!d.vehicle_fuel) d.vehicle_fuel = 'Petrol';
     return '<div class="wz-step-header"><div class="wz-step-title">🚗 Vehicle Information</div>' +
         '<div class="wz-step-desc">Verify and complete all vehicle and owner details. Use the auto-fetch buttons for VAHAN data population.</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Booking &amp; Customer <span style="font-size:11px;color:var(--text-secondary);">' + escW(d.booking_ref) + '</span></div>' +

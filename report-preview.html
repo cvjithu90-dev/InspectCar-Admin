@@ -734,7 +734,7 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('s-booked').textContent      = fmt(d.inspection_date);
     document.getElementById('s-completed').textContent   = fmt(d.completed_date, fmt(d.inspection_date));
     document.getElementById('s-package').textContent     = fmt(d.package_name);
-    document.getElementById('s-fuel').textContent        = fmt(d.vehicle_fuel);
+    document.getElementById('s-fuel').textContent        = fmt(d.vehicle_fuel, 'Petrol');
     document.getElementById('s-year').textContent        = fmt(d.vehicle_year);
     document.getElementById('s-owners').textContent      = d.owner_count ? d.owner_count + (d.owner_count === 1 ? ' (First Owner)' : ' Owners') : '—';
     document.getElementById('s-location-footer').textContent = fmt(d.area, 'India');
@@ -760,7 +760,7 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('v-engine-no').textContent      = fmt(d.engine_number, 'Withheld for privacy');
     document.getElementById('v-vin').textContent            = fmt(d.vin_number, 'Withheld for privacy');
     document.getElementById('v-color').textContent          = fmt(d.color);
-    document.getElementById('v-fuel').textContent           = fmt(d.vehicle_fuel);
+    document.getElementById('v-fuel').textContent           = fmt(d.vehicle_fuel, 'Petrol');
     document.getElementById('v-body').textContent           = fmt(d.body_type);
     document.getElementById('v-odometer').textContent       = d.odometer_km ? Number(d.odometer_km).toLocaleString('en-IN') + ' km' : '—';
     document.getElementById('v-seats').textContent          = fmt(d.seat_capacity);
