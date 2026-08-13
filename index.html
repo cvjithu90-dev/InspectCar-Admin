@@ -399,6 +399,8 @@
         }
         .hidden { display: none !important; }
     </style>
+    <!-- PDF.js: client-side PDF text extraction for Service History auto-capture -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
     <div id="toast-container"></div>
@@ -3351,7 +3353,7 @@ function buildNegRows() {
 function buildStep5() {
     const svc = (wz && wz.draft && wz.draft.service_history) ? wz.draft.service_history : [];
     const rows = svc.map(function(s, i) {
-        const typeOpts = ['dealer','authorized','local','oem'].map(function(t) {
+        const typeOpts = ['dealer','authorized','local','oem','free service','periodic','accidental','warranty'].map(function(t) {
             return '<option value="' + t + '"' + (s.service_type===t?' selected':'') + '>' + t + '</option>';
         }).join('');
         return '<tr>' +
@@ -3363,10 +3365,37 @@ function buildStep5() {
             '<td><input type="number" value="' + escW(s.cost||'') + '" oninput="wzUpdateSvc(' + i + ',\'cost\',this.value)" style="width:80px;"></td>' +
             '<td><button class="wz-del-btn" onclick="wzDelSvc(' + i + ')">✕</button></td></tr>';
     }).join('');
+
+    // PDF upload zone HTML
+    const pdfUploadZone =
+        '<div id="svc-pdf-upload-area" style="' +
+            'margin-bottom:14px;border:2px dashed var(--border-color);border-radius:10px;' +
+            'padding:22px 18px;text-align:center;cursor:pointer;transition:all 0.2s;' +
+            'background:var(--bg-color);' +
+        '" ' +
+        'onclick="document.getElementById(\'svc-pdf-input\').click()" ' +
+        'ondragover="event.preventDefault();this.style.borderColor=\'#7C3AED\';this.style.background=\'rgba(124,58,237,0.06)\';" ' +
+        'ondragleave="this.style.borderColor=\'\';this.style.background=\'\';" ' +
+        'ondrop="wzSvcHandleDrop(event)">' +
+            '<input type="file" id="svc-pdf-input" accept=".pdf" multiple style="display:none;" onchange="wzSvcHandleFiles(this.files)">' +
+            '<div style="font-size:22px;margin-bottom:6px;">📄</div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:3px;">Upload Service History PDF</div>' +
+            '<div style="font-size:11px;color:var(--text-secondary);">Drop your dealer invoice or service booklet — data auto-fills below</div>' +
+            '<button class="wz-api-btn" style="margin-top:10px;" onclick="event.stopPropagation();document.getElementById(\'svc-pdf-input\').click()">' +
+                '<i class="fas fa-file-pdf" style="color:#EF4444;"></i> Choose PDF' +
+            '</button>' +
+        '</div>' +
+        '<div id="svc-pdf-processing" style="display:none;text-align:center;padding:14px;color:var(--text-secondary);font-size:12px;">' +
+            '<span id="svc-pdf-spinner" style="display:inline-block;width:16px;height:16px;border:2px solid var(--border-color);border-top-color:#7C3AED;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:8px;vertical-align:middle;"></span>' +
+            '<span id="svc-pdf-msg">Reading PDF…</span>' +
+        '</div>';
+
     return '<div class="wz-step-header"><div class="wz-step-title">🔖 Service History</div>' +
-        '<div class="wz-step-desc">Add or verify the vehicle\'s service records.</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Service Records ' +
+        '<div class="wz-step-desc">Upload a service PDF to auto-capture records, or add manually.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Upload Service PDF' +
         '<button class="wz-api-btn" onclick="wzFetchServiceHistory()"><i class="fas fa-bolt"></i> Fetch from API</button></div>' +
+        pdfUploadZone + '</div>' +
+        '<div class="wz-card"><div class="wz-card-title">Service Records</div>' +
         '<table class="wz-table"><thead><tr><th>Date</th><th>Dealer / Center</th><th>Odometer</th><th>Type</th><th>Description</th><th>Cost (₹)</th><th></th></tr></thead>' +
         '<tbody id="svc-table-body">' + rows + '</tbody></table>' +
         '<button class="wz-add-row-btn" onclick="wzAddSvcRow()">+ Add Service Record</button></div>';
@@ -3611,6 +3640,206 @@ window.wzAddSvcRow = function() {
 };
 window.wzUpdateSvc = function(i, f, v) { if (wz.draft.service_history && wz.draft.service_history[i]) { wz.draft.service_history[i][f] = v; updateWzPreview(); } };
 window.wzDelSvc = function(i) { if (wz.draft.service_history) { wz.draft.service_history.splice(i,1); goToWzStep(5); } };
+
+// ── PDF Auto-Capture for Service History ──────────────────────────────────────
+// Set up PDF.js worker
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+window.wzSvcHandleDrop = function(e) {
+    e.preventDefault();
+    const area = document.getElementById('svc-pdf-upload-area');
+    if (area) { area.style.borderColor = ''; area.style.background = ''; }
+    const files = Array.from(e.dataTransfer.files).filter(function(f) { return f.type === 'application/pdf'; });
+    if (files.length) wzSvcHandleFiles(files);
+};
+
+window.wzSvcHandleFiles = function(fileList) {
+    const files = Array.from(fileList);
+    if (!files.length) return;
+    const processing = document.getElementById('svc-pdf-processing');
+    const uploadArea = document.getElementById('svc-pdf-upload-area');
+    const msgEl = document.getElementById('svc-pdf-msg');
+    if (processing) processing.style.display = 'block';
+    if (uploadArea) uploadArea.style.opacity = '0.4';
+
+    var idx = 0;
+    function processNext() {
+        if (idx >= files.length) {
+            if (processing) processing.style.display = 'none';
+            if (uploadArea) uploadArea.style.opacity = '1';
+            // Refresh step UI to show populated rows
+            goToWzStep(5);
+            return;
+        }
+        var file = files[idx++];
+        if (msgEl) msgEl.textContent = 'Reading: ' + file.name + ' (' + idx + '/' + files.length + ')\u2026';
+        wzExtractPdfText(file).then(function(text) {
+            var records = wzParseSvcRecords(text);
+            if (!wz.draft.service_history) wz.draft.service_history = [];
+            records.forEach(function(rec) {
+                // Dedup by date+odo
+                var key = (rec.service_date||'') + '|' + (rec.odometer_km||'');
+                var exists = wz.draft.service_history.some(function(r) {
+                    return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
+                });
+                if (!exists) wz.draft.service_history.push(rec);
+            });
+            processNext();
+        }).catch(function(err) {
+            console.error('PDF read error:', err);
+            processNext();
+        });
+    }
+    processNext();
+};
+
+window.wzExtractPdfText = function(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var typedArray = new Uint8Array(e.target.result);
+            pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
+                var fullText = '';
+                var total = pdf.numPages;
+                var done = 0;
+                if (total === 0) { resolve(''); return; }
+                for (var p = 1; p <= total; p++) {
+                    pdf.getPage(p).then(function(page) {
+                        page.getTextContent().then(function(content) {
+                            fullText += content.items.map(function(it) { return it.str; }).join(' ') + '\n';
+                            done++;
+                            if (done === total) resolve(fullText);
+                        });
+                    });
+                }
+            }).catch(reject);
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+    });
+};
+
+window.wzParseSvcRecords = function(rawText) {
+    var lines = rawText.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+    var records = [];
+
+    // Regex patterns
+    var DATE_RE   = /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|\d{4}[\/-]\d{1,2}[\/-]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s,]+\d{2,4})/gi;
+    var ODO_RE    = /(?:odometer|odo|km|kms|mileage|reading|klms?)[:\s]*([0-9,]+)\s*(?:km|kms?|klms?)?/gi;
+    var AMT_RE    = /(?:total\s*(?:amount)?|grand\s+total|net\s*(?:total|amount)|amount\s+(?:paid|due|billed)|bill\s+amount|invoice\s+amount)[:\s]*(?:rs\.?|₹|inr)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/gi;
+    var DEALER_RE = /(?:dealer(?:ship)?|workshop|service\s+cent(?:er|re)|garage|authorized\s+service|service\s+center)[:\s]+([A-Za-z0-9\s&.,'-]+)/gi;
+
+    // Service type classifier
+    var SVC_MAP = [
+        [/free service|first service|1st service|fsc/i,       'free service'],
+        [/second service|2nd service/i,                       'free service'],
+        [/third service|3rd service/i,                        'free service'],
+        [/paid service|periodic|scheduled service/i,          'periodic'],
+        [/oil change|engine oil/i,                            'dealer'],
+        [/brake/i,                                            'dealer'],
+        [/tyre|tire|alignment|balancing/i,                    'dealer'],
+        [/accident|collision|body repair|panel/i,             'accidental'],
+        [/warranty|recall|campaign/i,                         'warranty'],
+        [/general service|annual service/i,                   'dealer'],
+    ];
+
+    function classifySvc(text) {
+        for (var k = 0; k < SVC_MAP.length; k++) {
+            if (SVC_MAP[k][0].test(text)) return SVC_MAP[k][1];
+        }
+        return 'dealer';
+    }
+
+    function normDate(raw) {
+        raw = raw.trim();
+        // yyyy-mm-dd → yyyy-mm-dd (keep ISO for date input)
+        var m = raw.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+        if (m) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
+        // dd/mm/yyyy or dd-mm-yyyy
+        m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+        if (m) {
+            var yr = m[3].length === 2 ? '20' + m[3] : m[3];
+            return yr + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+        }
+        // Human format: 15 Mar 2024
+        var MON = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+        m = raw.match(/(\d{1,2})\s+([A-Za-z]+)[,\s]+(\d{4})/);
+        if (m) {
+            var mo = MON[(m[2].toLowerCase().substring(0,3))]||'01';
+            return m[3] + '-' + mo + '-' + m[1].padStart(2,'0');
+        }
+        return '';
+    }
+
+    // Row-based detection
+    var seen = {};
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var dateMatches = line.match(DATE_RE);
+        if (!dateMatches) continue;
+        var ctx = lines.slice(Math.max(0,i-2), Math.min(lines.length,i+5)).join(' ');
+        var date = normDate(dateMatches[0]);
+        if (!date) continue;
+        if (seen[date]) continue;
+        seen[date] = true;
+
+        var odo = '';
+        var odoM = ctx.match(ODO_RE);
+        if (odoM) {
+            var n = ctx.match(/(?:odometer|odo|km|kms|mileage|reading|klms?)[:\s]*([0-9,]+)/i);
+            if (n) odo = n[1].replace(/,/g,'');
+        } else {
+            var numM = ctx.match(/\b([1-9][0-9]{3,5})\b/);
+            if (numM) odo = numM[1];
+        }
+
+        var cost = '';
+        var amtM = ctx.match(AMT_RE);
+        if (amtM) {
+            var costN = ctx.match(/(?:total|grand|net|amount|bill|invoice)[\s\S]{0,20}?([0-9,]+(?:\.[0-9]{1,2})?)/i);
+            if (costN) cost = costN[1].replace(/,/g,'');
+        }
+
+        var dealer = '';
+        var dealerM = ctx.match(DEALER_RE);
+        if (dealerM) {
+            var dn = ctx.match(/(?:dealer(?:ship)?|workshop|service\s+cent(?:er|re)|garage)[:\s]+([A-Za-z0-9\s&.,'-]{3,40})/i);
+            if (dn) dealer = dn[1].trim();
+        }
+
+        records.push({
+            service_date: date,
+            odometer_km:  odo,
+            service_type: classifySvc(ctx),
+            dealer_name:  dealer,
+            description:  '',
+            cost:         cost
+        });
+    }
+
+    // Fallback: whole-document extraction if no row hits
+    if (records.length === 0) {
+        var allDates = rawText.match(DATE_RE);
+        if (allDates && allDates.length > 0) {
+            var odoFb = rawText.match(/(?:odometer|odo|km|kms|mileage|reading|klms?)[:\s]*([0-9,]+)/i);
+            var amtFb = rawText.match(/(?:total|grand total|net total|net amount|amount paid)[:\s]*(?:rs\.?|₹|inr)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+            var dealerFb = rawText.match(/(?:dealer(?:ship)?|workshop|service\s+cent(?:er|re)|garage)[:\s]+([A-Za-z0-9\s&.,'-]{3,40})/i);
+            records.push({
+                service_date: normDate(allDates[0]),
+                odometer_km:  odoFb ? odoFb[1].replace(/,/g,'') : '',
+                service_type: classifySvc(rawText),
+                dealer_name:  dealerFb ? dealerFb[1].trim() : '',
+                description:  '',
+                cost:         amtFb ? amtFb[1].replace(/,/g,'') : ''
+            });
+        }
+    }
+    return records;
+};
+
 
 // Repairs
 window.wzAddRepairRow = function() {
