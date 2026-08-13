@@ -3475,13 +3475,21 @@ function buildStep8() {
                 '<span style="color:var(--text-secondary);white-space:nowrap;">' + new Date(e.ts).toLocaleTimeString() + '</span>' +
                 '<span style="color:var(--text-secondary);">Changed <b style="color:var(--text-primary);">' + escW(e.field) + '</b></span></div>';
         }).join('');
-    return '<div class="wz-step-header"><div class="wz-step-title">💬 Admin Remarks</div>' +
-        '<div class="wz-step-desc">Add inspector notes, admin remarks, and the final customer-facing recommendation.</div></div>' +
-        '<div class="wz-card"><div class="wz-field-grid">' +
+    return '<div class="wz-step-header"><div class="wz-step-title">💬 Admin Remarks &amp; Additional AI Checks</div>' +
+        '<div class="wz-step-desc">Add inspector notes, admin remarks, customer recommendation, and customize the Additional AI Check cards shown on Page 3 of the report.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">General Remarks &amp; Recommendation</div>' +
+        '<div class="wz-field-grid">' +
         wzFta('wf-inspector-notes','Inspector Notes (from field)',d.inspector_notes||d.admin_notes||'',4) +
         wzFta('wf-admin-remarks','Admin Internal Remarks',d.admin_remarks||'',4) +
         wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',3) +
-        wzFta('wf-summary','Executive Summary',d.summary||'',5) +
+        wzFta('wf-summary','Executive Summary',d.summary||'',4) +
+        '</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3)</div>' +
+        '<div class="wz-field-grid">' +
+        wzFta('wf-engine-cal','Engine Calibration / OBD Diagnostics Note',d.engine_calibration||'No active or pending diagnostic trouble codes found.',2) +
+        wzFta('wf-tyre-analysis','Tyre Analysis Note',d.tyre_analysis_text||'Tyre condition assessment based on inspection data.',2) +
+        wzFta('wf-service-history-note','Service History Check Note',d.service_history_note||'Full service history captured separately — see Service History section.',2) +
+        wzFta('wf-market-price','Market Price Analysis Note',d.market_price_analysis||'Market price analysis pending.',2) +
         '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Audit Log <span style="font-size:10px;color:var(--text-secondary);">Last 20 edits this session</span></div>' +
         '<div>' + logHtml + '</div></div>';
@@ -3538,7 +3546,9 @@ const WZ_FIELD_MAP = {
     'wf-reg-date':'reg_date','wf-insurance-expiry':'insurance_expiry','wf-puc-expiry':'puc_expiry',
     'wf-tax-expiry':'tax_expiry','wf-ai-score':'ai_score','wf-package-name':'package_name',
     'wf-completed-date':'completed_date','wf-recommendation':'recommendation','wf-summary':'summary',
-    'wf-inspector-notes':'inspector_notes','wf-admin-remarks':'admin_remarks'
+    'wf-inspector-notes':'inspector_notes','wf-admin-remarks':'admin_remarks',
+    'wf-engine-cal':'engine_calibration','wf-tyre-analysis':'tyre_analysis_text',
+    'wf-service-history-note':'service_history_note','wf-market-price':'market_price_analysis'
 };
 
 window.wzFieldChange = function(inputId) {

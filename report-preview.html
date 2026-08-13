@@ -444,7 +444,7 @@ table.cp td.note { color: #8A8296; }
   <div class="cat-grid" id="n-additional-checks">
     <div class="cat-card"><h4><span class="dot dot-g"></span>Engine Calibration</h4><p id="n-engine-cal">No active or pending diagnostic trouble codes found.</p></div>
     <div class="cat-card"><h4><span class="dot dot-a"></span>Tyre Analysis</h4><p id="n-tyre-analysis">Tyre condition assessment based on inspection data.</p></div>
-    <div class="cat-card"><h4><span class="dot dot-a"></span>Service History</h4><p>Full service history captured separately &mdash; see Service History section.</p></div>
+    <div class="cat-card"><h4><span class="dot dot-a"></span>Service History</h4><p id="n-service-history-note">Full service history captured separately &mdash; see Service History section.</p></div>
     <div class="cat-card"><h4><span class="dot dot-a"></span>Market Price Analysis</h4><p id="n-market">Market price analysis pending.</p></div>
   </div>
 
@@ -934,6 +934,10 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('r-admin-remarks').textContent     = fmt(d.admin_remarks);
     document.getElementById('r-final-recommendation').textContent = fmt(d.recommendation);
     document.getElementById('r-report-id').textContent        = fmt(d.booking_ref);
+    if (document.getElementById('n-engine-cal')) document.getElementById('n-engine-cal').textContent = fmt(d.engine_calibration, 'No active or pending diagnostic trouble codes found.');
+    if (document.getElementById('n-tyre-analysis')) document.getElementById('n-tyre-analysis').textContent = fmt(d.tyre_analysis_text, 'Tyre condition assessment based on inspection data.');
+    if (document.getElementById('n-service-history-note')) document.getElementById('n-service-history-note').textContent = fmt(d.service_history_note, 'Full service history captured separately — see Service History section.');
+    if (document.getElementById('n-market')) document.getElementById('n-market').textContent = fmt(d.market_price_analysis, 'Market price analysis pending.');
 
     // Tyre Data Page
     const tyreData = d.tyre_data || {};
