@@ -3045,6 +3045,75 @@ async function loadWzDraft() {
     }
 }
 
+function getDefaultCatSummary(name, status) {
+    const s = status || 'good';
+    const defaults = {
+        'Exterior': {
+            good: 'Completely inspected body structure, panels, and paint finish. All alignment and panels are in healthy condition with detailed photos captured below.',
+            attention: 'Minor cosmetic scratches or small dings observed on outer panels. Details and photos included in inspection report below.',
+            critical: 'Body panel alignment issues or visible structural repair marks detected during exterior inspection.'
+        },
+        'Tyres': {
+            good: 'All 4 tyres and spare wheel thoroughly inspected for tread depth, sidewall condition, and manufacturing date. In good roadworthy condition.',
+            attention: 'Uneven tread wear or minor age-related sidewall micro-cracks detected. Inflation and tread details logged below.',
+            critical: 'Low tread depth (<2mm) or sidewall damage detected on one or more tyres. Replacement recommended.'
+        },
+        'Brakes': {
+            good: 'Brake pads, rotors, pedal travel, and handbrake efficiency tested. Operating smoothly with optimal stopping power.',
+            attention: 'Moderate wear on brake pads or minor surface rust on brake discs noted during test.',
+            critical: 'Worn out brake pads, spongy brake pedal response, or handbrake slippage observed.'
+        },
+        'Underbody': {
+            good: 'Underbody and chassis frame inspected on lift. Floor pan, silencer, and lower crossmembers show no major rust or scraping.',
+            attention: 'Minor surface oxidation or light underbody scraping observed on heat shields or lower floor guard.',
+            critical: 'Significant underbody corrosion, structural bend, or active fluid seepage detected from undercarriage.'
+        },
+        'Engine Analysis': {
+            good: 'Engine idle, sound, mounting vibration, oil quality, and coolant level thoroughly checked. Operates clean with no abnormal noise.',
+            attention: 'Slight engine belt noise or minor oil sweat observed around valve cover gasket. No active leaks.',
+            critical: 'Abnormal engine noise, heavy smoke, or active fluid leakage detected during engine run check.'
+        },
+        'Interior': {
+            good: 'Seats, upholstery, dashboard console, switches, and seatbelts inspected. All cabin controls and trims in clean, functioning order.',
+            attention: 'Minor wear on driver seat upholstery or slight scuff marks on inner door plastic trims.',
+            critical: 'Damaged seat covers, non-functional power window, or missing cabin trim buttons noted.'
+        },
+        'Lighting': {
+            good: 'Headlamps, high/low beam, tail lights, indicators, fog lamps, and cabin dome lights tested and operational.',
+            attention: 'Minor condensation inside headlight lens or single bulb filament weak.',
+            critical: 'Cracked light housing or non-functional main headlight / brake indicator.'
+        },
+        'AC': {
+            good: 'Air conditioning compressor engagement, blower speed, vent airflow, and cooling temperature performance verified optimal.',
+            attention: 'AC cooling takes slightly longer to chill cabin. Cabin air filter cleaning recommended.',
+            critical: 'AC compressor failing to engage or insufficient cooling output detected.'
+        },
+        'Suspension': {
+            good: 'Front struts, rear shock absorbers, bush arm condition, and driveability tested. No thudding noise over bumps.',
+            attention: 'Slight stiffness or minor rubber bush aging observed on front lower suspension arms.',
+            critical: 'Leaking shock absorber or prominent clunking sound over uneven surfaces.'
+        },
+        'Gear & Transmission': {
+            good: 'Clutch pedal play, gear shift smoothness, clutch engagement point, and drive transmission checked. Smooth gear transitions.',
+            attention: 'Clutch pedal travel slightly firm or minor stiffness during gear engagement when cold.',
+            critical: 'Clutch slipping or harsh gear shift jerks / transmission noise detected during test drive.'
+        },
+        'Inspection Info': {
+            good: 'Comprehensive 300+ point inspection conducted at doorstep/yard by certified technician with full photo verification.',
+            attention: 'Inspection completed with limited access to highway speed test drive due to traffic/yard constraints.',
+            critical: 'Partial inspection completed due to vehicle non-start or battery discharge.'
+        },
+        'Vahan Info': {
+            good: 'RC details, owner history, registration validity, engine & chassis number match verified with official database.',
+            attention: 'RC particulars verified; insurance / PUC certificate renewal recommended.',
+            critical: 'Discrepancy noted in vehicle registration date or owner count vs document records.'
+        }
+    };
+    const match = defaults[name];
+    if (match) return match[s] || match.good;
+    return s === 'good' ? 'Inspected and verified in healthy functioning condition.' : 'Minor observations noted during inspection.';
+}
+
 function autoPopulateCategories() {
     if (!wz) return;
     const catNames = ['Exterior','Tyres','Brakes','Underbody','Engine Analysis','Interior','Lighting','AC','Suspension','Gear & Transmission','Inspection Info','Vahan Info'];
@@ -3053,7 +3122,8 @@ function autoPopulateCategories() {
         const rel = answers.filter(a => a.category && a.category.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
         const failCt = rel.filter(a => a.answer === 'Fail' || a.severity === 'high').length;
         const warnCt = rel.filter(a => a.severity === 'medium' || ['Scratch','Dent','Rust','Worn'].includes(a.answer)).length;
-        return { name, status: failCt > 0 ? 'critical' : warnCt > 0 ? 'attention' : 'good', description: '' };
+        const status = failCt > 0 ? 'critical' : warnCt > 0 ? 'attention' : 'good';
+        return { name, status, description: getDefaultCatSummary(name, status), _isAutoDesc: true };
     });
 }
 
@@ -3288,6 +3358,10 @@ function buildStep4() {
     }
     const cats = d.categories || [];
     const catsHtml = cats.map(function(c, i) {
+        if (!c.description) {
+            c.description = getDefaultCatSummary(c.name, c.status);
+            c._isAutoDesc = true;
+        }
         const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'🟡 Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
             return '<option value="' + o.v + '"' + (c.status===o.v?' selected':'') + '>' + o.l + '</option>';
         }).join('');
@@ -3601,7 +3675,17 @@ window.wzSetVerdict = function(v) {
 
 window.wzUpdateCategory = function(idx, field, val) {
     if (!wz || !wz.draft || !wz.draft.categories || !wz.draft.categories[idx]) return;
-    wz.draft.categories[idx][field] = val;
+    const cat = wz.draft.categories[idx];
+    cat[field] = val;
+    if (field === 'status' && (!cat.description || cat._isAutoDesc)) {
+        cat.description = getDefaultCatSummary(cat.name, val);
+        cat._isAutoDesc = true;
+        goToWzStep(4);
+        return;
+    }
+    if (field === 'description') {
+        cat._isAutoDesc = false;
+    }
     updateWzPreview();
 };
 
