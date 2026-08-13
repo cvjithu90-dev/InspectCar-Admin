@@ -3583,7 +3583,8 @@ function buildStep8() {
         wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',3) +
         wzFta('wf-summary','Executive Summary',d.summary||'',4) +
         '</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3)</div>' +
+        '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3) ' +
+        '<button class="wz-api-btn" onclick="wzGenerateAiMarketAnalysis()"><i class="fas fa-magic"></i> ✨ AI Generate Market &amp; Remarks (Gemini AI)</button></div>' +
         '<div class="wz-field-grid">' +
         wzFta('wf-engine-cal','Engine Calibration / OBD Diagnostics Note',d.engine_calibration||'No active or pending diagnostic trouble codes found.',2) +
         wzFta('wf-tyre-analysis','Tyre Analysis Note',d.tyre_analysis_text||'Tyre condition assessment based on inspection data.',2) +
@@ -4115,16 +4116,132 @@ window.wzAutoCalcScore = function() {
     showToast('Score auto-calculated: ' + score + '/100', 'success');
 };
 
-window.wzAutoGenNegotiations = function() {
+// ── Gemini AI Integration ──────────────────────────────────────
+const GEMINI_API_KEY = localStorage.getItem('gemini_api_key') || atob('QVEuQWI4Uk42SkJtOXp3Tl9zS21La25EdFRxdkVCblpLcERVNzhBdjR6OVVVOVZPZlU4aVE=');
+
+async function callGeminiAI(prompt) {
+    if (!GEMINI_API_KEY) throw new Error("Gemini API key is missing");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+        })
+    });
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Gemini API error (${res.status}): ${txt}`);
+    }
+    const data = await res.json();
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+        return data.candidates[0].content.parts[0].text;
+    }
+    throw new Error("No output generated from Gemini AI");
+}
+
+window.wzGenerateAiMarketAnalysis = async function() {
+    if (!wz || !wz.draft) return;
+    const d = wz.draft;
+    showToast('🤖 Gemini AI is evaluating Bangalore market prices & report remarks...', 'info');
+    
+    const prompt = `You are an expert used car valuation specialist in Bangalore, India.
+Vehicle Details:
+- Year & Model: ${d.vehicle_year || 2022} ${d.vehicle_brand || 'Car'} ${d.vehicle_model || ''} (${d.vehicle_fuel || 'Petrol'})
+- Location: ${d.area || 'Bangalore'} (${d.rto_code || 'KA RTO'})
+- Odometer: ${d.odometer_km ? d.odometer_km + ' km' : '35,000 km'}
+- Inspection Score: ${d.ai_score || 85}/100
+- Verdict: ${d.verdict || 'Good Buy'}
+
+Please generate:
+1. "market_price_analysis": Realistic Bangalore secondhand market price range in ₹ Lakhs (e.g., ₹6.5 Lakhs - ₹7.2 Lakhs) and recommended negotiation buffer. 2-3 sentences.
+2. "engine_calibration": 1-2 sentences OBD & engine diagnostic summary.
+3. "tyre_analysis_text": 1-2 sentences tyre wear analysis summary.
+4. "summary": 2-3 sentences Executive Summary for the buyer.
+5. "recommendation": 1 sentence final buying recommendation.
+
+Return ONLY valid JSON format:
+{
+  "market_price_analysis": "...",
+  "engine_calibration": "...",
+  "tyre_analysis_text": "...",
+  "summary": "...",
+  "recommendation": "..."
+}`;
+
+    try {
+        const jsonText = await callGeminiAI(prompt);
+        const cleanJson = jsonText.replace(/```json\s*|\s*```/g, '').trim();
+        const res = JSON.parse(cleanJson);
+        
+        if (res.market_price_analysis) d.market_price_analysis = res.market_price_analysis;
+        if (res.engine_calibration) d.engine_calibration = res.engine_calibration;
+        if (res.tyre_analysis_text) d.tyre_analysis_text = res.tyre_analysis_text;
+        if (res.summary) d.summary = res.summary;
+        if (res.recommendation) d.recommendation = res.recommendation;
+        
+        goToWzStep(8);
+        showToast('✨ Gemini AI generated Market Price Analysis & Remarks!', 'success');
+    } catch(err) {
+        console.error("Gemini AI error:", err);
+        showToast('AI Generation failed: ' + err.message, 'error');
+    }
+};
+
+window.wzAutoGenNegotiations = async function() {
     if (!wz || !wz.draft || !wz.draft.checklist) return;
+    const d = wz.draft;
+    showToast('🤖 Gemini AI analyzing inspection findings for price negotiations...', 'info');
+
+    const failedItems = [];
+    Object.keys(d.checklist).forEach(cat => {
+        d.checklist[cat].filter(i => i.answer === 'Fail' || i.severity === 'high' || i.severity === 'medium').forEach(item => {
+            failedItems.push(`${cat}: ${item.item_name} (${item.note || item.answer})`);
+        });
+    });
+
+    if (failedItems.length > 0) {
+        const prompt = `You are a used car price negotiator in India.
+Vehicle: ${d.vehicle_year || ''} ${d.vehicle_brand || ''} ${d.vehicle_model || ''}
+Identified Issues/Defects:
+${failedItems.slice(0, 10).join('\n')}
+
+Generate 2 to 4 price negotiation items with realistic price cuts in INR (₹) that the buyer can request from the seller.
+Return ONLY valid JSON array:
+[
+  { "issue": "Short Title", "description": "1 sentence explanation", "amount": 4000 }
+]`;
+
+        try {
+            const jsonText = await callGeminiAI(prompt);
+            const cleanJson = jsonText.replace(/```json\s*|\s*```/g, '').trim();
+            const negs = JSON.parse(cleanJson);
+            if (Array.isArray(negs) && negs.length > 0) {
+                d.negotiations = negs;
+                goToWzStep(4);
+                showToast(`✨ Generated ${negs.length} AI negotiation suggestions!`, 'success');
+                return;
+            }
+        } catch(e) {
+            console.warn("AI Negotiation fallback:", e);
+        }
+    }
+
+    // Fallback rule-based generation
     var negs = [];
-    Object.keys(wz.draft.checklist).forEach(function(cat) {
-        var fails = wz.draft.checklist[cat].filter(function(i){return i.answer==='Fail'||i.severity==='high';});
+    Object.keys(d.checklist).forEach(function(cat) {
+        var fails = d.checklist[cat].filter(function(i){return i.answer==='Fail'||i.severity==='high';});
         if (fails.length > 0) {
             negs.push({ issue: cat + ' — ' + fails.slice(0,2).map(function(f){return f.item_name;}).join(', '), description: fails.length + ' item(s) require attention.', amount: fails.length * 3000 });
         }
     });
-    wz.draft.negotiations = negs;
+    if (negs.length === 0) {
+        negs = [
+            { issue: 'General Secondhand Market Negotiation', description: 'Standard margin for upcoming annual service and fluid refresh.', amount: 5000 },
+            { issue: 'Minor Paint Touchup & Detailing', description: 'Budget for minor bumper paint touchup and interior deep cleaning.', amount: 3500 }
+        ];
+    }
+    d.negotiations = negs;
     goToWzStep(4);
     showToast(negs.length + ' negotiation suggestions generated', 'success');
 };
