@@ -1686,33 +1686,34 @@
                     const ref = b.booking_ref || '';
 
                     const msg = [
-                        `🚗 *InspectCar – Booking Confirmation*`,
-                        ``,
-                        `Hi ${b.customer_name || 'Customer'}, your vehicle inspection is confirmed. Here are your booking details:`,
-                        ``,
-                        `📋 *Booking Reference:* ${ref}`,
-                        `🔖 *Status:* ${status}`,
-                        ``,
-                        `👤 *Customer Details*`,
-                        `• Name: ${b.customer_name || '—'}`,
-                        `• Phone: ${b.customer_phone || '—'}`,
-                        `• Email: ${b.customer_email || '—'}`,
-                        ``,
-                        `🚙 *Vehicle Details*`,
-                        `• Vehicle: ${vehicle || '—'}`,
-                        `• Reg. No.: ${b.vehicle_reg || '—'}`,
-                        `• Fuel: ${b.vehicle_fuel || 'Petrol'}`,
-                        ``,
-                        `📅 *Inspection Schedule*`,
-                        `• Date: ${inspDate}`,
-                        `• Time: ${inspTime}`,
-                        `• Location: ${address}`,
-                        ``,
-                        `📦 *Package:* ${pkg}`,
-                        `💰 *Amount:* ${price}`,
-                        `💳 *Payment Status:* ${payStatus}`,
-                        ``,
-                        `For any queries, please contact us. Thank you for choosing *InspectCar*! 🙏`
+                        '*InspectCar | Booking Confirmation*',
+                        '--------------------------------',
+                        'Hi ' + (b.customer_name || 'Customer') + ', your vehicle inspection is confirmed. Here are your booking details:',
+                        '',
+                        '*Booking Ref:* ' + ref,
+                        '*Status:* ' + status,
+                        '',
+                        '*--- Customer Details ---*',
+                        'Name: ' + (b.customer_name || '-'),
+                        'Phone: ' + (b.customer_phone || '-'),
+                        'Email: ' + (b.customer_email || '-'),
+                        '',
+                        '*--- Vehicle Details ---*',
+                        'Vehicle: ' + (vehicle || '-'),
+                        'Reg No: ' + (b.vehicle_reg || '-'),
+                        'Fuel: ' + (b.vehicle_fuel || 'Petrol'),
+                        '',
+                        '*--- Inspection Schedule ---*',
+                        'Date: ' + inspDate,
+                        'Time: ' + inspTime,
+                        'Location: ' + address,
+                        '',
+                        '*Package:* ' + pkg,
+                        '*Amount:* ' + price,
+                        '*Payment:* ' + payStatus,
+                        '',
+                        'For any queries contact us.',
+                        'Thank you for choosing *InspectCar*!'
                     ].join('\n');
 
                     const phone = (b.customer_phone || '').replace(/\D/g, '');
@@ -1834,7 +1835,7 @@
             }
             if ($('#pay-balance-amt')) $('#pay-balance-amt').textContent = formatCurrency(balance);
             if ($('#pay-balance-status')) {
-                $('#pay-balance-status').textContent = isFullyPaid ? '✅ Fully Paid' : (charged > 0 ? '🟡 Balance Pending' : '⚠️ Unpaid Booking');
+                $('#pay-balance-status').textContent = isFullyPaid ? 'Fully Paid' : (charged > 0 ? 'Balance Pending' : '⚠️ Unpaid Booking');
             }
 
             if ($('#detail-payment-badge')) {
@@ -1855,17 +1856,20 @@
             const payBalanceUrl = `${clientWebsiteUrl}?ref=${b.booking_ref}&amt=${balance}&name=${encodeURIComponent(b.customer_name)}`;
 
             const waText = encodeURIComponent(
-                `Hi ${b.customer_name}! 👋\n\n` +
-                `Here are the payment details for your InspectCar inspection booking (*${b.booking_ref}*):\n\n` +
-                `🚗 *Vehicle:* ${b.vehicle_brand} ${b.vehicle_model} (${b.vehicle_year})\n` +
-                `📦 *Package Total:* ${formatCurrency(total)}\n` +
-                `✅ *Advance Paid:* ${formatCurrency(charged)}\n` +
-                `🟡 *Balance Due:* *${formatCurrency(balance)}*\n\n` +
-                `Please complete your balance payment securely here:\n` +
-                `${payBalanceUrl}`
+                'Hi ' + b.customer_name + ',\n\n' +
+                '*InspectCar | Balance Payment Request*\n' +
+                '--------------------------------\n' +
+                'Booking Ref: ' + b.booking_ref + '\n' +
+                'Vehicle: ' + b.vehicle_brand + ' ' + b.vehicle_model + ' (' + b.vehicle_year + ')\n\n' +
+                '*Package Total:* ' + formatCurrency(total) + '\n' +
+                '*Advance Paid:* ' + formatCurrency(charged) + '\n' +
+                '*Balance Due:* ' + formatCurrency(balance) + '\n\n' +
+                'Please complete your balance payment securely here:\n' +
+                payBalanceUrl + '\n\n' +
+                'Thank you for choosing InspectCar!'
             );
             const waPhone = (b.customer_phone || '').replace(/\D/g, '');
-            const waFullUrl = `https://wa.me/91${waPhone.slice(-10)}?text=${waText}`;
+            const waFullUrl = 'https://wa.me/91' + waPhone.slice(-10) + '?text=' + waText;
 
             const btnAdminPay = $('#btn-admin-pay-now');
             if (btnAdminPay) {
@@ -1994,7 +1998,7 @@
                                 }).eq('id', id);
                                 closeModal();
                                 if (!error) {
-                                    showToast(`✅ Custom payment of ₹${customAmt.toLocaleString('en-IN')} collected successfully!`, 'success');
+                                    showToast(`Custom payment of ₹${customAmt.toLocaleString('en-IN')} collected successfully!`, 'success');
                                     renderBookingDetail();
                                 } else {
                                     showToast('Payment received but failed to save note. Check manually.', 'error');
@@ -2022,17 +2026,18 @@
                         const payUrl = `https://inspectcar.in/#pay-balance?ref=${b.booking_ref}&amt=${Math.round(customAmt)}&name=${encodeURIComponent(b.customer_name || 'Customer')}&desc=${encodeURIComponent(customDesc)}`;
                         const customerName = b.customer_name ? b.customer_name.split(' ')[0] : 'there';
                         const waText = encodeURIComponent(
-                            `Hi ${customerName} 👋\n\n` +
-                            `*InspectCar – Payment Request*\n\n` +
-                            `📋 *Booking:* ${b.booking_ref}\n` +
-                            `💰 *Amount:* ₹${customAmt.toLocaleString('en-IN')}\n` +
-                            `📝 *For:* ${customDesc}\n\n` +
-                            `Please complete your payment securely using the link below:\n` +
-                            `${payUrl}\n\n` +
-                            `Thank you! 🚗`
+                            'Hi ' + customerName + ',\n\n' +
+                            '*InspectCar | Payment Request*\n' +
+                            '--------------------------------\n' +
+                            'Booking Ref: ' + b.booking_ref + '\n' +
+                            'Amount Due: Rs.' + customAmt.toLocaleString('en-IN') + '\n' +
+                            'For: ' + customDesc + '\n\n' +
+                            'Please complete your payment securely using the link below:\n' +
+                            payUrl + '\n\n' +
+                            'Thank you for choosing InspectCar!'
                         );
                         const waPhone = (b.customer_phone || '').replace(/\D/g, '');
-                        const waFullUrl = `https://wa.me/91${waPhone.slice(-10)}?text=${waText}`;
+                        const waFullUrl = 'https://wa.me/91' + waPhone.slice(-10) + '?text=' + waText;
                         closeModal();
                         window.open(waFullUrl, '_blank');
                         showToast('WhatsApp opened with payment link!', 'success');
@@ -2099,7 +2104,7 @@
                     if (error) {
                         showToast('Failed to update package: ' + error.message, 'error');
                     } else {
-                        showToast(`✅ Package changed to ${newPkg} (₹${newPrice.toLocaleString('en-IN')})`, 'success');
+                        showToast(`Package changed to ${newPkg} (₹${newPrice.toLocaleString('en-IN')})`, 'success');
                         renderBookingDetail();
                     }
                 };
@@ -2139,8 +2144,8 @@
                         showToast('Failed to apply discount: ' + error.message, 'error');
                     } else {
                         const msg = discAmt > 0
-                            ? `✅ Discount of ₹${discAmt.toLocaleString('en-IN')} applied. New total: ₹${discountedTotal.toLocaleString('en-IN')}`
-                            : '✅ Discount removed. Original price restored.';
+                            ? `Discount of ₹${discAmt.toLocaleString('en-IN')} applied. New total: ₹${discountedTotal.toLocaleString('en-IN')}`
+                            : 'Discount removed. Original price restored.';
                         showToast(msg, 'success');
                         renderBookingDetail();
                     }
@@ -3255,7 +3260,7 @@ function escW(s) { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/"/
 function buildStep1() {
     const d = wz.draft;
     if (!d.vehicle_fuel) d.vehicle_fuel = 'Petrol';
-    return '<div class="wz-step-header"><div class="wz-step-title">🚗 Vehicle Information</div>' +
+    return '<div class="wz-step-header"><div class="wz-step-title">Vehicle Information</div>' +
         '<div class="wz-step-desc">Verify and complete all vehicle and owner details. Use the auto-fetch buttons for VAHAN data population.</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Booking &amp; Customer <span style="font-size:11px;color:var(--text-secondary);">' + escW(d.booking_ref) + '</span></div>' +
         '<div class="wz-field-grid">' +
@@ -3419,7 +3424,7 @@ function buildStep4() {
             c.description = getDefaultCatSummary(c.name, c.status);
             c._isAutoDesc = true;
         }
-        const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'🟡 Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
+        const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
             return '<option value="' + o.v + '"' + (c.status===o.v?' selected':'') + '>' + o.l + '</option>';
         }).join('');
         return '<div class="wz-cat-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
@@ -3546,7 +3551,7 @@ function buildStep5() {
             '<span id="svc-pdf-msg">Reading PDF…</span>' +
         '</div>';
 
-    return '<div class="wz-step-header"><div class="wz-step-title">🔖 Service History</div>' +
+    return '<div class="wz-step-header"><div class="wz-step-title">Service History</div>' +
         '<div class="wz-step-desc">Upload a service PDF to auto-capture records, or add manually.</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Upload Service PDF' +
         '<button class="wz-api-btn" onclick="wzFetchServiceHistory()"><i class="fas fa-bolt"></i> Fetch from API</button></div>' +
@@ -3783,7 +3788,7 @@ window.wzAutoLoadTyreData = function() {
         }
     });
     goToWzStep(wz.currentStep);
-    showToast(loaded > 0 ? '✅ Tyre data loaded from inspector (' + loaded + ' fields)' : '⚠️ Inspector tyre fields not filled yet.', loaded > 0 ? 'success' : 'error');
+    showToast(loaded > 0 ? 'Tyre data loaded from inspector (' + loaded + ' fields)' : '⚠️ Inspector tyre fields not filled yet.', loaded > 0 ? 'success' : 'error');
 };
 
 window.wzUpdateChecklistItem = function(cat, itemIdx, field, val) {
@@ -4375,7 +4380,7 @@ window.wzFetchVahan = function() {
     var reg = wz && wz.draft ? wz.draft.vehicle_reg : '';
     if (!reg) { setApiResult('Please enter Registration Number first.', false); return; }
     setApiResult('⏳ Fetching VAHAN data for <b>' + reg + '</b>...', true);
-    setTimeout(function() { setApiResult('✅ VAHAN API placeholder triggered for <b>' + reg + '</b>. Connect a real VAHAN API endpoint to auto-populate fields.', true); }, 1500);
+    setTimeout(function() { setApiResult('VAHAN API placeholder triggered for <b>' + reg + '</b>. Connect a real VAHAN API endpoint to auto-populate fields.', true); }, 1500);
 };
 window.wzFetchInsurance    = function() { setApiResult('⚡ Insurance API placeholder — connect IIB or insurance provider API here.'); };
 window.wzFetchPUC          = function() { setApiResult('⚡ PUC/PUCC API placeholder — connect MoRTH or PUCC API here.'); };
@@ -4431,7 +4436,21 @@ window.wzDownloadPDF = function() { updateWzPreview(); window.open('report-previ
 window.wzWhatsAppPDF = function() {
     var phone = (wz && wz.booking && wz.booking.customer_phone) ? wz.booking.customer_phone.replace(/[^0-9]/g,'') : '919900368006';
     var d = (wz && wz.draft) ? wz.draft : {};
-    var msg = encodeURIComponent('Hello ' + (d.customer_name||'') + ',\n\nYour InspectCar inspection report for ' + (d.vehicle_brand||'') + ' ' + (d.vehicle_model||'') + ' (Ref: ' + (d.booking_ref||'') + ') is ready.\n\nInspectCar: +91 99003 68006 | inspectcar.in');
+    var vehicle = [d.vehicle_year, d.vehicle_brand, d.vehicle_model].filter(Boolean).join(' ');
+    var msg = encodeURIComponent(
+        'Hi ' + (d.customer_name || '') + ',\n\n' +
+        '*InspectCar | Inspection Report Ready*\n' +
+        '--------------------------------\n' +
+        'Booking Ref: ' + (d.booking_ref || '') + '\n' +
+        'Vehicle: ' + vehicle + '\n' +
+        (d.ai_score ? 'Inspection Score: ' + d.ai_score + '/100\n' : '') +
+        (d.verdict ? 'Verdict: ' + d.verdict + '\n' : '') +
+        '\nYour detailed inspection report is now ready.\n\n' +
+        'For the full report and details contact us:\n' +
+        'InspectCar: +91 99003 68006\n' +
+        'Website: inspectcar.in\n\n' +
+        'Thank you for choosing InspectCar!'
+    );
     window.open('https://wa.me/' + phone + '?text=' + msg, '_blank');
 };
 window.wzEmailPDF = function() {
