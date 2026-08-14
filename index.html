@@ -575,7 +575,12 @@
         
         <div class="flex justify-between items-center mb-4">
             <h2 id="detail-ref">Booking Ref</h2>
-            <div id="detail-status-badge"></div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <button id="btn-share-whatsapp-booking" style="display:flex; align-items:center; gap:7px; background:#25D366; color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(37,211,102,0.25); transition:opacity 0.2s;" onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">
+                    <i class="fab fa-whatsapp" style="font-size:16px;"></i> Share Booking Details
+                </button>
+                <div id="detail-status-badge"></div>
+            </div>
         </div>
 
         <div class="grid-2 mb-4">
@@ -1665,6 +1670,58 @@
             }
             if($('#edit-vehicle-fuel')) $('#edit-vehicle-fuel').value = b.vehicle_fuel || 'Petrol';
             if($('#edit-vehicle-reg')) $('#edit-vehicle-reg').value = b.vehicle_reg || '';
+
+            // ── Share Booking via WhatsApp ──────────────────────────────────
+            const shareWaBtn = $('#btn-share-whatsapp-booking');
+            if (shareWaBtn) {
+                shareWaBtn.onclick = function() {
+                    const vehicle = [b.vehicle_year, b.vehicle_brand, b.vehicle_model].filter(Boolean).join(' ');
+                    const inspDate = formatDate(b.inspection_date);
+                    const inspTime = b.inspection_time || '';
+                    const address = b.address || b.area || '';
+                    const pkg = b.package_name || '';
+                    const price = b.total_price ? '₹' + Number(b.total_price).toLocaleString('en-IN') : '';
+                    const payStatus = (b.payment_status || 'unpaid').toUpperCase();
+                    const status = (b.status || 'booked').replace(/_/g,' ').toUpperCase();
+                    const ref = b.booking_ref || '';
+
+                    const msg = [
+                        `🚗 *InspectCar – Booking Confirmation*`,
+                        ``,
+                        `Hi ${b.customer_name || 'Customer'}, your vehicle inspection is confirmed. Here are your booking details:`,
+                        ``,
+                        `📋 *Booking Reference:* ${ref}`,
+                        `🔖 *Status:* ${status}`,
+                        ``,
+                        `👤 *Customer Details*`,
+                        `• Name: ${b.customer_name || '—'}`,
+                        `• Phone: ${b.customer_phone || '—'}`,
+                        `• Email: ${b.customer_email || '—'}`,
+                        ``,
+                        `🚙 *Vehicle Details*`,
+                        `• Vehicle: ${vehicle || '—'}`,
+                        `• Reg. No.: ${b.vehicle_reg || '—'}`,
+                        `• Fuel: ${b.vehicle_fuel || 'Petrol'}`,
+                        ``,
+                        `📅 *Inspection Schedule*`,
+                        `• Date: ${inspDate}`,
+                        `• Time: ${inspTime}`,
+                        `• Location: ${address}`,
+                        ``,
+                        `📦 *Package:* ${pkg}`,
+                        `💰 *Amount:* ${price}`,
+                        `💳 *Payment Status:* ${payStatus}`,
+                        ``,
+                        `For any queries, please contact us. Thank you for choosing *InspectCar*! 🙏`
+                    ].join('\n');
+
+                    const phone = (b.customer_phone || '').replace(/\D/g, '');
+                    const waPhone = phone.length === 10 ? '91' + phone : phone;
+                    const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+                    window.open(waUrl, '_blank');
+                    showToast('WhatsApp opened with booking details!', 'success');
+                };
+            }
 
             // Customer Edit Event Handlers
             if($('#btn-edit-customer')) {
