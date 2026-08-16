@@ -676,13 +676,8 @@ table.cp td.note { color: #8A8296; }
     <div id="r-final-recommendation" style="font-size:13px; font-weight:800; line-height:1.4;">—</div>
   </div>
 
-  <div style="font-size:8.5px; color:#9CA3AF; line-height:1.6; border-top:1px solid #EFE6FF; padding-top:10px; margin-bottom:16px;">
+  <div style="font-size:8.5px; color:#9CA3AF; line-height:1.6; border-top:1px solid #EFE6FF; padding-top:12px; margin-top:16px;">
     <b style="color:#5B21B6;">Disclaimer:</b> This report is prepared by InspectCar based on a physical visual and functional inspection performed at the time and location mentioned. InspectCar does not guarantee the future performance of the vehicle. The report reflects the condition of the vehicle at the time of inspection only and should not be used as a substitute for professional mechanical advice. InspectCar holds no liability for any decisions made based on this report.
-  </div>
-
-  <div class="footer">
-    <div>InspectCar &middot; inspectcar.in &middot; +91 99003 68006</div>
-    <div>Report ID: <span id="r-report-id">—</span></div>
   </div>
 </div>
 
@@ -982,7 +977,7 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('r-inspector-notes').textContent   = fmt(d.inspector_notes);
     document.getElementById('r-admin-remarks').textContent     = fmt(d.admin_remarks);
     document.getElementById('r-final-recommendation').textContent = fmt(d.recommendation);
-    document.getElementById('r-report-id').textContent        = fmt(d.booking_ref);
+    if (document.getElementById('r-report-id')) document.getElementById('r-report-id').textContent = fmt(d.booking_ref);
     if (document.getElementById('n-engine-cal')) document.getElementById('n-engine-cal').textContent = fmt(d.engine_calibration, 'No active or pending diagnostic trouble codes found.');
     if (document.getElementById('n-tyre-analysis')) document.getElementById('n-tyre-analysis').textContent = fmt(d.tyre_analysis_text, 'Tyre condition assessment based on inspection data.');
     if (document.getElementById('n-service-history-note')) document.getElementById('n-service-history-note').textContent = fmt(d.service_history_note, 'Full service history captured separately — see Service History section.');
