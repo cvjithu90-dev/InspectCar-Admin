@@ -768,10 +768,51 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('v-puc').textContent            = fmt(d.puc_expiry);
     document.getElementById('v-tax').textContent            = fmt(d.tax_expiry);
 
-    // Anomaly / Negotiation
-    document.getElementById('n-insurance').textContent  = d.insurance_expiry ? 'Valid till ' + d.insurance_expiry + '.' : '—';
-    document.getElementById('n-ownership').textContent  = d.owner_count ? (d.owner_count === 1 ? 'Single owner (individual).' : d.owner_count + ' previous owners.') : '—';
-    document.getElementById('n-puc').textContent        = d.puc_expiry ? 'Valid till ' + d.puc_expiry + '.' : 'Not available at time of inspection.';
+    // Vahan & Document Verification Cards (Page 2)
+    const insValid = d.insurance_expiry && d.insurance_expiry !== '—' && d.insurance_expiry !== '-' && d.insurance_expiry.trim() !== '';
+    if (document.getElementById('v-insurance-text')) {
+      document.getElementById('v-insurance-text').textContent = insValid 
+        ? 'Yes, having a valid insurance till ' + d.insurance_expiry + '.' 
+        : 'Insurance validity not available or expired. Check locally.';
+    }
+    if (document.getElementById('v-insurance-dot')) {
+      document.getElementById('v-insurance-dot').style.background = insValid ? '#22C55E' : '#F59E0B';
+    }
+
+    const pucValid = d.puc_expiry && d.puc_expiry !== '—' && d.puc_expiry !== '-' && d.puc_expiry.trim() !== '';
+    if (document.getElementById('v-puc-text')) {
+      document.getElementById('v-puc-text').textContent = pucValid 
+        ? 'Valid till ' + d.puc_expiry + '.' 
+        : 'Not available in Parivahan. Check locally.';
+    }
+
+    if (document.getElementById('v-finance-text')) {
+      document.getElementById('v-finance-text').textContent = 'Getting verified';
+    }
+
+    const taxValid = d.tax_expiry && d.tax_expiry !== '—' && d.tax_expiry !== '-' && d.tax_expiry.trim() !== '';
+    if (document.getElementById('v-tax-text')) {
+      document.getElementById('v-tax-text').textContent = taxValid 
+        ? 'Tax & fitness valid till ' + d.tax_expiry + ' (Valid).' 
+        : 'Tax & fitness status valid.';
+    }
+
+    // Anomaly / Negotiation on Page 3
+    if (document.getElementById('n-insurance')) {
+      document.getElementById('n-insurance').textContent = insValid 
+        ? 'Yes, having a valid insurance till ' + d.insurance_expiry + '.' 
+        : 'Insurance validity not available or expired.';
+    }
+    if (document.getElementById('n-ownership')) {
+      document.getElementById('n-ownership').textContent = d.owner_count 
+        ? (d.owner_count === 1 ? 'Single owner (individual).' : d.owner_count + ' previous owners.') 
+        : 'Single owner (individual).';
+    }
+    if (document.getElementById('n-puc')) {
+      document.getElementById('n-puc').textContent = pucValid 
+        ? 'Valid till ' + d.puc_expiry + '.' 
+        : 'Not available in Parivahan. Check locally.';
+    }
 
     const negList = d.negotiations || [];
     const negContainer = document.getElementById('n-negotiation-list');
