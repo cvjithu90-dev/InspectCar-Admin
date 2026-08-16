@@ -3480,15 +3480,15 @@ function buildTyreDataCard() {
             '<div class="wz-card-title" style="color:#f59e0b;">' + pos.label + '</div>' +
             copyBtn +
             '<div class="wz-field-grid">' +
-            '<div class="wz-field"><label>Brand / Make</label><input type="text" value="' + escW(t.tyre_make||'') + '" placeholder="e.g. MRF, CEAT" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_make\',this.value)"></div>' +
-            '<div class="wz-field"><label>Model / Pattern</label><input type="text" value="' + escW(t.tyre_model||'') + '" placeholder="e.g. ZLX, Milaze X3" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_model\',this.value)"></div>' +
-            '<div class="wz-field"><label>Size</label><input type="text" value="' + escW(t.tyre_size||'') + '" placeholder="e.g. 195/65R15" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_size\',this.value)"></div>' +
-            '<div class="wz-field"><label>DOT Mfg. Week</label><input type="number" value="' + escW(t.mfg_week||'') + '" placeholder="e.g. 32" min="1" max="53" oninput="wzSetTyre(\'' + pos.key + '\',\'mfg_week\',this.value)"></div>' +
-            '<div class="wz-field"><label>DOT Mfg. Year</label><input type="number" value="' + escW(t.mfg_year||'') + '" placeholder="e.g. 2021" min="2000" max="2030" oninput="wzSetTyre(\'' + pos.key + '\',\'mfg_year\',this.value)"></div>' +
-            '<div class="wz-field"><label>Tread Depth (mm)</label><input type="number" value="' + escW(t.tread_depth||'') + '" placeholder="e.g. 4.5" step="0.5" min="0" max="12" oninput="wzSetTyre(\'' + pos.key + '\',\'tread_depth\',this.value)"></div>' +
-            '<div class="wz-field wz-field-full"><label>Tread Condition</label><select onchange="wzSetTyre(\'' + pos.key + '\',\'tread_condition\',this.value)">' + treadSelOpts + '</select></div>' +
-            '<div class="wz-field wz-field-full"><label>Sidewall Condition</label><select onchange="wzSetTyre(\'' + pos.key + '\',\'sidewall_condition\',this.value)">' + sideSelOpts + '</select></div>' +
-            '<div class="wz-field wz-field-full"><label>Admin Notes</label><input type="text" value="' + escW(t.note||'') + '" placeholder="Additional observations..." oninput="wzSetTyre(\'' + pos.key + '\',\'note\',this.value)"></div>' +
+            '<div class="wz-field"><label>Brand / Make</label><input type="text" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="tyre_make" value="' + escW(t.tyre_make||'') + '" placeholder="e.g. MRF, CEAT" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_make\',this.value)"></div>' +
+            '<div class="wz-field"><label>Model / Pattern</label><input type="text" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="tyre_model" value="' + escW(t.tyre_model||'') + '" placeholder="e.g. ZLX, Milaze X3" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_model\',this.value)"></div>' +
+            '<div class="wz-field"><label>Size</label><input type="text" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="tyre_size" value="' + escW(t.tyre_size||'') + '" placeholder="e.g. 195/65R15" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_size\',this.value)"></div>' +
+            '<div class="wz-field"><label>DOT Mfg. Week</label><input type="number" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="mfg_week" value="' + escW(t.mfg_week||'') + '" placeholder="e.g. 32" min="1" max="53" oninput="wzSetTyre(\'' + pos.key + '\',\'mfg_week\',this.value)"></div>' +
+            '<div class="wz-field"><label>DOT Mfg. Year</label><input type="number" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="mfg_year" value="' + escW(t.mfg_year||'') + '" placeholder="e.g. 2021" min="2000" max="2030" oninput="wzSetTyre(\'' + pos.key + '\',\'mfg_year\',this.value)"></div>' +
+            '<div class="wz-field"><label>Tread Depth (mm)</label><input type="number" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="tread_depth" value="' + escW(t.tread_depth||'') + '" placeholder="e.g. 4.5" step="0.5" min="0" max="12" oninput="wzSetTyre(\'' + pos.key + '\',\'tread_depth\',this.value)"></div>' +
+            '<div class="wz-field wz-field-full"><label>Tread Condition</label><select data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="tread_condition" onchange="wzSetTyre(\'' + pos.key + '\',\'tread_condition\',this.value)">' + treadSelOpts + '</select></div>' +
+            '<div class="wz-field wz-field-full"><label>Sidewall Condition</label><select data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="sidewall_condition" onchange="wzSetTyre(\'' + pos.key + '\',\'sidewall_condition\',this.value)">' + sideSelOpts + '</select></div>' +
+            '<div class="wz-field wz-field-full"><label>Admin Notes</label><input type="text" data-admin-tyre-pos="' + pos.key + '" data-admin-tyre-field="note" value="' + escW(t.note||'') + '" placeholder="Additional observations..." oninput="wzSetTyre(\'' + pos.key + '\',\'note\',this.value)"></div>' +
             '</div></div>';
     }).join('');
 
@@ -3778,16 +3778,28 @@ window.wzSetTyreSummary = function(val) {
 window.wzCopyFlToAllTyres = function() {
     if (!wz || !wz.draft) return;
     if (!wz.draft.tyre_data) wz.draft.tyre_data = { fl:{}, fr:{}, rl:{}, rr:{}, spare:{} };
-    const fl = wz.draft.tyre_data.fl || {};
+    if (!wz.draft.tyre_data.fl) wz.draft.tyre_data.fl = {};
+
     const fields = ['tyre_make', 'tyre_model', 'tyre_size', 'mfg_week', 'mfg_year', 'tread_depth', 'tread_condition', 'sidewall_condition', 'note'];
+
+    // Scrape live DOM inputs for FL in case input hasn't blurred yet
+    fields.forEach(function(f) {
+        const el = document.querySelector('[data-admin-tyre-pos="fl"][data-admin-tyre-field="' + f + '"]');
+        if (el && el.value !== undefined && el.value !== '') {
+            wz.draft.tyre_data.fl[f] = el.value;
+        }
+    });
+
+    const fl = wz.draft.tyre_data.fl || {};
     ['fr', 'rl', 'rr'].forEach(function(targetPos) {
         if (!wz.draft.tyre_data[targetPos]) wz.draft.tyre_data[targetPos] = {};
         fields.forEach(function(f) {
-            if (fl[f] !== undefined && fl[f] !== '') {
+            if (fl[f] !== undefined && fl[f] !== null) {
                 wz.draft.tyre_data[targetPos][f] = fl[f];
             }
         });
     });
+
     goToWzStep(4);
     updateWzPreview();
     showToast('Copied Front Left tyre specs to all 4 tyres (Spare untouched)', 'success');
