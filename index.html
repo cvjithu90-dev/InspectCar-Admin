@@ -3473,8 +3473,12 @@ function buildTyreDataCard() {
         const sideSelOpts = sidewallOpts.map(function(o) {
             return '<option value="' + o + '"' + (t.sidewall_condition===o?' selected':'') + '>' + (o||'Select...') + '</option>';
         }).join('');
+        const copyBtn = (pos.key === 'fl') ?
+            '<div style="margin:6px 0 10px;"><button type="button" class="wz-api-btn" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;font-size:11px;padding:5px 10px;cursor:pointer;" onclick="wzCopyFlToAllTyres()"><i class="fas fa-copy"></i> 📋 Copy FL data to all 4 tyres (FL, FR, RL, RR)</button></div>' : '';
+
         return '<div class="wz-card" style="margin-bottom:10px;background:var(--bg-color);border:1px solid rgba(245,158,11,0.25);">' +
             '<div class="wz-card-title" style="color:#f59e0b;">' + pos.label + '</div>' +
+            copyBtn +
             '<div class="wz-field-grid">' +
             '<div class="wz-field"><label>Brand / Make</label><input type="text" value="' + escW(t.tyre_make||'') + '" placeholder="e.g. MRF, CEAT" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_make\',this.value)"></div>' +
             '<div class="wz-field"><label>Model / Pattern</label><input type="text" value="' + escW(t.tyre_model||'') + '" placeholder="e.g. ZLX, Milaze X3" oninput="wzSetTyre(\'' + pos.key + '\',\'tyre_model\',this.value)"></div>' +
@@ -3769,6 +3773,24 @@ window.wzSetTyreSummary = function(val) {
     if (!wz || !wz.draft) return;
     wz.draft.tyre_summary = val;
     updateWzPreview();
+};
+
+window.wzCopyFlToAllTyres = function() {
+    if (!wz || !wz.draft) return;
+    if (!wz.draft.tyre_data) wz.draft.tyre_data = { fl:{}, fr:{}, rl:{}, rr:{}, spare:{} };
+    const fl = wz.draft.tyre_data.fl || {};
+    const fields = ['tyre_make', 'tyre_model', 'tyre_size', 'mfg_week', 'mfg_year', 'tread_depth', 'tread_condition', 'sidewall_condition', 'note'];
+    ['fr', 'rl', 'rr'].forEach(function(targetPos) {
+        if (!wz.draft.tyre_data[targetPos]) wz.draft.tyre_data[targetPos] = {};
+        fields.forEach(function(f) {
+            if (fl[f] !== undefined && fl[f] !== '') {
+                wz.draft.tyre_data[targetPos][f] = fl[f];
+            }
+        });
+    });
+    goToWzStep(4);
+    updateWzPreview();
+    showToast('Copied Front Left tyre specs to all 4 tyres (Spare untouched)', 'success');
 };
 
 // Auto-load tyre data from inspector submissions (Tyre Data category)
