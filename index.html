@@ -3384,12 +3384,17 @@ function buildStep3() {
                 if (isTyreCat && item.item_name?.includes('Spare')) {
                     tyreDataHtml = item.spare_condition ? '<span style="font-size:10px;color:#818cf8;margin-left:6px;">Condition: ' + escW(item.spare_condition) + '</span>' : '';
                 }
+                const photoUploadBtn = '<label style="display:inline-flex;align-items:center;gap:4px;background:rgba(99,102,241,0.15);border:1px solid #6366f1;color:#c7d2fe;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;font-weight:600;" title="Upload photo for ' + escW(item.item_name) + '">' +
+                    '<i class="fas fa-camera"></i> + Photo' +
+                    '<input type="file" accept="image/*" style="display:none;" onchange="wzUploadChecklistPhoto(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',this)">' +
+                    '</label>';
                 return '<div class="wz-checklist-item">' +
                     '<div class="wz-checklist-row">' +
                     '<div class="wz-checklist-name">' + escW(item.item_name) + extraFields + '</div>' +
                     '<select class="wz-status-select" onchange="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'answer\',this.value)">' + statusOpts + '</select>' +
                     '<input type="text" placeholder="Notes..." value="' + escW(item.note||'') + '" oninput="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'note\',this.value)" style="flex:2;min-width:120px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 8px;border-radius:6px;font-size:11px;">' +
                     '<select onchange="wzUpdateChecklistItem(\'' + escW(cat).replace(/'/g,"\\'") + '\',' + ii + ',\'severity\',this.value)" style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 7px;border-radius:6px;font-size:11px;">' + sevOpts + '</select>' +
+                    photoUploadBtn +
                     '</div>' + tyreDataHtml + photosHtml + '</div>';
             }).join('');
             return '<div class="wz-card" style="margin-bottom:10px;">' +
@@ -3801,6 +3806,27 @@ window.wzDeleteChecklistPhoto = function(cat, itemIdx, photoIdx) {
     if (!wz || !wz.draft || !wz.draft.checklist || !wz.draft.checklist[cat] || !wz.draft.checklist[cat][itemIdx]) return;
     wz.draft.checklist[cat][itemIdx].photos.splice(photoIdx, 1);
     goToWzStep(wz.currentStep);
+    updateWzPreview();
+};
+
+window.wzUploadChecklistPhoto = function(cat, itemIdx, input) {
+    if (!input.files || !input.files[0]) return;
+    if (!wz || !wz.draft || !wz.draft.checklist || !wz.draft.checklist[cat] || !wz.draft.checklist[cat][itemIdx]) return;
+    var file = input.files[0];
+    showToast('Compressing and adding photo...', 'info');
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        compressWzImage(e.target.result, 1200, 900, 0.75).then(function(compressed) {
+            if (!wz.draft.checklist[cat][itemIdx].photos) {
+                wz.draft.checklist[cat][itemIdx].photos = [];
+            }
+            wz.draft.checklist[cat][itemIdx].photos.push(compressed);
+            goToWzStep(3);
+            updateWzPreview();
+            showToast('Photo added to checkpoint!', 'success');
+        });
+    };
+    reader.readAsDataURL(file);
 };
 
 // Negotiations
