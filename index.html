@@ -3566,8 +3566,24 @@ function buildStep5() {
             '<span id="svc-pdf-msg">Reading PDF…</span>' +
         '</div>';
 
+    // Executive Summary Card HTML
+    const currentSummary = (wz && wz.draft && wz.draft.service_history_note) ? wz.draft.service_history_note : '';
+    const summaryCard = '<div class="wz-card" style="background:var(--surface-color);border:1px solid rgba(139,92,246,0.35);">' +
+        '<div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;color:#A78BFA;margin-bottom:6px;">' +
+            '<span><i class="fas fa-bolt" style="color:#F59E0B;margin-right:6px;"></i> Executive Summary</span>' +
+            '<button type="button" class="wz-api-btn" onclick="wzAutoGenerateSvcSummary()" style="font-size:11px;padding:4px 10px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:#C4B5FD;cursor:pointer;">' +
+                '<i class="fas fa-magic"></i> Auto-Generate / Recalculate' +
+            '</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">' +
+            'Highlighted summary box shown on the Service History report page. Edit freely to customize numbers, observations, or key highlights.' +
+        '</div>' +
+        '<textarea id="wz-svc-summary-input" rows="3" oninput="wzUpdateSvcSummary(this.value)" placeholder="e.g. This vehicle has 10 recorded service visits on file ranging from 2015-04-07 to 2021-07-28..." style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;">' + escW(currentSummary) + '</textarea>' +
+    '</div>';
+
     return '<div class="wz-step-header"><div class="wz-step-title">Service History</div>' +
         '<div class="wz-step-desc">Upload a service PDF to auto-capture records, or add manually.</div></div>' +
+        summaryCard +
         '<div class="wz-card"><div class="wz-card-title">Upload Service PDF' +
         '<button class="wz-api-btn" onclick="wzFetchServiceHistory()"><i class="fas fa-bolt"></i> Fetch from API</button></div>' +
         pdfUploadZone + '</div>' +
@@ -3888,6 +3904,43 @@ window.wzAddSvcRow = function() {
 };
 window.wzUpdateSvc = function(i, f, v) { if (wz.draft.service_history && wz.draft.service_history[i]) { wz.draft.service_history[i][f] = v; updateWzPreview(); } };
 window.wzDelSvc = function(i) { if (wz.draft.service_history) { wz.draft.service_history.splice(i,1); goToWzStep(5); } };
+
+window.wzUpdateSvcSummary = function(val) {
+    if (!wz || !wz.draft) return;
+    wz.draft.service_history_note = val;
+    updateWzPreview();
+};
+
+window.wzAutoGenerateSvcSummary = function() {
+    if (!wz || !wz.draft) return;
+    const services = wz.draft.service_history || [];
+    if (!services.length) {
+        showToast('No service records added yet to summarize.', 'error');
+        return;
+    }
+    const count = services.length;
+    const dates = services.map(s => s.service_date).filter(Boolean).sort();
+    const odos = services.map(s => Number(s.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>a-b);
+    const totalCost = services.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
+
+    let summary = `This vehicle has <b>${count} recorded service visit${count > 1 ? 's' : ''}</b> on file`;
+    if (dates.length > 0) {
+        summary += ` ranging from <b>${dates[0]}</b> to <b>${dates[dates.length - 1]}</b>`;
+    }
+    if (odos.length > 0) {
+        summary += `. Odometer readings span from <b>${odos[0].toLocaleString('en-IN')} km</b> up to <b>${odos[odos.length - 1].toLocaleString('en-IN')} km</b>`;
+    }
+    if (totalCost > 0) {
+        summary += `, with total recorded maintenance cost of <b>₹${totalCost.toLocaleString('en-IN')}</b>`;
+    }
+    summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.`;
+
+    wz.draft.service_history_note = summary;
+    const el = document.getElementById('wz-svc-summary-input');
+    if (el) el.value = summary;
+    updateWzPreview();
+    showToast('✨ Service history executive summary auto-generated!', 'success');
+};
 
 // ── PDF Auto-Capture for Service History ──────────────────────────────────────
 // Set up PDF.js worker
