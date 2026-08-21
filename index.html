@@ -1681,52 +1681,56 @@
             const shareWaBtn = $('#btn-share-whatsapp-booking');
             if (shareWaBtn) {
                 shareWaBtn.onclick = function() {
-                    const vehicle = [b.vehicle_year, b.vehicle_brand, b.vehicle_model].filter(Boolean).join(' ');
+                    const vehicle = [b.vehicle_brand, b.vehicle_model].filter(Boolean).join(' ');
                     const inspDate = formatDate(b.inspection_date);
                     const inspTime = b.inspection_time || '';
                     const address = b.address || b.area || '';
                     const pkg = b.package_name || '';
-                    const price = b.total_price ? '₹' + Number(b.total_price).toLocaleString('en-IN') : '';
-                    const payStatus = (b.payment_status || 'unpaid').toUpperCase();
-                    const status = (b.status || 'booked').replace(/_/g,' ').toUpperCase();
+                    const totalPrice = b.total_price ? Number(b.total_price) : 0;
+                    const paidAmount = b.advance_paid ? Number(b.advance_paid) : (b.payment_status === 'paid' ? totalPrice : 0);
+                    const balanceAmount = totalPrice - paidAmount;
+                    const customerName = b.customer_name || 'Customer';
                     const ref = b.booking_ref || '';
+                    const regNo = b.vehicle_reg || '-';
+
+                    // Determine payment label
+                    let paymentLabel = 'Advance Paid';
+                    if (b.payment_status === 'paid' || balanceAmount <= 0) {
+                        paymentLabel = 'Fully Paid';
+                    }
 
                     const msg = [
-                        '*InspectCar | Booking Confirmation*',
-                        '--------------------------------',
-                        'Hi ' + (b.customer_name || 'Customer') + ', your vehicle inspection is confirmed. Here are your booking details:',
+                        'Hi ' + customerName + '! 👋',
                         '',
-                        '*Booking Ref:* ' + ref,
-                        '*Status:* ' + status,
+                        '*🚗 InspectCar Booking Confirmation*',
                         '',
-                        '*--- Customer Details ---*',
-                        'Name: ' + (b.customer_name || '-'),
-                        'Phone: ' + (b.customer_phone || '-'),
-                        'Email: ' + (b.customer_email || '-'),
+                        '*Booking ID:* ' + ref,
                         '',
-                        '*--- Vehicle Details ---*',
-                        'Vehicle: ' + (vehicle || '-'),
-                        'Reg No: ' + (b.vehicle_reg || '-'),
-                        'Fuel: ' + (b.vehicle_fuel || 'Petrol'),
+                        '🚗 *Vehicle:* ' + (vehicle || '-'),
+                        '📋 *Registration:* ' + regNo,
+                        '📍 *Location:* ' + (address || '-'),
+                        '📅 *Date:* ' + inspDate,
+                        '⏰ *Time:* ' + inspTime,
                         '',
-                        '*--- Inspection Schedule ---*',
-                        'Date: ' + inspDate,
-                        'Time: ' + inspTime,
-                        'Location: ' + address,
+                        '📦 *Package:* ' + (pkg || '-'),
                         '',
-                        '*Package:* ' + pkg,
-                        '*Amount:* ' + price,
-                        '*Payment:* ' + payStatus,
+                        '💳 *Payment:* ' + paymentLabel,
+                        '✅ *Paid:* ₹' + paidAmount.toLocaleString('en-IN'),
+                        '🔖 *Balance:* ₹' + balanceAmount.toLocaleString('en-IN'),
                         '',
-                        'For any queries contact us.',
-                        'Thank you for choosing *InspectCar*!'
+                        '*Booking Status: CONFIRMED* ✅',
+                        '',
+                        'We look forward to inspecting your vehicle.',
+                        '',
+                        '_For any queries, reach us at +91 99003 68006_',
+                        '_www.inspectcar.in_'
                     ].join('\n');
 
                     const phone = (b.customer_phone || '').replace(/\D/g, '');
                     const waPhone = phone.length === 10 ? '91' + phone : phone;
                     const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
                     window.open(waUrl, '_blank');
-                    showToast('WhatsApp opened with booking details!', 'success');
+                    showToast('WhatsApp opened with booking confirmation!', 'success');
                 };
             }
 
