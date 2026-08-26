@@ -1301,35 +1301,22 @@
                 if (session) {
                     state.user = session.user;
 
-                    // ── SECURITY: Check actual role from profiles table ──────────────
-                    // Never trust the session alone — always verify role from DB
-                    try {
-                        const { data: profileData } = await dbClient.from('profiles')
-                            .select('role, full_name, is_active')
-                            .eq('id', session.user.id)
-                            .maybeSingle();
+                    // ── SECURITY: Only the admin email gets access ──────────────────
+                    const ADMIN_EMAIL = 'cvjithu90@gmail.com';
+                    const isAdminEmail = session.user.email && session.user.email.toLowerCase().trim() === ADMIN_EMAIL;
 
-                        if (profileData && profileData.role === 'inspector') {
-                            // Inspector landed on admin panel (e.g. via email confirmation link)
-                            // Sign them out silently and redirect to inspector app
-                            await dbClient.auth.signOut();
-                            window.location.href = 'https://inspector.inspectcar.in';
-                            return;
-                        }
-
+                    if (isAdminEmail) {
+                        // Always grant access to the admin email — regardless of DB role
                         state.profile = {
                             id: session.user.id,
-                            full_name: profileData?.full_name || session.user.user_metadata?.full_name || 'Admin',
-                            role: profileData?.role || 'admin'
+                            full_name: session.user.user_metadata?.full_name || 'Admin',
+                            role: 'admin'
                         };
-                    } catch(e) {
-                        // If profiles table not accessible, fall back but only allow known admin email
-                        if (session.user.email && session.user.email.toLowerCase() !== 'cvjithu90@gmail.com') {
-                            await dbClient.auth.signOut();
-                            window.location.hash = '#/login';
-                            return;
-                        }
-                        state.profile = { id: session.user.id, full_name: session.user.user_metadata?.full_name || 'Admin', role: 'admin' };
+                    } else {
+                        // Everyone else → sign out and redirect to inspector app
+                        await dbClient.auth.signOut();
+                        window.location.href = 'https://inspector.inspectcar.in';
+                        return;
                     }
                 }
 
@@ -1496,29 +1483,20 @@
                 } else if (data && data.session) {
                     state.user = data.session.user;
 
-                    // ── SECURITY: Verify actual role before granting admin access ───
-                    try {
-                        const { data: profileData } = await dbClient.from('profiles')
-                            .select('role, full_name')
-                            .eq('id', data.session.user.id)
-                            .maybeSingle();
+                    // ── SECURITY: Only admin email can access this panel ───────────
+                    const ADMIN_EMAIL = 'cvjithu90@gmail.com';
+                    const isAdminEmail = data.session.user.email &&
+                        data.session.user.email.toLowerCase().trim() === ADMIN_EMAIL;
 
-                        if (profileData && profileData.role === 'inspector') {
-                            // This is an inspector — don't grant admin access
-                            await dbClient.auth.signOut();
-                            if (errDiv) errDiv.textContent = 'Access denied. Use the Inspector App to login.';
-                            showToast('Access denied. Please use inspector.inspectcar.in', 'error');
-                            return;
-                        }
-
-                        state.profile = {
-                            id: data.session.user.id,
-                            full_name: profileData?.full_name || 'Admin',
-                            role: profileData?.role || 'admin'
-                        };
-                    } catch(e) {
-                        state.profile = { id: data.session.user.id, full_name: 'Admin', role: 'admin' };
+                    if (!isAdminEmail) {
+                        // Not the admin — block access, redirect to inspector app
+                        await dbClient.auth.signOut();
+                        if (errDiv) errDiv.textContent = 'Access denied. This panel is for Admin only.';
+                        showToast('Access denied. Please use the Inspector App at inspector.inspectcar.in', 'error');
+                        return;
                     }
+
+                    state.profile = { id: data.session.user.id, full_name: 'Admin', role: 'admin' };
 
                     if (errDiv) errDiv.textContent = 'Success! Opening dashboard...';
                     showToast('Sign in successful!', 'success');
