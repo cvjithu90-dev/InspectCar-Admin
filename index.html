@@ -2365,29 +2365,48 @@
                     showToast("Creating inspector account...", "info");
 
                     try {
-                        // 1. Try Register in Auth
+                        // 1. Register in Supabase Auth
                         let userId = null;
                         const { data: authData, error: authError } = await client.auth.signUp({
                             email,
                             password,
                             options: {
                                 data: { full_name: name, role: 'inspector' },
-                                // ── Redirect confirmation email to Inspector App, NOT Admin Panel ──
+                                // Redirect confirmation email to Inspector App, NOT Admin Panel
                                 emailRedirectTo: 'https://inspector.inspectcar.in'
                             }
                         });
 
+                        // ── Detect "email already registered" ───────────────────────
+                        // Supabase returns authData.user but with identities:[] when email exists
+                        const emailAlreadyExists = authData && authData.user &&
+                            Array.isArray(authData.user.identities) &&
+                            authData.user.identities.length === 0;
+
+                        if (emailAlreadyExists) {
+                            showToast(
+                                `❌ "${email}" is already registered in Supabase. Either:\n` +
+                                `1. Use a different email, OR\n` +
+                                `2. Go to Supabase → Auth → Users → find this email → Reset Password`,
+                                "error"
+                            );
+                            return;
+                        }
+
+                        if (authError) {
+                            // Hard error from Supabase (e.g. invalid email, weak password)
+                            showToast(`Auth error: ${authError.message}`, "error");
+                            return;
+                        }
+
                         if (authData && authData.user && authData.user.id) {
                             userId = authData.user.id;
-                        } else if (authError) {
-                            console.warn("Auth signUp notice:", authError);
+                        } else {
+                            showToast("Auth account could not be created. Please try again.", "error");
+                            return;
                         }
 
-                        if (!userId) {
-                            userId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
-                        }
-
-                        // 2. Create in profiles table
+                        // 2. Save to profiles table
                         const { error: profError } = await client.from('profiles').upsert({
                             id: userId,
                             full_name: name,
@@ -2398,9 +2417,9 @@
 
                         if (profError) {
                             console.error("Profile creation error:", profError);
-                            showToast(`Notice: Run SQL fix in Supabase if needed (${profError.message})`, "error");
+                            showToast(`Profile save error: ${profError.message}`, "error");
                         } else {
-                            showToast(`Inspector "${name}" created successfully!`, "success");
+                            showToast(`✅ Inspector "${name}" created! They will receive a confirmation email at ${email}. Once confirmed, they can login at inspector.inspectcar.in`, "success");
                             const modal = document.getElementById('modal-add-inspector');
                             if(modal) modal.classList.add('hidden');
                             addForm.reset();
