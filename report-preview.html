@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -14,8 +14,15 @@
 /* ============================================================
    PRINT / PDF STYLES  (A4)
 ============================================================ */
-@page { margin: 0; size: A4; }
-* { box-sizing: border-box; }
+@page {
+  size: A4 portrait;
+  margin: 0mm !important;
+}
+* {
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
 body {
   font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
   color: #241D33;
@@ -23,6 +30,8 @@ body {
   padding: 0;
   font-size: 12px;
   background: #f0f0f5;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 .page {
   width: 210mm;
@@ -33,11 +42,41 @@ body {
   background: #fff;
   margin: 0 auto 20px auto;
   box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+  box-sizing: border-box;
 }
 .page:last-child { page-break-after: avoid; margin-bottom: 0; }
 @media print {
-  body { background: #fff; }
-  .page { box-shadow: none; margin: 0; }
+  html, body {
+    width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  .page {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    height: 297mm !important;
+    padding: 16mm 14mm 18mm 14mm !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+  .page.cover, .page.back {
+    padding: 0 !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+  }
+  .page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
   .no-print { display: none !important; }
 }
 
