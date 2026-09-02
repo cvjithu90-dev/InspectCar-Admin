@@ -558,6 +558,7 @@
                 <thead>
                     <tr>
                         <th>Ref</th>
+                        <th>Booked On</th>
                         <th>Customer</th>
                         <th>Vehicle</th>
                         <th>Date & Time</th>
@@ -567,7 +568,7 @@
                     </tr>
                 </thead>
                 <tbody id="bookings-table-body">
-                    <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                    <tr><td colspan="8" class="text-center">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -576,11 +577,14 @@
     <!-- Booking Detail View -->
     <template id="view-booking-detail">
         <div class="mb-4">
-            <a href="#/bookings" class="text-secondary">← Back to Bookings</a>
+            <a href="#/bookings" class="text-secondary text-sm">&larr; Back to Bookings</a>
         </div>
         
         <div class="flex justify-between items-center mb-4">
-            <h2 id="detail-ref">Booking Ref</h2>
+            <div>
+                <h2 id="detail-ref" style="margin-bottom: 2px;">Booking Ref</h2>
+                <div id="detail-created-at" class="text-xs text-secondary"></div>
+            </div>
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <button id="btn-share-whatsapp-booking" style="display:flex; align-items:center; gap:7px; background:#25D366; color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(37,211,102,0.25); transition:opacity 0.2s;" onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">
                     <i class="fab fa-whatsapp" style="font-size:16px;"></i> Share Booking Details
@@ -1286,6 +1290,13 @@
             return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
         }
 
+        function formatTime(dateStr) {
+            if(!dateStr) return '';
+            const d = new Date(dateStr);
+            if(isNaN(d.getTime())) return '';
+            return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+
         // ==========================================
         // Routing & View Management
         // ==========================================
@@ -1644,9 +1655,15 @@
 
                  data.forEach(b => {
                      const inspectorName = b.profiles ? b.profiles.full_name : 'Unassigned';
+                     const bookedDate = b.created_at ? formatDate(b.created_at) : '—';
+                     const bookedTime = b.created_at ? formatTime(b.created_at) : '';
                      tbody.innerHTML += `
                         <tr>
                             <td class="font-bold text-accent-light">${b.booking_ref}</td>
+                            <td>
+                                <div>${bookedDate}</div>
+                                <div class="text-xs text-secondary">${bookedTime}</div>
+                            </td>
                             <td>
                                 <div>${b.customer_name}</div>
                                 <div class="text-xs text-secondary">${b.customer_phone}</div>
@@ -1698,6 +1715,11 @@
 
             // Populate UI
             $('#detail-ref').textContent = `Booking: ${b.booking_ref}`;
+            if ($('#detail-created-at')) {
+                $('#detail-created-at').textContent = b.created_at 
+                    ? `Booked on: ${formatDate(b.created_at)} at ${formatTime(b.created_at)}`
+                    : '';
+            }
             $('#detail-status-badge').innerHTML = `<span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span>`;
             
             $('#detail-customer-name').textContent = b.customer_name || 'N/A';
