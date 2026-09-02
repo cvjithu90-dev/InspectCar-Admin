@@ -51,6 +51,8 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .page {
     width: 210mm !important;
@@ -65,13 +67,19 @@ body {
     break-after: page !important;
     break-inside: avoid !important;
     overflow: hidden !important;
-    background: #fff !important;
+    background-color: #fff;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .page.cover, .page.back {
     padding: 0 !important;
     height: 297mm !important;
     min-height: 297mm !important;
     max-height: 297mm !important;
+    background: linear-gradient(160deg, #150C29 0%, #241147 55%, #3B1670 100%) !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .page:last-child {
     page-break-after: auto !important;
