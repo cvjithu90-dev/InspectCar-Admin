@@ -640,7 +640,7 @@
                 <div class="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 style="margin:0;">Vehicle &amp; Package</h3>
                     <button id="btn-edit-vehicle" class="btn btn-secondary text-xs" style="padding: 4px 10px; cursor: pointer;">
-                        <i class="fas fa-car-side"></i> Edit Vehicle
+                        <i class="fas fa-edit"></i> Edit Details &amp; Schedule
                     </button>
                 </div>
                 <div class="grid-2 gap-2 text-sm" id="vehicle-view-mode">
@@ -651,16 +651,16 @@
                     <div class="text-secondary">Date:</div><div id="detail-datetime"></div>
                 </div>
 
-                <!-- Vehicle Edit Form -->
+                <!-- Vehicle & Schedule Edit Form -->
                 <div id="vehicle-edit-mode" class="hidden">
                     <div class="grid-2 gap-3 text-sm mb-3">
                         <div>
                             <label class="text-secondary text-xs block mb-1">Brand Make</label>
-                            <input type="text" id="edit-vehicle-brand" class="form-control text-sm" />
+                            <input type="text" id="edit-vehicle-brand" class="form-control text-sm" placeholder="e.g. Tata" />
                         </div>
                         <div>
                             <label class="text-secondary text-xs block mb-1">Model Name</label>
-                            <input type="text" id="edit-vehicle-model" class="form-control text-sm" />
+                            <input type="text" id="edit-vehicle-model" class="form-control text-sm" placeholder="e.g. Punch EV" />
                         </div>
                         <div>
                             <label class="text-secondary text-xs block mb-1">Year</label>
@@ -672,19 +672,44 @@
                             <select id="edit-vehicle-fuel" class="form-control text-sm">
                                 <option value="Petrol">Petrol</option>
                                 <option value="Diesel">Diesel</option>
-                                <option value="CNG">CNG</option>
                                 <option value="Electric">Electric</option>
+                                <option value="CNG">CNG</option>
                                 <option value="Hybrid">Hybrid</option>
                             </select>
                         </div>
-                        <div style="grid-column: span 2;">
+                        <div>
                             <label class="text-secondary text-xs block mb-1">Reg Number</label>
-                            <input type="text" id="edit-vehicle-reg" class="form-control text-sm" />
+                            <input type="text" id="edit-vehicle-reg" class="form-control text-sm" placeholder="e.g. KA-01-AB-1234 or N/A" />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">Inspection Package</label>
+                            <select id="edit-vehicle-package" class="form-control text-sm">
+                                <option value="Pre-Drive" data-price="1999">Pre-Drive (New Car PDI) — ₹1,999</option>
+                                <option value="Expert-Drive" data-price="2699">Expert-Drive (Used Car) — ₹2,699</option>
+                                <option value="Lux-Drive" data-price="3999">Lux-Drive (Luxury Used Car) — ₹3,999</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">📅 Inspection Date</label>
+                            <input type="date" id="edit-inspection-date" class="form-control text-sm" required />
+                        </div>
+                        <div>
+                            <label class="text-secondary text-xs block mb-1">⏰ Time Slot</label>
+                            <select id="edit-inspection-time" class="form-control text-sm">
+                                <option value="9:00 AM - 11:00 AM">9:00 AM - 11:00 AM</option>
+                                <option value="11:00 AM - 1:00 PM">11:00 AM - 1:00 PM</option>
+                                <option value="1:30 PM - 3:30 PM">1:30 PM - 3:30 PM</option>
+                                <option value="3:30 PM - 5:30 PM">3:30 PM - 5:30 PM</option>
+                                <option value="5:00 PM - 7:00 PM">5:00 PM - 7:00 PM</option>
+                                <option value="6:30 PM - 8:30 PM">6:30 PM - 8:30 PM</option>
+                                <option value="CUSTOM">Custom Time...</option>
+                            </select>
+                            <input type="text" id="edit-inspection-time-custom" class="form-control text-xs hidden" style="margin-top: 5px;" placeholder="e.g. 10:30 AM - 12:30 PM" />
                         </div>
                     </div>
                     <div class="flex gap-2 justify-end">
                         <button id="btn-cancel-edit-vehicle" class="btn btn-secondary text-xs">Cancel</button>
-                        <button id="btn-save-vehicle" class="btn btn-primary text-xs"><i class="fas fa-save"></i> Save Vehicle</button>
+                        <button id="btn-save-vehicle" class="btn btn-primary text-xs"><i class="fas fa-save"></i> Save Details &amp; Schedule</button>
                     </div>
                 </div>
             </div>
@@ -1698,7 +1723,7 @@
             if($('#edit-area')) $('#edit-area').value = b.area || '';
             if($('#edit-address')) $('#edit-address').value = b.address || '';
 
-            // Pre-fill Vehicle Edit Inputs
+            // Pre-fill Vehicle, Package & Schedule Edit Inputs
             if($('#edit-vehicle-brand')) $('#edit-vehicle-brand').value = b.vehicle_brand || '';
             if($('#edit-vehicle-model')) $('#edit-vehicle-model').value = b.vehicle_model || '';
             if($('#edit-vehicle-year')) {
@@ -1707,6 +1732,60 @@
             }
             if($('#edit-vehicle-fuel')) $('#edit-vehicle-fuel').value = b.vehicle_fuel || 'Petrol';
             if($('#edit-vehicle-reg')) $('#edit-vehicle-reg').value = b.vehicle_reg || '';
+
+            // Pre-fill Package
+            const pkgSelect = $('#edit-vehicle-package');
+            if (pkgSelect && b.package_name) {
+                const opts = pkgSelect.options;
+                for (let i = 0; i < opts.length; i++) {
+                    if (opts[i].value === b.package_name || b.package_name.includes(opts[i].value) || opts[i].value.includes(b.package_name.split(' ')[0])) {
+                        pkgSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // Pre-fill Date
+            if($('#edit-inspection-date')) $('#edit-inspection-date').value = b.inspection_date || '';
+
+            // Pre-fill Time Slot
+            const timeSelect = $('#edit-inspection-time');
+            const customTimeInput = $('#edit-inspection-time-custom');
+            if (timeSelect) {
+                let matched = false;
+                if (b.inspection_time) {
+                    for (let i = 0; i < timeSelect.options.length; i++) {
+                        if (timeSelect.options[i].value.toLowerCase().trim() === b.inspection_time.toLowerCase().trim()) {
+                            timeSelect.selectedIndex = i;
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                if (!matched && b.inspection_time) {
+                    timeSelect.value = 'CUSTOM';
+                    if (customTimeInput) {
+                        customTimeInput.classList.remove('hidden');
+                        customTimeInput.value = b.inspection_time;
+                    }
+                } else {
+                    if (customTimeInput) {
+                        customTimeInput.classList.add('hidden');
+                        customTimeInput.value = '';
+                    }
+                }
+
+                timeSelect.onchange = () => {
+                    if (timeSelect.value === 'CUSTOM') {
+                        if (customTimeInput) {
+                            customTimeInput.classList.remove('hidden');
+                            customTimeInput.focus();
+                        }
+                    } else {
+                        if (customTimeInput) customTimeInput.classList.add('hidden');
+                    }
+                };
+            }
 
             // ── Share Booking via WhatsApp ──────────────────────────────────
             const shareWaBtn = $('#btn-share-whatsapp-booking');
@@ -1724,9 +1803,12 @@
                     const ref = b.booking_ref || '';
                     const regNo = b.vehicle_reg || '-';
 
-                    // Determine payment label
-                    let paymentLabel = 'Advance Paid';
-                    if (b.payment_status === 'paid' || balanceAmount <= 0) {
+                    let paymentLabel = 'Unpaid';
+                    if (b.payment_status === 'paid') {
+                        paymentLabel = 'Fully Paid';
+                    } else if (b.payment_status === 'token_paid' || (b.payment_method && b.payment_method.includes('199'))) {
+                        paymentLabel = 'Token Paid (Advance: ₹199)';
+                    } else if (balanceAmount === 0 && totalPrice > 0) {
                         paymentLabel = 'Fully Paid';
                     }
 
@@ -1808,7 +1890,7 @@
                 };
             }
 
-            // Vehicle Edit Event Handlers
+            // Vehicle & Schedule Edit Event Handlers
             if($('#btn-edit-vehicle')) {
                 $('#btn-edit-vehicle').onclick = () => {
                     $('#vehicle-view-mode').classList.add('hidden');
@@ -1828,19 +1910,43 @@
                     const vYear = $('#edit-vehicle-year').value.trim();
                     const vFuel = $('#edit-vehicle-fuel') ? $('#edit-vehicle-fuel').value : 'Petrol';
                     const vReg = $('#edit-vehicle-reg').value.trim();
+                    const vDate = $('#edit-inspection-date') ? $('#edit-inspection-date').value : '';
+                    
+                    const timeSelect = $('#edit-inspection-time');
+                    const customTimeInput = $('#edit-inspection-time-custom');
+                    let vTime = timeSelect ? timeSelect.value : '';
+                    if (vTime === 'CUSTOM') {
+                        vTime = (customTimeInput ? customTimeInput.value.trim() : '') || '10:00 AM - 12:00 PM';
+                    }
 
-                    const { error } = await client.from('bookings').update({
+                    const pkgSelect = $('#edit-vehicle-package');
+                    const newPkg = pkgSelect ? pkgSelect.value : b.package_name;
+                    const newPrice = pkgSelect && pkgSelect.selectedIndex >= 0 ? parseInt(pkgSelect.options[pkgSelect.selectedIndex].dataset.price || b.total_price) : b.total_price;
+
+                    const pkgChanged = newPkg !== b.package_name && !b.package_name.includes(newPkg);
+
+                    const updateData = {
                         vehicle_brand: vBrand,
                         vehicle_model: vModel,
                         vehicle_year: vYear,
                         vehicle_fuel: vFuel,
-                        vehicle_reg: vReg || null
-                    }).eq('id', id);
+                        vehicle_reg: vReg || null,
+                        package_name: newPkg,
+                        inspection_date: vDate || b.inspection_date,
+                        inspection_time: vTime || b.inspection_time
+                    };
+
+                    if (pkgChanged) {
+                        updateData.base_price = newPrice;
+                        updateData.total_price = newPrice;
+                    }
+
+                    const { error } = await client.from('bookings').update(updateData).eq('id', id);
 
                     if(error) {
                         showToast(error.message, 'error');
                     } else {
-                        showToast('Vehicle details saved successfully!', 'success');
+                        showToast('Vehicle details & schedule saved successfully!', 'success');
                         renderBookingDetail();
                     }
                 };
