@@ -646,33 +646,10 @@ table.cp td.note { color: #8A8296; }
 </div>
 
 <!-- ============================================================
-     PAGE 7: PHOTO GALLERY + CHECKPOINTS
+     PAGES 7+: PHOTO GALLERY + CHECKPOINTS (Dynamically Paginated)
 ============================================================ -->
-<div class="page" id="pg-checkpoints">
-  <div class="hdr">
-    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
-    <div class="hdr-right">Diagnostic Checkpoints<br/>Inspector-verified 300+ point inspection</div>
-  </div>
-
-  <div class="pill-purple">Photo Gallery</div>
-  <div class="section-title">Vehicle Exterior Overview</div>
-
-  <div class="gallery4" id="hero-gallery">
-    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Front View</div><div class="cap">Front</div></div>
-    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Driver Side</div><div class="cap">Side (Driver)</div></div>
-    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Rear View</div><div class="cap">Rear</div></div>
-    <div class="g-item"><div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">Passenger Side</div><div class="cap">Side (Passenger)</div></div>
-  </div>
-
-  <div class="subhead">Inspection Checkpoints</div>
-  <div id="checkpoint-sections">
-    <!-- Populated dynamically by category -->
-  </div>
-
-  <div class="footer">
-    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
-    <div>Page 7+</div>
-  </div>
+<div id="checkpoint-pages-container">
+  <!-- Dynamically rendered into multiple .page blocks (Page 7, 8, 9, etc.) -->
 </div>
 
 <!-- ============================================================
@@ -698,12 +675,12 @@ table.cp td.note { color: #8A8296; }
 
   <div class="footer">
     <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
-    <div>Tyre Report</div>
+    <div id="pg-tyre-footer-num">Tyre Report</div>
   </div>
 </div>
 
 <!-- ============================================================
-     PAGE 8: ADMIN REMARKS & BACK COVER
+     ADMIN REMARKS & RECOMMENDATIONS PAGE
 ============================================================ -->
 <div class="page" id="pg-remarks" style="padding-bottom: 24mm;">
   <div class="hdr">
@@ -735,7 +712,7 @@ table.cp td.note { color: #8A8296; }
 
   <div class="footer" style="position:relative; bottom:auto; left:auto; right:auto; margin-top:10px; border-top:1px solid #EEE7FB; padding-top:6px;">
     <div>InspectCar &middot; inspectcar.in &middot; +91 9900368006</div>
-    <div>Report ID: <span id="r-report-id">—</span></div>
+    <div>Report ID: <span id="r-report-id">—</span> &middot; <span id="pg-remarks-footer-num">Remarks</span></div>
   </div>
 </div>
 
@@ -982,13 +959,9 @@ table.cp td.note { color: #8A8296; }
         </div>`).join('');
     }
 
-    // Hero Photos — prefer admin-uploaded, fall back to inspector baseline photos
+    // Hero Photos & Checkpoint Pages (Dynamically Paginated across multiple A4 pages)
     const heroPhotos = d.hero_photos || {};
-    const heroGallery = document.getElementById('hero-gallery');
-    // Inspector baseline photos are stored in checklist as 'Baseline Photos & Docs' category
     const baselineCat = d.checklist && (d.checklist['Baseline Photos & Docs'] || d.checklist['Baseline Photos & Docs']);
-    const baselineExtItem = baselineCat && baselineCat.find(i => i.item_name === 'Exterior Baseline Photos');
-    // sub-key photos stored with key 'Exterior Baseline Photos_front' etc. in answers
     const getBaselinePhoto = (slot) => {
       const key = 'Exterior Baseline Photos_' + slot;
       const subItem = baselineCat && baselineCat.find(i => i.item_name === key);
@@ -1000,36 +973,150 @@ table.cp td.note { color: #8A8296; }
       { label: 'Rear',            adminKey: 'rear',           inspKey: 'rear' },
       { label: 'Side (Passenger)',adminKey: 'side_passenger', inspKey: 'right' }
     ];
-    heroGallery.innerHTML = heroSlots.map(slot => {
-      const url = heroPhotos[slot.adminKey] || getBaselinePhoto(slot.inspKey);
-      const content = url
-        ? `<img src="${url}" style="width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #EEE7FB;">`
-        : `<div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">${slot.label}</div>`;
-      return `<div class="g-item">${content}<div class="cap">${slot.label}</div></div>`;
-    }).join('');
+    const heroGalleryHtml = `
+      <div class="pill-purple">Photo Gallery</div>
+      <div class="section-title">Vehicle Exterior Overview</div>
+      <div class="gallery4" id="hero-gallery">
+        ${heroSlots.map(slot => {
+          const url = heroPhotos[slot.adminKey] || getBaselinePhoto(slot.inspKey);
+          const content = url
+            ? `<img src="${url}" style="width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #EEE7FB;">`
+            : `<div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">${slot.label}</div>`;
+          return `<div class="g-item">${content}<div class="cap">${slot.label}</div></div>`;
+        }).join('')}
+      </div>
+      <div class="subhead">Inspection Checkpoints</div>
+    `;
 
-    // Checkpoints
     const checkpointData = d.checklist || {};
-    const sections = document.getElementById('checkpoint-sections');
-    sections.innerHTML = Object.keys(checkpointData).map(cat => {
-      // Filter out baseline photo sub-keys (Exterior Baseline Photos_front etc.)
+    const cpContainer = document.getElementById('checkpoint-pages-container');
+
+    // Filter valid categories and remove baseline photo sub-keys
+    const rawCategories = [];
+    Object.keys(checkpointData).forEach(cat => {
       const items = (checkpointData[cat] || []).filter(i => !i.item_name || !i.item_name.includes('Exterior Baseline Photos_'));
-      if (!items.length) return '';
-      return `<div class="cp-section">
-        <div class="cp-title">${escHtml(cat)}<span class="n">${items.length} checks</span></div>
-        <table class="cp">
-          <tr><th>Item</th><th>Status</th><th>Notes</th></tr>
-          ${items.map(item => `
-            <tr>
-              <td>${escHtml(item.item_name)}</td>
-              <td class="ans ${ansClass(item.answer)}">${escHtml(item.answer||'N/A')}</td>
-              <td class="note">${escHtml(item.remarks||item.note||'')}</td>
-            </tr>
-            ${item.photos&&item.photos.length?`<tr><td colspan="3" style="padding:0"><div class="cp-photos">${item.photos.map(p=>`<img src="${p}" alt="photo">`).join('')}</div></td></tr>`:''}
-          `).join('')}
-        </table>
-      </div>`;
-    }).join('');
+      if (items.length > 0) {
+        rawCategories.push({ name: cat, items });
+      }
+    });
+
+    // Chunk categories into page groups based on visual height budget
+    // First page budget: 145 units (includes hero gallery)
+    // Subsequent pages budget: 215 units
+    const cpPages = [];
+    let curPage = [];
+    let curBudget = 0;
+    const getLimit = (pIdx) => (pIdx === 0 ? 145 : 215);
+
+    rawCategories.forEach(cat => {
+      let remainingItems = [...cat.items];
+      let partNum = 1;
+
+      while (remainingItems.length > 0) {
+        const limit = getLimit(cpPages.length);
+        const availBudget = limit - curBudget;
+
+        let fitCount = 0;
+        let batchCost = 22; // title + table header
+
+        for (let i = 0; i < remainingItems.length; i++) {
+          const item = remainingItems[i];
+          const hasPhoto = item.photos && item.photos.length > 0;
+          const itemCost = hasPhoto ? 22 : 7.2;
+
+          if (batchCost + itemCost <= availBudget || (curBudget === 0 && fitCount === 0)) {
+            batchCost += itemCost;
+            fitCount++;
+          } else {
+            break;
+          }
+        }
+
+        if (fitCount === 0 && curPage.length > 0) {
+          cpPages.push(curPage);
+          curPage = [];
+          curBudget = 0;
+          continue;
+        }
+
+        const batchItems = remainingItems.slice(0, fitCount);
+        remainingItems = remainingItems.slice(fitCount);
+
+        const displayName = partNum > 1 ? `${cat.name} (Cont.)` : cat.name;
+        curPage.push({ name: displayName, items: batchItems });
+        curBudget += batchCost;
+        partNum++;
+
+        if (remainingItems.length > 0) {
+          cpPages.push(curPage);
+          curPage = [];
+          curBudget = 0;
+        }
+      }
+    });
+
+    if (curPage.length > 0) {
+      cpPages.push(curPage);
+    }
+
+    if (cpPages.length === 0) {
+      cpPages.push([{ name: 'Diagnostic Checkpoints', items: [] }]);
+    }
+
+    const startPageNumber = 7;
+    if (cpContainer) {
+      cpContainer.innerHTML = cpPages.map((pageCats, pIdx) => {
+        const pageNum = startPageNumber + pIdx;
+        const isFirst = pIdx === 0;
+
+        const topSection = isFirst ? heroGalleryHtml : `
+          <div class="pill-purple">Inspection Checkpoints</div>
+          <div class="section-title">Diagnostic Checkpoints (Continued)</div>
+        `;
+
+        const catsHtml = pageCats.map(c => `
+          <div class="cp-section">
+            <div class="cp-title">${escHtml(c.name)}<span class="n">${c.items.length} checks</span></div>
+            <table class="cp">
+              <tr><th>Item</th><th>Status</th><th>Notes</th></tr>
+              ${c.items.map(item => `
+                <tr>
+                  <td>${escHtml(item.item_name)}</td>
+                  <td class="ans ${ansClass(item.answer)}">${escHtml(item.answer||'N/A')}</td>
+                  <td class="note">${escHtml(item.remarks||item.note||'')}</td>
+                </tr>
+                ${item.photos && item.photos.length ? `<tr><td colspan="3" style="padding:0"><div class="cp-photos">${item.photos.map(p=>`<img src="${p}" alt="photo">`).join('')}</div></td></tr>` : ''}
+              `).join('')}
+            </table>
+          </div>
+        `).join('');
+
+        return `
+          <div class="page" id="pg-checkpoints-${pIdx + 1}">
+            <div class="hdr">
+              <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+              <div class="hdr-right">Diagnostic Checkpoints<br/>Inspector-verified 300+ point inspection</div>
+            </div>
+            ${topSection}
+            <div class="checkpoint-sections">
+              ${catsHtml}
+            </div>
+            <div class="footer">
+              <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+              <div>Page ${pageNum}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Dynamic sequential page numbering for subsequent pages
+    const tyrePageNum = startPageNumber + cpPages.length;
+    const remarksPageNum = tyrePageNum + 1;
+    const tyreFooter = document.getElementById('pg-tyre-footer-num');
+    if (tyreFooter) tyreFooter.textContent = `Page ${tyrePageNum}`;
+    const remarksFooter = document.getElementById('pg-remarks-footer-num');
+    if (remarksFooter) remarksFooter.textContent = `Page ${remarksPageNum}`;
 
     // Remarks
     document.getElementById('r-inspector-notes').textContent   = fmt(d.inspector_notes);
