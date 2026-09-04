@@ -538,10 +538,10 @@
 
     <!-- Bookings List View -->
     <template id="view-bookings">
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-center mb-4" style="flex-wrap: wrap; gap: 10px;">
             <h2>All Bookings</h2>
-            <div class="flex gap-2">
-                <input type="text" id="bookings-search" class="form-control" placeholder="Search ref, name, phone..." style="width: 250px;">
+            <div class="flex gap-2" style="flex-wrap: wrap;">
+                <input type="text" id="bookings-search" class="form-control" placeholder="Search ref, name, phone..." style="width: 220px;">
                 <select id="bookings-status-filter" class="form-control">
                     <option value="">All Statuses</option>
                     <option value="pending">Pending</option>
@@ -549,6 +549,12 @@
                     <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
+                </select>
+                <select id="bookings-sort-filter" class="form-control" style="width: auto;">
+                    <option value="created_desc">Sort: Booked On (Newest First)</option>
+                    <option value="created_asc">Sort: Booked On (Oldest First)</option>
+                    <option value="inspection_desc">Sort: Inspection Date (Newest / Latest First)</option>
+                    <option value="inspection_asc">Sort: Inspection Date (Earliest / Upcoming First)</option>
                 </select>
             </div>
         </div>
@@ -558,10 +564,14 @@
                 <thead>
                     <tr>
                         <th>Ref</th>
-                        <th>Booked On</th>
+                        <th id="th-sort-booked" style="cursor: pointer; user-select: none;" title="Click to sort by Booking Date">
+                            Booked On <i id="sort-icon-booked" class="fas fa-sort-down" style="color: #a78bfa; margin-left: 4px;"></i>
+                        </th>
                         <th>Customer</th>
                         <th>Vehicle</th>
-                        <th>Date & Time</th>
+                        <th id="th-sort-inspection" style="cursor: pointer; user-select: none;" title="Click to sort by Inspection Date">
+                            Inspection Date &amp; Time <i id="sort-icon-inspection" class="fas fa-sort" style="color: #6b7280; margin-left: 4px; opacity: 0.6;"></i>
+                        </th>
                         <th>Package</th>
                         <th>Status</th>
                         <th>Action</th>
@@ -1628,28 +1638,92 @@
              const tbody = $('#bookings-table-body');
              const statusFilter = $('#bookings-status-filter');
              const searchInput = $('#bookings-search');
+             const sortFilter = $('#bookings-sort-filter');
+             const thSortBooked = $('#th-sort-booked');
+             const thSortInspection = $('#th-sort-inspection');
+             const iconSortBooked = $('#sort-icon-booked');
+             const iconSortInspection = $('#sort-icon-inspection');
+
+             let currentSort = sortFilter ? sortFilter.value : 'created_desc';
+
+             function updateSortIcons() {
+                 if (iconSortBooked) {
+                     if (currentSort === 'created_desc') {
+                         iconSortBooked.className = 'fas fa-sort-down';
+                         iconSortBooked.style.color = '#a78bfa';
+                         iconSortBooked.style.opacity = '1';
+                     } else if (currentSort === 'created_asc') {
+                         iconSortBooked.className = 'fas fa-sort-up';
+                         iconSortBooked.style.color = '#a78bfa';
+                         iconSortBooked.style.opacity = '1';
+                     } else {
+                         iconSortBooked.className = 'fas fa-sort';
+                         iconSortBooked.style.color = '#6b7280';
+                         iconSortBooked.style.opacity = '0.5';
+                     }
+                 }
+
+                 if (iconSortInspection) {
+                     if (currentSort === 'inspection_desc') {
+                         iconSortInspection.className = 'fas fa-sort-down';
+                         iconSortInspection.style.color = '#a78bfa';
+                         iconSortInspection.style.opacity = '1';
+                     } else if (currentSort === 'inspection_asc') {
+                         iconSortInspection.className = 'fas fa-sort-up';
+                         iconSortInspection.style.color = '#a78bfa';
+                         iconSortInspection.style.opacity = '1';
+                     } else {
+                         iconSortInspection.className = 'fas fa-sort';
+                         iconSortInspection.style.color = '#6b7280';
+                         iconSortInspection.style.opacity = '0.5';
+                     }
+                 }
+
+                 if (sortFilter && sortFilter.value !== currentSort) {
+                     sortFilter.value = currentSort;
+                 }
+             }
 
              async function loadData() {
                  const client = dbClient || window.supabase;
                  if(!client) return;
-                 let query = client.from('bookings').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(50);
+
+                 let sortField = 'created_at';
+                 let sortAsc = false;
+                 if (currentSort === 'created_asc') {
+                     sortField = 'created_at';
+                     sortAsc = true;
+                 } else if (currentSort === 'inspection_desc') {
+                     sortField = 'inspection_date';
+                     sortAsc = false;
+                 } else if (currentSort === 'inspection_asc') {
+                     sortField = 'inspection_date';
+                     sortAsc = true;
+                 } else {
+                     sortField = 'created_at';
+                     sortAsc = false;
+                 }
+
+                 let query = client.from('bookings').select('*, profiles(full_name)').order(sortField, { ascending: sortAsc, nullsFirst: false }).limit(100);
                  
-                 if(statusFilter.value) query = query.eq('status', statusFilter.value);
-                 if(searchInput.value) {
-                     const term = searchInput.value;
-                     query = query.or(`booking_ref.ilike.%${term}%,customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%`);
+                 if(statusFilter && statusFilter.value) query = query.eq('status', statusFilter.value);
+                 if(searchInput && searchInput.value) {
+                     const term = searchInput.value.trim();
+                     if(term) {
+                         query = query.or(`booking_ref.ilike.%${term}%,customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,vehicle_brand.ilike.%${term}%,vehicle_model.ilike.%${term}%`);
+                     }
                  }
 
                  const { data, error } = await query;
                  tbody.innerHTML = '';
                  
                  if(error) {
-                     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error loading data</td></tr>`;
+                     tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
                      return;
                  }
 
-                 if(data.length === 0) {
-                     tbody.innerHTML = `<tr><td colspan="7" class="text-center">No bookings found</td></tr>`;
+                 if(!data || data.length === 0) {
+                     tbody.innerHTML = `<tr><td colspan="8" class="text-center">No bookings found</td></tr>`;
                      return;
                  }
 
@@ -1665,15 +1739,15 @@
                                 <div class="text-xs text-secondary">${bookedTime}</div>
                             </td>
                             <td>
-                                <div>${b.customer_name}</div>
-                                <div class="text-xs text-secondary">${b.customer_phone}</div>
+                                <div>${b.customer_name || 'N/A'}</div>
+                                <div class="text-xs text-secondary">${b.customer_phone || '—'}</div>
                             </td>
-                            <td>${b.vehicle_brand} ${b.vehicle_model}</td>
+                            <td>${b.vehicle_brand || ''} ${b.vehicle_model || ''}</td>
                             <td>
                                 <div>${formatDate(b.inspection_date)}</div>
-                                <div class="text-xs text-secondary">${b.inspection_time}</div>
+                                <div class="text-xs text-secondary">${b.inspection_time || '—'}</div>
                             </td>
-                            <td>${b.package_name}</td>
+                            <td>${b.package_name || '—'}</td>
                             <td><span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span></td>
                             <td><a href="#/booking/${b.id}" class="btn btn-secondary text-sm">View</a></td>
                         </tr>
@@ -1681,14 +1755,41 @@
                  });
              }
 
+             if (thSortBooked) {
+                 thSortBooked.onclick = () => {
+                     currentSort = (currentSort === 'created_desc') ? 'created_asc' : 'created_desc';
+                     updateSortIcons();
+                     loadData();
+                 };
+             }
+
+             if (thSortInspection) {
+                 thSortInspection.onclick = () => {
+                     currentSort = (currentSort === 'inspection_desc') ? 'inspection_asc' : 'inspection_desc';
+                     updateSortIcons();
+                     loadData();
+                 };
+             }
+
+             if (sortFilter) {
+                 sortFilter.onchange = () => {
+                     currentSort = sortFilter.value;
+                     updateSortIcons();
+                     loadData();
+                 };
+             }
+
+             updateSortIcons();
              loadData();
-             statusFilter.addEventListener('change', loadData);
+             if (statusFilter) statusFilter.addEventListener('change', loadData);
              
              let debounceTimeout;
-             searchInput.addEventListener('input', () => {
-                 clearTimeout(debounceTimeout);
-                 debounceTimeout = setTimeout(loadData, 500);
-             });
+             if (searchInput) {
+                 searchInput.addEventListener('input', () => {
+                     clearTimeout(debounceTimeout);
+                     debounceTimeout = setTimeout(loadData, 400);
+                 });
+             }
         }
 
         // --- BOOKING DETAIL ---
