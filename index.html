@@ -569,6 +569,7 @@
                         </th>
                         <th>Customer</th>
                         <th>Vehicle</th>
+                        <th>Location</th>
                         <th id="th-sort-inspection" style="cursor: pointer; user-select: none;" title="Click to sort by Inspection Date">
                             Inspection Date &amp; Time <i id="sort-icon-inspection" class="fas fa-sort" style="color: #6b7280; margin-left: 4px; opacity: 0.6;"></i>
                         </th>
@@ -578,7 +579,7 @@
                     </tr>
                 </thead>
                 <tbody id="bookings-table-body">
-                    <tr><td colspan="8" class="text-center">Loading...</td></tr>
+                    <tr><td colspan="9" class="text-center">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1710,7 +1711,7 @@
                  if(searchInput && searchInput.value) {
                      const term = searchInput.value.trim();
                      if(term) {
-                         query = query.or(`booking_ref.ilike.%${term}%,customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,vehicle_brand.ilike.%${term}%,vehicle_model.ilike.%${term}%`);
+                         query = query.or(`booking_ref.ilike.%${term}%,customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,vehicle_brand.ilike.%${term}%,vehicle_model.ilike.%${term}%,area.ilike.%${term}%,address.ilike.%${term}%`);
                      }
                  }
 
@@ -1718,12 +1719,12 @@
                  tbody.innerHTML = '';
                  
                  if(error) {
-                     tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
+                     tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
                      return;
                  }
 
                  if(!data || data.length === 0) {
-                     tbody.innerHTML = `<tr><td colspan="8" class="text-center">No bookings found</td></tr>`;
+                     tbody.innerHTML = `<tr><td colspan="9" class="text-center">No bookings found</td></tr>`;
                      return;
                  }
 
@@ -1731,6 +1732,10 @@
                      const inspectorName = b.profiles ? b.profiles.full_name : 'Unassigned';
                      const bookedDate = b.created_at ? formatDate(b.created_at) : '—';
                      const bookedTime = b.created_at ? formatTime(b.created_at) : '';
+                     const areaText = b.area || (b.address ? b.address.split(',')[0] : 'Bangalore');
+                     const fullAddr = b.address || '';
+                     const isMaps = fullAddr.includes('http');
+
                      tbody.innerHTML += `
                         <tr>
                             <td class="font-bold text-accent-light">${b.booking_ref}</td>
@@ -1743,6 +1748,13 @@
                                 <div class="text-xs text-secondary">${b.customer_phone || '—'}</div>
                             </td>
                             <td>${b.vehicle_brand || ''} ${b.vehicle_model || ''}</td>
+                            <td>
+                                <div class="font-medium" style="color: #e5e7eb;">${areaText}</div>
+                                ${fullAddr && fullAddr !== areaText ? `
+                                    <div class="text-xs text-secondary" style="max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${fullAddr.replace(/"/g, '&quot;')}">
+                                        ${isMaps ? '<i class="fas fa-map-marker-alt" style="color: #a78bfa; margin-right: 3px;"></i>' : ''}${fullAddr}
+                                    </div>` : ''}
+                            </td>
                             <td>
                                 <div>${formatDate(b.inspection_date)}</div>
                                 <div class="text-xs text-secondary">${b.inspection_time || '—'}</div>
