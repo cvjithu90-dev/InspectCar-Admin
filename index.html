@@ -3267,6 +3267,30 @@ async function loadWzBooking() {
     } catch(e) { console.warn('loadWzBooking:', e); }
 }
 
+function matchChecklistItem(itemList, photoItemName) {
+    if (!photoItemName || !itemList || !itemList.length) return null;
+    const pName = photoItemName.trim().toLowerCase();
+    
+    // 1. Exact match
+    let found = itemList.find(i => i.item_name && i.item_name.trim().toLowerCase() === pName);
+    if (found) return found;
+
+    // 2. Baseline Photos special match:
+    // "Exterior Baseline Photos - Front View", "Exterior Baseline Photos_front", etc. -> "Exterior Baseline Photos"
+    if (pName.includes('exterior baseline')) {
+        found = itemList.find(i => i.item_name && i.item_name.toLowerCase().includes('exterior baseline'));
+        if (found) return found;
+    }
+
+    // 3. Prefix match
+    found = itemList.find(i => {
+        if (!i.item_name) return false;
+        const iName = i.item_name.trim().toLowerCase();
+        return pName.startsWith(iName) || iName.startsWith(pName);
+    });
+    return found || null;
+}
+
 async function loadWzAnswers() {
     const client = dbClient || window.supabase;
     if (!client || !wz) return;
@@ -3288,13 +3312,19 @@ async function loadWzAnswers() {
             
             // Flexible matching on item_name
             let item = wz.draft.checklist[ans.category].find(i => 
-                i.item_name && i.item_name.trim().toLowerCase() === ans.item_name.trim().toLowerCase()
+                i.item_name && (i.item_name.trim().toLowerCase() === ans.item_name.trim().toLowerCase() ||
+                (ans.item_name.toLowerCase().includes('exterior baseline') && i.item_name.toLowerCase().includes('exterior baseline')))
             );
 
             // Match photos for this item
-            const itemPhotos = (photos || []).filter(p => 
-                p.item_name && p.item_name.trim().toLowerCase() === ans.item_name.trim().toLowerCase()
-            ).map(p => p.photo_url);
+            const itemPhotos = (photos || []).filter(p => {
+                if (!p.item_name) return false;
+                const pName = p.item_name.trim().toLowerCase();
+                const ansName = ans.item_name.trim().toLowerCase();
+                if (pName === ansName) return true;
+                if (ansName.includes('exterior baseline') && pName.includes('exterior baseline')) return true;
+                return false;
+            }).map(p => p.photo_url);
 
             // Tyre-specific fields to carry over
             const tyreFields = {
@@ -3335,13 +3365,24 @@ async function loadWzAnswers() {
             }
         });
 
-        // Ensure photos matched by category are also assigned if item match missed
+        // Clean up any photo misalignments in checklist (e.g. baseline photos under PUC Certificate)
+        Object.keys(wz.draft.checklist).forEach(cat => {
+            (wz.draft.checklist[cat] || []).forEach(item => {
+                if (item.photos && item.photos.length > 0) {
+                    item.photos = item.photos.filter(pUrl => {
+                        const photoObj = (photos || []).find(p => p.photo_url === pUrl);
+                        if (!photoObj) return true; // keep manually added admin photos
+                        const target = matchChecklistItem(wz.draft.checklist[photoObj.category || cat], photoObj.item_name);
+                        return target && target.item_name === item.item_name;
+                    });
+                }
+            });
+        });
+
+        // Assign photos accurately to matched checklist items
         (photos || []).forEach(p => {
             if (p.category && wz.draft.checklist[p.category]) {
-                const targetItem = wz.draft.checklist[p.category].find(i => 
-                    i.item_name && p.item_name && i.item_name.trim().toLowerCase() === p.item_name.trim().toLowerCase()
-                ) || wz.draft.checklist[p.category][0];
-
+                const targetItem = matchChecklistItem(wz.draft.checklist[p.category], p.item_name);
                 if (targetItem) {
                     if (!targetItem.photos) targetItem.photos = [];
                     if (!targetItem.photos.includes(p.photo_url)) {
