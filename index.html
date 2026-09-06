@@ -3363,24 +3363,23 @@ async function loadWzAnswers() {
 
 function autoPopulateHeroPhotos(photos) {
     if (!wz.draft.hero_photos) wz.draft.hero_photos = {};
-    // First pass: prioritise Exterior Baseline Photo slots from inspector
-    // item_name patterns: "Exterior Baseline Photos – Front View", "– Rear View", "– Left Side View", "– Right Side View"
+    // First pass: always prioritize actual Exterior Baseline Photos from inspector
     (photos || []).forEach(p => {
         const name = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
-        const isBaseline = name.includes('exterior baseline');
+        const isBaseline = name.includes('exterior baseline') || (p.category === 'Baseline Photos & Docs' && (name.includes('front') || name.includes('rear') || name.includes('left') || name.includes('right') || name.includes('side')));
         if (isBaseline) {
-            if (name.includes('front') && !wz.draft.hero_photos.front) {
+            if (name.includes('front')) {
                 wz.draft.hero_photos.front = p.photo_url;
-            } else if (name.includes('rear') && !wz.draft.hero_photos.rear) {
+            } else if (name.includes('rear')) {
                 wz.draft.hero_photos.rear = p.photo_url;
-            } else if (name.includes('left') && !wz.draft.hero_photos.side_driver) {
+            } else if (name.includes('left') || name.includes('driver')) {
                 wz.draft.hero_photos.side_driver = p.photo_url;
-            } else if (name.includes('right') && !wz.draft.hero_photos.side_passenger) {
+            } else if (name.includes('right') || name.includes('passenger')) {
                 wz.draft.hero_photos.side_passenger = p.photo_url;
             }
         }
     });
-    // Second pass: fall back to any photo with front/rear/left/right in name
+    // Second pass: fill any remaining empty slots
     (photos || []).forEach(p => {
         const str = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
         if (str.includes('front') && !wz.draft.hero_photos.front) {
