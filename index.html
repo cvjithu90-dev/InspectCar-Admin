@@ -2892,7 +2892,7 @@
         async function loadBlockedSlots() {
             const list = $('#bs-blocked-list');
             if (!list) return;
-            const client = window._supabase || window.supabase;
+            const client = dbClient;
             if (!client) {
                 list.innerHTML = '<p class="text-secondary text-sm">Supabase not connected.</p>';
                 return;
@@ -2938,7 +2938,7 @@
                 return;
             }
             const reason = reasonInput ? reasonInput.value.trim() : '';
-            const client = window._supabase || window.supabase;
+            const client = dbClient;
             if (!client) { if (msg) { msg.style.color = '#ef4444'; msg.innerText = 'Supabase not connected.'; } return; }
 
             const btn = $('#btn-block-slot');
@@ -2967,7 +2967,7 @@
 
         window.unblockSlot = async function(id) {
             if (!confirm('Remove this block? The slot will become available on the booking website again.')) return;
-            const client = window._supabase || window.supabase;
+            const client = dbClient;
             if (!client) return;
             try {
                 const { error } = await client.from('blocked_slots').delete().eq('id', id);
