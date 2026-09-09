@@ -461,6 +461,7 @@
                 <a href="#/inspectors" class="nav-item" data-path="/inspectors"><span><i class="fas fa-user-shield"></i></span> Inspectors</a>
                 <a href="#/analytics" class="nav-item" data-path="/analytics"><span><i class="fas fa-chart-pie"></i></span> Analytics</a>
                 <a href="#/database" class="nav-item" data-path="/database"><span><i class="fas fa-database"></i></span> Car Database</a>
+                <a href="#/blocked-slots" class="nav-item" data-path="/blocked-slots"><span><i class="fas fa-ban"></i></span> Block Slots</a>
                 <a href="#" id="logout-btn" class="nav-item mt-4" style="border-top: 1px solid var(--border-color);"><span><i class="fas fa-sign-out-alt"></i></span> Logout</a>
             </div>
         </div>
@@ -713,10 +714,10 @@
                             <select id="edit-inspection-time" class="form-control text-sm">
                                 <option value="9:00 AM - 11:00 AM">9:00 AM - 11:00 AM</option>
                                 <option value="11:00 AM - 1:00 PM">11:00 AM - 1:00 PM</option>
-                                <option value="1:30 PM - 3:30 PM">1:30 PM - 3:30 PM</option>
-                                <option value="3:30 PM - 5:30 PM">3:30 PM - 5:30 PM</option>
+                                <option value="1:00 PM - 3:00 PM">1:00 PM - 3:00 PM</option>
+                                <option value="3:00 PM - 5:00 PM">3:00 PM - 5:00 PM</option>
                                 <option value="5:00 PM - 7:00 PM">5:00 PM - 7:00 PM</option>
-                                <option value="6:30 PM - 8:30 PM">6:30 PM - 8:30 PM</option>
+                                <option value="7:00 PM - 10:00 PM">7:00 PM - 10:00 PM (On Demand Night)</option>
                                 <option value="CUSTOM">Custom Time...</option>
                             </select>
                             <input type="text" id="edit-inspection-time-custom" class="form-control text-xs hidden" style="margin-top: 5px;" placeholder="e.g. 10:30 AM - 12:30 PM" />
@@ -1245,6 +1246,69 @@
         </div>
     </template>
 
+    <!-- Blocked Slots View -->
+    <template id="view-blocked-slots">
+        <style>
+            .bs-slot-pill { display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);cursor:pointer;font-size:12.5px;color:var(--text-secondary);transition:all .2s;user-select:none; }
+            .bs-slot-pill:hover { border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);color:#f87171; }
+            .bs-slot-pill.selected { border-color:#ef4444;background:rgba(239,68,68,0.15);color:#f87171;font-weight:600; }
+            .blocked-row { display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;margin-bottom:8px;font-size:13px; }
+            .blocked-row .bdate { font-weight:700;color:#f4f4f6;min-width:110px; }
+            .blocked-row .bslot { color:#fca5a5;flex:1;padding:0 10px; }
+            .blocked-row .breason { color:var(--text-secondary);font-size:11.5px;flex:1; }
+            .btn-unblock { background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:600;transition:all .2s; }
+            .btn-unblock:hover { background:rgba(239,68,68,0.3); }
+            .bs-calendar-input { background:#161625;border:1px solid var(--border-color);color:#f4f4f6;padding:8px 12px;border-radius:8px;font-size:13px;width:100%; }
+            .bs-calendar-input:focus { outline:none;border-color:#6366f1; }
+        </style>
+        <div class="page-header flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-white">🚫 Block Slots</h2>
+                <p class="text-secondary text-sm mt-1">Block specific time slots on specific dates — they won't show as Available on the booking website.</p>
+            </div>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+            <!-- LEFT: Add Block Form -->
+            <div class="card p-5">
+                <h3 class="font-bold text-white mb-4" style="font-size:15px;">➕ Block a Slot</h3>
+                <div class="form-group mb-3">
+                    <label class="text-secondary text-xs block mb-1">📅 Date</label>
+                    <input type="date" id="bs-date" class="bs-calendar-input" />
+                </div>
+                <div class="form-group mb-3">
+                    <label class="text-secondary text-xs block mb-1">⏰ Time Slot</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="bs-slot-pills">
+                        <div class="bs-slot-pill" data-slot="9:00 AM - 11:00 AM">9:00 AM – 11:00 AM</div>
+                        <div class="bs-slot-pill" data-slot="11:00 AM - 1:00 PM">11:00 AM – 1:00 PM</div>
+                        <div class="bs-slot-pill" data-slot="1:00 PM - 3:00 PM">1:00 PM – 3:00 PM</div>
+                        <div class="bs-slot-pill" data-slot="3:00 PM - 5:00 PM">3:00 PM – 5:00 PM</div>
+                        <div class="bs-slot-pill" data-slot="5:00 PM - 7:00 PM">5:00 PM – 7:00 PM</div>
+                        <div class="bs-slot-pill" data-slot="7:00 PM - 10:00 PM">7:00 PM – 10:00 PM</div>
+                        <div class="bs-slot-pill" data-slot="ALL_DAY">🚫 All Day (Block Entire Day)</div>
+                    </div>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="text-secondary text-xs block mb-1">📝 Reason (Optional)</label>
+                    <input type="text" id="bs-reason" class="bs-calendar-input" placeholder="e.g. Inspector day off, Holiday..." />
+                </div>
+                <button id="btn-block-slot" class="btn btn-danger w-full" style="background:#ef4444;border-color:#ef4444;">
+                    <i class="fas fa-ban"></i> Block Selected Slot
+                </button>
+                <p id="bs-msg" class="text-xs mt-2" style="min-height:18px;"></p>
+            </div>
+            <!-- RIGHT: Active Blocks List -->
+            <div class="card p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-white" style="font-size:15px;">🔒 Currently Blocked</h3>
+                    <button onclick="renderBlockedSlots()" class="btn btn-secondary text-xs"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+                <div id="bs-blocked-list">
+                    <div class="text-secondary text-sm" style="text-align:center;padding:30px;">Loading blocked slots...</div>
+                </div>
+            </div>
+        </div>
+    </template>
+
     <script>
         // ==========================================
         // Supabase Configuration
@@ -1408,6 +1472,9 @@
                 } else if (path === '#/database') {
                     viewTemplateId = 'view-database';
                     renderLogic = renderDatabase;
+                } else if (path === '#/blocked-slots') {
+                    viewTemplateId = 'view-blocked-slots';
+                    renderLogic = renderBlockedSlots;
                 } else if (path === '#/reports') {
                     viewTemplateId = 'view-reports';
                     renderLogic = renderReports;
@@ -2791,6 +2858,125 @@
             await loadDbModels();
             setupDbForms();
         }
+
+        // ========================================
+        // BLOCKED SLOTS — Admin slot blocker
+        // ========================================
+        let bsSelectedSlot = null;
+
+        async function renderBlockedSlots() {
+            // Set today as default date
+            const dateInput = $('#bs-date');
+            if (dateInput && !dateInput.value) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                dateInput.value = todayStr;
+            }
+            // Wire up pill selection
+            const pills = document.querySelectorAll('#bs-slot-pills .bs-slot-pill');
+            pills.forEach(pill => {
+                pill.addEventListener('click', () => {
+                    pills.forEach(p => p.classList.remove('selected'));
+                    pill.classList.add('selected');
+                    bsSelectedSlot = pill.getAttribute('data-slot');
+                });
+            });
+            // Wire up block button
+            const btn = $('#btn-block-slot');
+            if (btn) {
+                btn.addEventListener('click', blockSlot);
+            }
+            // Load list
+            await loadBlockedSlots();
+        }
+
+        async function loadBlockedSlots() {
+            const list = $('#bs-blocked-list');
+            if (!list) return;
+            const client = window._supabase || window.supabase;
+            if (!client) {
+                list.innerHTML = '<p class="text-secondary text-sm">Supabase not connected.</p>';
+                return;
+            }
+            try {
+                const { data, error } = await client
+                    .from('blocked_slots')
+                    .select('*')
+                    .order('block_date', { ascending: true })
+                    .order('block_time', { ascending: true });
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    list.innerHTML = '<div class="text-secondary text-sm" style="text-align:center;padding:30px;"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i>No slots are currently blocked.</div>';
+                    return;
+                }
+                list.innerHTML = data.map(row => {
+                    const dateDisp = new Date(row.block_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+                    const slotDisp = row.block_time === 'ALL_DAY' ? '🚫 All Day' : row.block_time;
+                    const reason = row.reason ? `<span class="breason">${row.reason}</span>` : '';
+                    return `<div class="blocked-row">
+                        <span class="bdate">${dateDisp}</span>
+                        <span class="bslot">${slotDisp}</span>
+                        ${reason}
+                        <button class="btn-unblock" onclick="unblockSlot('${row.id}')"><i class="fas fa-unlock-alt"></i> Unblock</button>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                list.innerHTML = `<p class="text-danger text-sm">Error loading: ${e.message}</p>`;
+            }
+        }
+
+        async function blockSlot() {
+            const dateInput = $('#bs-date');
+            const reasonInput = $('#bs-reason');
+            const msg = $('#bs-msg');
+            const dateVal = dateInput ? dateInput.value.trim() : '';
+            if (!dateVal) {
+                if (msg) { msg.style.color = '#ef4444'; msg.innerText = '⚠️ Please select a date.'; }
+                return;
+            }
+            if (!bsSelectedSlot) {
+                if (msg) { msg.style.color = '#ef4444'; msg.innerText = '⚠️ Please select a time slot.'; }
+                return;
+            }
+            const reason = reasonInput ? reasonInput.value.trim() : '';
+            const client = window._supabase || window.supabase;
+            if (!client) { if (msg) { msg.style.color = '#ef4444'; msg.innerText = 'Supabase not connected.'; } return; }
+
+            const btn = $('#btn-block-slot');
+            if (btn) { btn.disabled = true; btn.innerText = 'Blocking...'; }
+            if (msg) { msg.style.color = '#a78bfa'; msg.innerText = 'Saving...'; }
+
+            // If ALL_DAY, insert one row per slot
+            const ALL_SLOTS = ['9:00 AM - 11:00 AM','11:00 AM - 1:00 PM','1:00 PM - 3:00 PM','3:00 PM - 5:00 PM','5:00 PM - 7:00 PM','7:00 PM - 10:00 PM'];
+            const slotsToBlock = bsSelectedSlot === 'ALL_DAY' ? ALL_SLOTS : [bsSelectedSlot];
+            const rows = slotsToBlock.map(s => ({ block_date: dateVal, block_time: s, reason: reason || null }));
+
+            try {
+                const { error } = await client.from('blocked_slots').insert(rows);
+                if (error) throw error;
+                if (msg) { msg.style.color = '#10b981'; msg.innerText = `✅ ${rows.length === 1 ? 'Slot' : 'All slots for the day'} blocked successfully!`; }
+                // Reset selection
+                document.querySelectorAll('#bs-slot-pills .bs-slot-pill').forEach(p => p.classList.remove('selected'));
+                bsSelectedSlot = null;
+                if (reasonInput) reasonInput.value = '';
+                await loadBlockedSlots();
+            } catch(e) {
+                if (msg) { msg.style.color = '#ef4444'; msg.innerText = `Error: ${e.message}`; }
+            }
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Block Selected Slot'; }
+        }
+
+        window.unblockSlot = async function(id) {
+            if (!confirm('Remove this block? The slot will become available on the booking website again.')) return;
+            const client = window._supabase || window.supabase;
+            if (!client) return;
+            try {
+                const { error } = await client.from('blocked_slots').delete().eq('id', id);
+                if (error) throw error;
+                await loadBlockedSlots();
+            } catch(e) {
+                alert('Error removing block: ' + e.message);
+            }
+        };
 
         async function loadDbMakesForFilters() {
             const client = dbClient || window.supabase;
