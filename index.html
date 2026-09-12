@@ -1507,6 +1507,75 @@
         window.addEventListener('hashchange', router);
         window.addEventListener('load', router);
 
+        // ══════════════════════════════════════════════════════════════
+        // GLOBAL DATE PASTE HANDLER
+        // Allows pasting dates in any format into all <input type="date">
+        // Supports: dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy, mm/dd/yyyy,
+        //           d/m/yy, yyyy-mm-dd, "13 Sep 2025", "Sep 13 2025" etc.
+        // ══════════════════════════════════════════════════════════════
+        document.addEventListener('paste', function(e) {
+            const target = e.target;
+            if (!target || target.type !== 'date') return;
+
+            const raw = (e.clipboardData || window.clipboardData).getData('text').trim();
+            if (!raw) return;
+
+            const parsed = parseDateToISO(raw);
+            if (!parsed) return; // couldn't parse — let browser handle it
+
+            e.preventDefault();
+            target.value = parsed;
+            // Trigger oninput/onchange so the wizard saves the value
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+        }, true); // capture phase so it fires even for dynamically added elements
+
+        function parseDateToISO(str) {
+            if (!str) return null;
+            str = str.trim().replace(/\s+/g, ' ');
+
+            // Already ISO: 2025-09-13
+            if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+                const parts = str.split('-');
+                const y = parts[0], m = parts[1].padStart(2,'0'), d = parts[2].padStart(2,'0');
+                if (isValidDate(y, m, d)) return `${y}-${m}-${d}`;
+            }
+
+            // dd/mm/yyyy or dd-mm-yyyy or dd.mm.yyyy (most common Indian format)
+            const dmy = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+            if (dmy) {
+                let [, d, m, y] = dmy;
+                if (y.length === 2) y = y < '50' ? '20' + y : '19' + y;
+                d = d.padStart(2,'0'); m = m.padStart(2,'0');
+                // Try dd/mm/yyyy first (Indian standard)
+                if (parseInt(d) <= 31 && parseInt(m) <= 12 && isValidDate(y, m, d))
+                    return `${y}-${m}-${d}`;
+                // Fallback: try mm/dd/yyyy
+                if (parseInt(m) <= 31 && parseInt(d) <= 12 && isValidDate(y, d, m))
+                    return `${y}-${d}-${m}`;
+            }
+
+            // Try native Date parsing for formats like "13 Sep 2025", "Sep 13, 2025", "13-Sep-2025"
+            const normalized = str.replace(/[\/\-\.]/g, ' ');
+            const native = new Date(normalized);
+            if (!isNaN(native.getTime())) {
+                const y = native.getFullYear();
+                const m = String(native.getMonth() + 1).padStart(2,'0');
+                const d = String(native.getDate()).padStart(2,'0');
+                if (y >= 1900 && y <= 2100) return `${y}-${m}-${d}`;
+            }
+
+            return null;
+        }
+
+        function isValidDate(y, m, d) {
+            const dt = new Date(`${y}-${m}-${d}`);
+            return !isNaN(dt.getTime()) &&
+                dt.getFullYear() === parseInt(y) &&
+                dt.getMonth() + 1 === parseInt(m) &&
+                dt.getDate() === parseInt(d);
+        }
+
         // ==========================================
         // Core Setup
         // ==========================================
