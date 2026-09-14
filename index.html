@@ -4172,7 +4172,7 @@ function buildStep5() {
         '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">' +
             'Highlighted summary box shown on the Service History report page. Edit freely to customize numbers, observations, or key highlights.' +
         '</div>' +
-        '<textarea id="wz-svc-summary-input" rows="3" oninput="wzUpdateSvcSummary(this.value)" placeholder="e.g. This vehicle has 10 recorded service visits on file ranging from 2015-04-07 to 2021-07-28..." style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;">' + escW(currentSummary) + '</textarea>' +
+        '<textarea id="wz-svc-summary-input" rows="6" oninput="wzUpdateSvcSummary(this.value)" placeholder="e.g. This vehicle has 10 recorded service visits on file ranging from 2015-04-07 to 2021-07-28..." style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;">' + escW(currentSummary) + '</textarea>' +
     '</div>';
 
     return '<div class="wz-step-header"><div class="wz-step-title">Service History</div>' +
@@ -4562,14 +4562,28 @@ window.wzSvcHandleFiles = async function(fileList) {
 
     for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
-        if (msgEl) msgEl.textContent = `Analyzing with Gemini AI: ${file.name} (${idx + 1}/${files.length})\u2026`;
+        if (msgEl) msgEl.textContent = `Analyzing Service PDF: ${file.name} (${idx + 1}/${files.length})…`;
         try {
             const rawText = await wzExtractPdfText(file);
-            let parsed = null;
-            try {
-                parsed = await wzParseSvcWithGemini(rawText);
-            } catch (aiErr) {
-                console.warn('Gemini AI PDF parse failed, falling back to multi-rule regex:', aiErr);
+            console.log('Extracted PDF text length:', rawText.length);
+
+            // 1. Run our comprehensive structured & tabular PDF parser
+            let parsed = wzParseServicePdf(rawText);
+
+            // 2. If no records were found, optionally try Gemini AI with short timeout
+            if (!parsed || !parsed.records || parsed.records.length === 0) {
+                try {
+                    if (msgEl) msgEl.textContent = `Attempting AI analysis: ${file.name}…`;
+                    const aiParsed = await Promise.race([
+                        wzParseSvcWithGemini(rawText),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout')), 5000))
+                    ]);
+                    if (aiParsed && aiParsed.records && aiParsed.records.length > 0) {
+                        parsed = aiParsed;
+                    }
+                } catch (aiErr) {
+                    console.warn('AI fallback skipped or timed out:', aiErr.message);
+                }
             }
 
             if (!wz.draft.service_history) wz.draft.service_history = [];
@@ -4580,22 +4594,62 @@ window.wzSvcHandleFiles = async function(fileList) {
                     var exists = wz.draft.service_history.some(function(r) {
                         return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
                     });
-                    if (!exists) wz.draft.service_history.push(rec);
+                    if (!exists) {
+                        wz.draft.service_history.push(rec);
+                    }
                 });
+
+                // Set executive summary note
                 if (parsed.summary) {
                     wz.draft.service_history_note = parsed.summary;
                 }
-                showToast(`✨ Captured ${parsed.records.length} service records & AI summary!`, 'success');
+
+                // If vehicle details in draft are empty, auto-populate from service PDF
+                if (parsed.vehicle) {
+                    if (parsed.vehicle.reg && !wz.draft.vehicle_reg) {
+                        wz.draft.vehicle_reg = parsed.vehicle.reg;
+                    }
+                    if (parsed.vehicle.model && !wz.draft.vehicle_model) {
+                        wz.draft.vehicle_model = parsed.vehicle.model;
+                    }
+                }
+
+                // Auto-populate latest odometer in Step 1 if odometer_km is empty
+                if (!wz.draft.odometer_km) {
+                    const validOdos = wz.draft.service_history.map(r => Number(r.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>b-a);
+                    if (validOdos.length > 0) {
+                        wz.draft.odometer_km = validOdos[0];
+                    }
+                }
+
+                // Attach uploaded PDF to documents list if not already there
+                if (!wz.draft.documents) wz.draft.documents = [];
+                const alreadyHasDoc = wz.draft.documents.some(d => d.file_name === file.name);
+                if (!alreadyHasDoc) {
+                    try {
+                        const fileDataUrl = await new Promise(res => {
+                            const r = new FileReader();
+                            r.onload = ev => res(ev.target.result);
+                            r.onerror = () => res(null);
+                            r.readAsDataURL(file);
+                        });
+                        if (fileDataUrl) {
+                            wz.draft.documents.push({
+                                file_name: file.name,
+                                doc_type: 'service_history',
+                                file_size: file.size,
+                                mime_type: file.type || 'application/pdf',
+                                file_url: fileDataUrl
+                            });
+                        }
+                    } catch(dErr) {
+                        console.warn('Could not store PDF file to documents:', dErr);
+                    }
+                }
+
+                showToast(`✨ Captured ${parsed.records.length} service records & Executive Summary!`, 'success');
             } else {
-                var records = wzParseSvcRecords(rawText);
-                records.forEach(function(rec) {
-                    var key = (rec.service_date||'') + '|' + (rec.odometer_km||'');
-                    var exists = wz.draft.service_history.some(function(r) {
-                        return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
-                    });
-                    if (!exists) wz.draft.service_history.push(rec);
-                });
-                showToast(`Captured ${records.length} records from PDF`, 'info');
+                showToast('No service records found in PDF. You can add records manually.', 'info');
             }
         } catch (err) {
             console.error('PDF error:', err);
@@ -4650,7 +4704,7 @@ window.wzExtractPdfText = function(file) {
                             var items = (content.items || []).slice().sort(function(a, b) {
                                 var yA = a.transform ? a.transform[5] : 0;
                                 var yB = b.transform ? b.transform[5] : 0;
-                                if (Math.abs(yA - yB) > 4) return yB - yA; // top to bottom
+                                if (Math.abs(yA - yB) > 6) return yB - yA; // top to bottom
                                 var xA = a.transform ? a.transform[4] : 0;
                                 var xB = b.transform ? b.transform[4] : 0;
                                 return xA - xB; // left to right
@@ -4658,18 +4712,19 @@ window.wzExtractPdfText = function(file) {
 
                             var pageLines = [];
                             var currentLine = [];
-                            var lastY = null;
+                            var lineY = null;
 
                             items.forEach(function(item) {
                                 var str = (item.str || '').trim();
                                 if (!str) return;
                                 var y = item.transform ? item.transform[5] : 0;
-                                if (lastY !== null && Math.abs(y - lastY) > 4) {
-                                    pageLines.push(currentLine.join(' '));
+                                if (lineY !== null && Math.abs(y - lineY) > 6) {
+                                    if (currentLine.length > 0) pageLines.push(currentLine.join(' '));
                                     currentLine = [];
+                                    lineY = y;
                                 }
+                                if (lineY === null) lineY = y;
                                 currentLine.push(str);
-                                lastY = y;
                             });
                             if (currentLine.length > 0) {
                                 pageLines.push(currentLine.join(' '));
@@ -4688,169 +4743,261 @@ window.wzExtractPdfText = function(file) {
     });
 };
 
-window.wzParseSvcRecords = function(rawText) {
-    var lines = rawText.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
-    var records = [];
-
-    // ── Month name → number ──────────────────────────────────
+// ── Multi-Format Service History PDF Parser ─────────────────────────────
+window.wzParseServicePdf = function(rawText) {
     var MON = {
         jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
         jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'
     };
 
-    // ── Normalize date string → YYYY-MM-DD ───────────────
     function normDate(raw) {
-        raw = (raw || '').trim().replace(/\s+\d{1,2}:\d{2}.*$/, '').trim();
-        // DD-MON-YYYY  e.g. 10-JUN-2026
-        var m = raw.match(/^(\d{1,2})[-\/]([A-Za-z]{3,})[-\/](\d{2,4})$/);
+        if (!raw) return '';
+        raw = raw.trim().replace(/\s+\d{1,2}:\d{2}.*$/, '').trim();
+        var m = raw.match(/^(\d{1,2})[-\/\s]([A-Za-z]{3,})[-\/\s,]+(\d{2,4})$/);
         if (m) {
             var mo = MON[m[2].toLowerCase().substring(0,3)] || '01';
             var yr = m[3].length === 2 ? '20' + m[3] : m[3];
             return yr + '-' + mo + '-' + m[1].padStart(2,'0');
         }
-        // YYYY-MM-DD
         m = raw.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
         if (m) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
-        // DD/MM/YYYY or DD-MM-YYYY
         m = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);
         if (m) {
             var yr2 = m[3].length === 2 ? '20' + m[3] : m[3];
             return yr2 + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
         }
-        // DD Mon YYYY
-        m = raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})[,\s]+(\d{4})$/);
-        if (m) {
-            var mo2 = MON[m[2].toLowerCase().substring(0,3)] || '01';
-            return m[3] + '-' + mo2 + '-' + m[1].padStart(2,'0');
-        }
         return '';
     }
 
-    // ── Service type classifier ────────────────────────────────
-    var SVC_MAP = [
-        [/1st\s*free\s*service|first\s*free\s*service/i,   'free service'],
-        [/2nd\s*free\s*service|second\s*free\s*service/i,  'free service'],
-        [/3rd\s*free\s*service|third\s*free\s*service/i,   'free service'],
-        [/\d+th\s*free\s*service/i,                        'free service'],
-        [/free\s*service|fsc/i,                            'free service'],
-        [/service\s*camp/i,                                'dealer'],
-        [/running\s*repair/i,                              'dealer'],
-        [/m\.o\.s\.|mos\b/i,                               'dealer'],
-        [/paid\s*service/i,                                'dealer'],
-        [/periodic\s*service|scheduled\s*service/i,        'periodic'],
-        [/accidental|accident|collision|body\s*repair/i,   'accidental'],
-        [/warranty|recall|campaign/i,                      'warranty'],
-        [/general\s*service|annual\s*service/i,            'dealer'],
-        [/oil\s*change|engine\s*oil/i,                     'dealer'],
-    ];
-    function classifySvc(text) {
-        for (var k = 0; k < SVC_MAP.length; k++) {
-            if (SVC_MAP[k][0].test(text)) return SVC_MAP[k][1];
-        }
+    function mapServiceType(str) {
+        str = (str || '').toLowerCase().trim();
+        if (/free/i.test(str)) return 'free service';
+        if (/accidental|accident|collision|damage/i.test(str)) return 'accidental';
+        if (/warranty|recall/i.test(str)) return 'warranty';
+        if (/paid/i.test(str)) return 'paid service';
+        if (/periodic|scheduled/i.test(str)) return 'periodic';
+        if (/running|repair/i.test(str)) return 'running repair';
+        if (/accessories/i.test(str)) return 'dealer';
         return 'dealer';
     }
 
-    // ── Extract readable service label for description field ──
-    var SVC_LABELS = [
-        /(\d+(?:st|nd|rd|th)\s+free\s+service)/i,
-        /(free\s+service)/i,
-        /(service\s+camp)/i,
-        /(running\s+repair)/i,
-        /(m\.o\.s\.)/i,
-        /(paid\s+service)/i,
-        /(periodic\s+service)/i,
-        /(general\s+service)/i,
-        /(annual\s+service)/i,
-    ];
-    function extractSvcLabel(text) {
-        for (var p = 0; p < SVC_LABELS.length; p++) {
-            var sl = text.match(SVC_LABELS[p]);
-            if (sl) return sl[1].trim().toUpperCase();
-        }
-        return '';
+    var result = {
+        summary: '',
+        records: [],
+        vehicle: {}
+    };
+
+    // 1. Vehicle info from header (if present)
+    var regMatch = rawText.match(/\b([A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4})\b/i);
+    if (regMatch) result.vehicle.reg = regMatch[1].toUpperCase();
+
+    var modelMatch = rawText.match(/([A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4})\s*[•·|\-]\s*([^•·|\n]+)/i);
+    if (modelMatch) result.vehicle.model = modelMatch[2].trim();
+
+    // 2. Executive Summary extraction
+    var execSummary = '';
+    var execMatch = rawText.match(/Executive\s+Summary\s*[\r\n]+([\s\S]*?)(?=Major\s+Red\s+Flags|Extracted\s+Service|Service\s*[\/&]\s*Repair\s+Data|Service\s+Records|Purchase\s+Recommendation|$)/i);
+    if (execMatch && execMatch[1].trim()) {
+        execSummary = execMatch[1].trim().replace(/\r?\n+/g, ' ');
     }
 
-    // Extract global dealer/make if available at top of PDF
-    var globalDealer = '';
-    var makeMatch = rawText.match(/Make[:\s]+([A-Za-z0-9]+)/i);
-    if (makeMatch) globalDealer = makeMatch[1].trim() + ' Authorized Service';
+    // Major Red Flags
+    var redFlagsMatch = rawText.match(/Major\s+Red\s+Flags\s*[\r\n]+([\s\S]*?)(?=Extracted\s+Service|Service\s*[\/&]\s*Repair\s+Data|Service\s+Records|Purchase\s+Recommendation|$)/i);
+    var redFlags = [];
+    if (redFlagsMatch && redFlagsMatch[1].trim()) {
+        var rfLines = redFlagsMatch[1].split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+        var currentFlag = '';
+        rfLines.forEach(function(line) {
+            if (/^(HIGH|MEDIUM|LOW|CRITICAL|WARNING)\b/i.test(line)) {
+                if (currentFlag) redFlags.push(currentFlag);
+                currentFlag = line;
+            } else if (currentFlag) {
+                currentFlag += ' ' + line;
+            }
+        });
+        if (currentFlag) redFlags.push(currentFlag);
+    }
 
-    // ── Process line by line ──────────────────────────────────
-    var seen = {};
+    if (execSummary) {
+        result.summary = execSummary;
+        if (redFlags.length > 0) {
+            result.summary += '\n\nKey Flags:\n• ' + redFlags.slice(0, 5).join('\n• ');
+        }
+    }
+
+    // 3. Extract Table Records
+    var tableHeaderRegex = /(?:Date\s+Dealer\s*[\/\&]?\s*Center\s+Odometer|Date\s+Workshop\s+Odometer|Date\s+Job\s*Card|Extracted\s+Service\s*[\/\&]?\s*Repair\s+Data|Service\s+Records|Visit\s*Date)/i;
+    var lines = rawText.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+
+    var inTableSection = false;
+    var tableBlocks = [];
+    var currentBlock = null;
 
     for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
 
-        // Skip lines that are purely headers (must NOT contain a date)
-        var isHeaderOnly = /visit\s*no|workshop\s*visit|odometer\s*reading|service\s*type/i.test(line) &&
-                           !/(\d{1,2}[\s\-\/][A-Za-z]{3,}[\s\-\/]\d{2,4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i.test(line);
-        if (isHeaderOnly) continue;
+        if (tableHeaderRegex.test(line)) {
+            inTableSection = true;
+            continue;
+        }
 
-        // Find date in this line
-        var dateRaw = '';
-        var matchSpace = line.match(/\b(\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[a-z]*\s+\d{2,4})\b/i);
-        var matchA = line.match(/(\d{1,2}[-\/](?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[-\/]\d{2,4})(?:\s+\d{1,2}:\d{2})?/i);
-        if (matchSpace) {
-            dateRaw = matchSpace[1];
-        } else if (matchA) {
-            dateRaw = matchA[1];
-        } else {
-            var matchB = line.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/);
-            if (matchB) dateRaw = matchB[1];
-            else {
-                var matchC = line.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-                if (matchC) dateRaw = matchC[1];
+        if (inTableSection && /^(Purchase\s+Recommendation|Executive\s+Summary|Major\s+Red\s+Flags|Source\s+limitation)\b/i.test(line)) {
+            inTableSection = false;
+            if (currentBlock) { tableBlocks.push(currentBlock); currentBlock = null; }
+            continue;
+        }
+
+        if (/^Date\s+(Dealer|Center|Workshop|Odometer)/i.test(line) || /^InspectCar\s*•/i.test(line) || /^Page\s*\d+/i.test(line)) {
+            continue;
+        }
+
+        var startsWithDate = line.match(/^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}[-\/\s][A-Za-z]{3,}[-\/\s]\d{2,4})/);
+        if (startsWithDate) {
+            var hasOdoOrType = inTableSection || /\b(free service|running repair|paid service|accidental|accessories|periodic|warranty|service)\b/i.test(line) || /\b\d{1,3}(?:,\d{3})+\b|\b\d+\s*km\b/i.test(line);
+            if (hasOdoOrType) {
+                if (currentBlock) tableBlocks.push(currentBlock);
+                currentBlock = { headerLine: line, continuationLines: [] };
+                continue;
             }
         }
 
-        if (!dateRaw) continue;
+        if (currentBlock) {
+            currentBlock.continuationLines.push(line);
+        }
+    }
+    if (currentBlock) tableBlocks.push(currentBlock);
 
-        var dateISO = normDate(dateRaw);
-        if (!dateISO) continue;
+    tableBlocks.forEach(function(b) {
+        var fullText = [b.headerLine, ...b.continuationLines].join(' ');
+        var dateM = b.headerLine.match(/^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}[-\/\s][A-Za-z]{3,}[-\/\s]\d{2,4})/);
+        if (!dateM) return;
+        var dateISO = normDate(dateM[1]);
+        if (!dateISO) return;
 
-        // Deduplicate by date
-        if (seen[dateISO]) continue;
-        seen[dateISO] = true;
-
-        // Context window: current line + next line
-        var ctx = lines.slice(i, Math.min(lines.length, i + 2)).join(' ');
-
-        // ── Odometer: match NUMBER km ──────
+        var rest = b.headerLine.substring(dateM[0].length).trim();
+        var dealer = '';
         var odo = '';
-        var odoM = ctx.match(/\b([0-9,]{3,7})\s*km\b/i);
-        if (odoM) {
-            odo = odoM[1].replace(/,/g, '');
+        var serviceType = 'dealer';
+        var description = '';
+        var cost = '';
+
+        var matchStructured = rest.match(/^(.*?)\s+([0-9,]+(?:\s*km)?)\s+(Free\s+Service|\d+(?:st|nd|rd|th)\s+Free\s+Service|Running\s+Repair|Paid\s+Service|Accidental|Service\s+Accessories|Sales\s+Accessories|Periodic|Warranty|Recall|Camp)(.*)$/i);
+
+        if (matchStructured) {
+            dealer = matchStructured[1].trim();
+            odo = matchStructured[2].replace(/km|,|\s/gi, '').trim();
+            var rawType = matchStructured[3].trim();
+            description = (matchStructured[4] + ' ' + b.continuationLines.join(' ')).trim();
+            serviceType = mapServiceType(rawType);
         } else {
-            var odoP = ctx.match(/(?:odometer|mileage|reading)[:\s]+([0-9,]+)/i);
-            if (odoP) odo = odoP[1].replace(/,/g, '');
+            var odoM = fullText.match(/\b([0-9,]{1,7})\s*km\b/i) || fullText.match(/\b([0-9]{1,2},[0-9]{3})\b/);
+            if (odoM) odo = odoM[1].replace(/,/g, '');
+
+            var typeM = fullText.match(/\b(1st\s*free\s*service|2nd\s*free\s*service|3rd\s*free\s*service|\d+th\s*free\s*service|free\s*service|running\s*repair|paid\s*service|accidental|accessories|periodic|warranty)\b/i);
+            if (typeM) serviceType = mapServiceType(typeM[1]);
+
+            description = b.continuationLines.join(' ') || rest;
         }
 
-        // ── Service label & type ──────────────────────────────
-        var svcLabel = extractSvcLabel(ctx);
-        var svcType  = classifySvc(ctx);
+        var costEndMatch = description.match(/(?:Not shown|₹\s*[0-9,.]+|Rs\.?\s*[0-9,.]+|\b[0-9,.]+\s*₹|\b0\b)\s*$/i);
+        if (costEndMatch) {
+            var costStr = costEndMatch[0].trim();
+            if (!/not shown/i.test(costStr)) {
+                var num = costStr.replace(/[^0-9.]/g, '');
+                if (num) cost = num;
+            }
+            description = description.substring(0, description.length - costEndMatch[0].length).trim();
+        }
 
-        // ── Cost (only if explicitly stated per row) ──────────
-        var cost = '';
-        var costM = ctx.match(/(?:amount|cost|charge)[:\s]+(?:rs\.?\s*|₹\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i);
-        if (costM) cost = costM[1].replace(/,/g, '');
+        if (/not shown/i.test(dealer)) dealer = '';
+        description = description.replace(/^[-–—:;\s]+/, '').replace(/[-–—:;\s]+$/, '').trim();
 
-        // ── Dealer name ───────────────────────────────────────
-        var dealer = globalDealer;
-        var dealerM = ctx.match(/(?:dealer(?:ship)?|workshop|service\s+cent(?:er|re))[:\s]+([A-Za-z0-9\s&.,']{3,35})/i);
-        if (dealerM) dealer = dealerM[1].trim();
-
-        records.push({
+        result.records.push({
             service_date: dateISO,
-            odometer_km:  odo,
-            service_type: svcType,
-            dealer_name:  dealer,
-            description:  svcLabel,
-            cost:         cost
+            dealer_name: dealer || (result.vehicle.model ? result.vehicle.model.split(' ')[0] + ' Authorized' : ''),
+            odometer_km: odo ? Number(odo) : '',
+            service_type: serviceType,
+            description: description || serviceType,
+            cost: cost ? Number(cost) : ''
         });
+    });
+
+    // 4. FALLBACK: Generic line-by-line parser for invoices or workshop receipts
+    if (result.records.length === 0) {
+        var genericSeen = {};
+        for (var j = 0; j < lines.length; j++) {
+            var gLine = lines[j];
+            var dMatch = gLine.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}[-\/\s][A-Za-z]{3,}[-\/\s]\d{2,4}|\d{4}-\d{2}-\d{2})\b/);
+            if (!dMatch) continue;
+
+            var gDateISO = normDate(dMatch[1]);
+            if (!gDateISO) continue;
+
+            var ctx = lines.slice(j, Math.min(lines.length, j + 6)).join(' ');
+            var isServiceContext = /\b(km|odometer|service|repair|engine|oil|filter|replace|maintenance|invoice|brake|tyre|clutch|battery)\b/i.test(ctx);
+            if (!isServiceContext) continue;
+
+            if (genericSeen[gDateISO]) continue;
+            genericSeen[gDateISO] = true;
+
+            var gOdo = '';
+            var gOdoM = ctx.match(/\b([0-9,]{3,7})\s*km\b/i) || ctx.match(/(?:odometer|mileage|reading|kms?)[:\s]+([0-9,]+)/i);
+            if (gOdoM) gOdo = gOdoM[1].replace(/,/g, '');
+
+            var gType = 'dealer';
+            var gTypeM = ctx.match(/\b(1st\s*free\s*service|2nd\s*free\s*service|3rd\s*free\s*service|\d+th\s*free\s*service|free\s*service|running\s*repair|paid\s*service|periodic\s*service|accidental|accessories|warranty)\b/i);
+            if (gTypeM) gType = mapServiceType(gTypeM[1]);
+
+            var gCost = '';
+            var gCostM = ctx.match(/(?:total|amount|cost|charges?|bill)[:\s]*(?:rs\.?|₹)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+            if (gCostM) gCost = gCostM[1].replace(/,/g, '');
+
+            var gDealer = '';
+            var gDealerM = ctx.match(/(?:dealer(?:ship)?|workshop|service\s+cent(?:er|re))[:\s]+([A-Za-z0-9\s&.,']{3,35})/i) ||
+                           ctx.match(/([A-Za-z0-9\s&.,']+(?:Motors|Automobiles|Auto|Garage|Works|Automotive))\b/i);
+            if (gDealerM) gDealer = gDealerM[1].trim();
+
+            var gDesc = '';
+            var descM = ctx.match(/(?:description|work\s+done|nature\s+of\s+work|complaint|repair\s+details?)[:\s]+([^.\n]+)/i);
+            if (descM) {
+                gDesc = descM[1].trim();
+            } else {
+                var svcDescM = ctx.match(/(?:service\s*type|type)[:\s]+([^.\n]+)/i);
+                if (svcDescM) gDesc = svcDescM[1].trim();
+                else {
+                    gDesc = gLine.replace(/date[:\s]*/i, '').replace(dMatch[0], '').trim();
+                    if (gDesc.length < 5 && j + 1 < lines.length) gDesc += ' ' + lines[j+1];
+                }
+            }
+            gDesc = gDesc.replace(/\b([0-9,]{3,7})\s*km\b/gi, '').trim();
+
+            result.records.push({
+                service_date: gDateISO,
+                dealer_name: gDealer || (result.vehicle.model ? result.vehicle.model.split(' ')[0] + ' Service' : 'Authorized Workshop'),
+                odometer_km: gOdo ? Number(gOdo) : '',
+                service_type: gType,
+                description: gDesc || gType,
+                cost: gCost ? Number(gCost) : ''
+            });
+        }
     }
 
-    return records;
+    // Auto-generate summary if none extracted
+    if (!result.summary && result.records.length > 0) {
+        var count = result.records.length;
+        var dates = result.records.map(function(r) { return r.service_date; }).filter(Boolean).sort();
+        var odos = result.records.map(function(r) { return Number(r.odometer_km); }).filter(function(n) { return !isNaN(n) && n > 0; }).sort(function(a,b){ return a-b; });
+        result.summary = 'This vehicle has ' + count + ' recorded service visits on file ranging from ' + (dates[0] || 'N/A') + ' to ' + (dates[dates.length-1] || 'N/A') + '. Odometer readings span from ' + (odos[0] ? odos[0].toLocaleString('en-IN') + ' km' : 'initial') + ' up to ' + (odos[odos.length-1] ? odos[odos.length-1].toLocaleString('en-IN') + ' km' : 'latest') + '. Service records indicate regular maintenance.';
+    }
+
+    return result;
 };
+
+window.wzParseSvcRecords = function(rawText) {
+    var res = window.wzParseServicePdf(rawText);
+    return res && res.records ? res.records : [];
+};
+
 
 
 // Repairs

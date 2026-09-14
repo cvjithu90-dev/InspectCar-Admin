@@ -618,7 +618,7 @@ table.cp td.note { color: #8A8296; }
     <div style="font-size:11px; font-weight:700; color:#6D28D9; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
       <span>⚡ Service History Executive Summary</span>
     </div>
-    <div id="svc-summary-text" style="font-size:11.5px; color:#4C1D95; line-height:1.5;"></div>
+    <div id="svc-summary-text" style="font-size:11.5px; color:#4C1D95; line-height:1.6; white-space:pre-line;"></div>
   </div>
 
   <table class="svc">
@@ -939,7 +939,7 @@ table.cp td.note { color: #8A8296; }
         summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.`;
       }
 
-      if (summaryText) summaryText.innerHTML = summary;
+      if (summaryText) summaryText.innerHTML = d.service_history_note ? escHtml(d.service_history_note).replace(/\n/g, '<br>') : summary;
       if (summaryBox) summaryBox.style.display = 'block';
     } else {
       if (summaryBox) summaryBox.style.display = 'none';
