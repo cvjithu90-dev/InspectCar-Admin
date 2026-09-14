@@ -1268,7 +1268,8 @@
         <style>
             .bs-slot-pill { display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);cursor:pointer;font-size:12.5px;color:var(--text-secondary);transition:all .2s;user-select:none; }
             .bs-slot-pill:hover { border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);color:#f87171; }
-            .bs-slot-pill.selected { border-color:#ef4444;background:rgba(239,68,68,0.15);color:#f87171;font-weight:600; }
+            .bs-slot-pill.selected { border-color:#ef4444;background:rgba(239,68,68,0.22);color:#fca5a5;font-weight:700;box-shadow:0 0 0 1px #ef4444; }
+            .bs-slot-pill.disabled { opacity:0.35;cursor:not-allowed;text-decoration:line-through;pointer-events:none;border-color:rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#6b7280; }
             .blocked-row { display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;margin-bottom:8px;font-size:13px; }
             .blocked-row .bdate { font-weight:700;color:#f4f4f6;min-width:110px; }
             .blocked-row .bslot { color:#fca5a5;flex:1;padding:0 10px; }
@@ -1281,19 +1282,26 @@
         <div class="page-header flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-xl font-bold text-white">🚫 Block Slots</h2>
-                <p class="text-secondary text-sm mt-1">Block specific time slots on specific dates — they won't show as Available on the booking website.</p>
+                <p class="text-secondary text-sm mt-1">Block specific time slots on specific dates — they won't show as Available on the booking website. Expired slots are automatically unblocked once their time crosses.</p>
             </div>
         </div>
         <div class="grid" style="grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
             <!-- LEFT: Add Block Form -->
             <div class="card p-5">
-                <h3 class="font-bold text-white mb-4" style="font-size:15px;">➕ Block a Slot</h3>
+                <h3 class="font-bold text-white mb-4" style="font-size:15px;">➕ Block Slots</h3>
                 <div class="form-group mb-3">
                     <label class="text-secondary text-xs block mb-1">📅 Date</label>
                     <input type="date" id="bs-date" class="bs-calendar-input" />
                 </div>
                 <div class="form-group mb-3">
-                    <label class="text-secondary text-xs block mb-1">⏰ Time Slot</label>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <label class="text-secondary text-xs" style="margin:0;">⏰ Time Slots <span style="color:#a78bfa;font-weight:600;">(Multi-Select)</span></label>
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" onclick="bsSelectAllSlots()" style="background:none;border:none;color:#818cf8;font-size:11.5px;font-weight:600;cursor:pointer;padding:0;">Select All</button>
+                            <span style="color:var(--text-secondary);font-size:11px;">•</span>
+                            <button type="button" onclick="bsClearAllSlots()" style="background:none;border:none;color:#9ca3af;font-size:11.5px;cursor:pointer;padding:0;">Clear</button>
+                        </div>
+                    </div>
                     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="bs-slot-pills">
                         <div class="bs-slot-pill" data-slot="9:00 AM - 11:00 AM">9:00 AM – 11:00 AM</div>
                         <div class="bs-slot-pill" data-slot="11:00 AM - 1:00 PM">11:00 AM – 1:00 PM</div>
@@ -1301,24 +1309,28 @@
                         <div class="bs-slot-pill" data-slot="3:00 PM - 5:00 PM">3:00 PM – 5:00 PM</div>
                         <div class="bs-slot-pill" data-slot="5:00 PM - 7:00 PM">5:00 PM – 7:00 PM</div>
                         <div class="bs-slot-pill" data-slot="7:00 PM - 10:00 PM">7:00 PM – 10:00 PM</div>
-                        <div class="bs-slot-pill" data-slot="ALL_DAY">🚫 All Day (Block Entire Day)</div>
+                        <div class="bs-slot-pill" data-slot="ALL_DAY" style="border-style:dashed;">🚫 All Day (Toggle All)</div>
                     </div>
                 </div>
                 <div class="form-group mb-4">
                     <label class="text-secondary text-xs block mb-1">📝 Reason (Optional)</label>
-                    <input type="text" id="bs-reason" class="bs-calendar-input" placeholder="e.g. Inspector day off, Holiday..." />
+                    <input type="text" id="bs-reason" class="bs-calendar-input" placeholder="e.g. Inspector day off, Holiday, Heavy rain..." />
                 </div>
                 <button id="btn-block-slot" class="btn btn-danger w-full" style="background:#ef4444;border-color:#ef4444;">
-                    <i class="fas fa-ban"></i> Block Selected Slot
+                    <i class="fas fa-ban"></i> Select Time Slots to Block
                 </button>
                 <p id="bs-msg" class="text-xs mt-2" style="min-height:18px;"></p>
             </div>
             <!-- RIGHT: Active Blocks List -->
             <div class="card p-5">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-bold text-white" style="font-size:15px;">🔒 Currently Blocked</h3>
+                <div class="flex justify-between items-center mb-1">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <h3 class="font-bold text-white" style="font-size:15px;margin:0;">🔒 Currently Blocked</h3>
+                        <span id="bs-active-count" class="text-xs" style="color:#a78bfa;font-weight:600;"></span>
+                    </div>
                     <button onclick="renderBlockedSlots()" class="btn btn-secondary text-xs"><i class="fas fa-sync-alt"></i> Refresh</button>
                 </div>
+                <p class="text-secondary text-xs mb-3" style="font-size:11px;">Passed slots are automatically unblocked and cleared once their time crosses.</p>
                 <div id="bs-blocked-list">
                     <div class="text-secondary text-sm" style="text-align:center;padding:30px;">Loading blocked slots...</div>
                 </div>
@@ -2964,32 +2976,191 @@
         }
 
         // ========================================
-        // BLOCKED SLOTS — Admin slot blocker
+        // BLOCKED SLOTS — Admin slot blocker (Multi-Select & Auto-Unblock)
         // ========================================
-        let bsSelectedSlot = null;
+        let bsSelectedSlots = new Set();
+        const BS_ALL_SLOTS = [
+            '9:00 AM - 11:00 AM',
+            '11:00 AM - 1:00 PM',
+            '1:00 PM - 3:00 PM',
+            '3:00 PM - 5:00 PM',
+            '5:00 PM - 7:00 PM',
+            '7:00 PM - 10:00 PM'
+        ];
 
-        async function renderBlockedSlots() {
-            // Set today as default date
-            const dateInput = $('#bs-date');
-            if (dateInput && !dateInput.value) {
-                const todayStr = new Date().toISOString().split('T')[0];
-                dateInput.value = todayStr;
+        function isSlotExpired(blockDate, blockTime) {
+            if (!blockDate) return false;
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${y}-${m}-${d}`;
+
+            // Past date is always expired
+            if (blockDate < todayStr) return true;
+            // Future date is not expired
+            if (blockDate > todayStr) return false;
+
+            // Today: slot is expired once its start time has crossed
+            const currentHour = now.getHours();
+            function getSlotStartHour(str) {
+                if (!str || str === 'ALL_DAY') return 24;
+                const match = str.match(/(\d+)(?::(\d+))?\s*(AM|PM)/i);
+                if (!match) return 24;
+                let h = parseInt(match[1]);
+                const isPm = match[3].toUpperCase() === 'PM';
+                if (isPm && h < 12) h += 12;
+                if (!isPm && h === 12) h = 0;
+                return h;
             }
-            // Wire up pill selection
+
+            const startH = getSlotStartHour(blockTime);
+            return currentHour >= startH;
+        }
+
+        function updateBlockBtnLabel() {
+            const btn = $('#btn-block-slot');
+            if (!btn) return;
+            const count = bsSelectedSlots.size;
+            if (count === 0) {
+                btn.innerHTML = '<i class="fas fa-ban"></i> Select Time Slots to Block';
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+            } else if (count === BS_ALL_SLOTS.length) {
+                btn.innerHTML = '<i class="fas fa-ban"></i> Block Entire Day (All 6 Slots)';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            } else if (count === 1) {
+                btn.innerHTML = '<i class="fas fa-ban"></i> Block 1 Selected Slot';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            } else {
+                btn.innerHTML = `<i class="fas fa-ban"></i> Block ${count} Selected Slots`;
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }
+
+        function syncSlotPillsWithDate() {
+            const dateInput = $('#bs-date');
+            const dateVal = dateInput ? dateInput.value : '';
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            const isToday = (dateVal === todayStr);
+
             const pills = document.querySelectorAll('#bs-slot-pills .bs-slot-pill');
             pills.forEach(pill => {
-                pill.addEventListener('click', () => {
-                    pills.forEach(p => p.classList.remove('selected'));
-                    pill.classList.add('selected');
-                    bsSelectedSlot = pill.getAttribute('data-slot');
-                });
+                const slot = pill.getAttribute('data-slot');
+                if (slot === 'ALL_DAY') return;
+
+                if (isToday && isSlotExpired(todayStr, slot)) {
+                    pill.classList.add('disabled');
+                    pill.classList.remove('selected');
+                    pill.title = 'This time slot has already passed today';
+                    bsSelectedSlots.delete(slot);
+                } else {
+                    pill.classList.remove('disabled');
+                    pill.title = '';
+                    if (bsSelectedSlots.has(slot)) {
+                        pill.classList.add('selected');
+                    } else {
+                        pill.classList.remove('selected');
+                    }
+                }
             });
+
+            // Check if ALL_DAY pill should be highlighted
+            const allDayPill = document.querySelector('#bs-slot-pills .bs-slot-pill[data-slot="ALL_DAY"]');
+            if (allDayPill) {
+                const availableSlots = BS_ALL_SLOTS.filter(s => !isToday || !isSlotExpired(todayStr, s));
+                if (availableSlots.length > 0 && availableSlots.every(s => bsSelectedSlots.has(s))) {
+                    allDayPill.classList.add('selected');
+                } else {
+                    allDayPill.classList.remove('selected');
+                }
+            }
+
+            updateBlockBtnLabel();
+        }
+
+        window.bsSelectAllSlots = function() {
+            const dateInput = $('#bs-date');
+            const dateVal = dateInput ? dateInput.value : '';
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            const isToday = (dateVal === todayStr);
+            const available = BS_ALL_SLOTS.filter(s => !isToday || !isSlotExpired(todayStr, s));
+            available.forEach(s => bsSelectedSlots.add(s));
+            syncSlotPillsWithDate();
+        };
+
+        window.bsClearAllSlots = function() {
+            bsSelectedSlots.clear();
+            syncSlotPillsWithDate();
+        };
+
+        async function renderBlockedSlots() {
+            bsSelectedSlots.clear();
+
+            // Set today as default date
+            const dateInput = $('#bs-date');
+            if (dateInput) {
+                if (!dateInput.value) {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    dateInput.value = todayStr;
+                }
+                dateInput.onchange = () => {
+                    syncSlotPillsWithDate();
+                };
+            }
+
+            // Wire up multi-select pill interaction
+            const pills = document.querySelectorAll('#bs-slot-pills .bs-slot-pill');
+            pills.forEach(pill => {
+                pill.onclick = () => {
+                    if (pill.classList.contains('disabled')) return;
+                    const slot = pill.getAttribute('data-slot');
+
+                    if (slot === 'ALL_DAY') {
+                        const dateVal = dateInput ? dateInput.value : '';
+                        const now = new Date();
+                        const todayStr = now.toISOString().split('T')[0];
+                        const isToday = (dateVal === todayStr);
+                        const availableSlots = BS_ALL_SLOTS.filter(s => !isToday || !isSlotExpired(todayStr, s));
+
+                        // If all already selected, clear all
+                        if (availableSlots.length > 0 && availableSlots.every(s => bsSelectedSlots.has(s))) {
+                            availableSlots.forEach(s => bsSelectedSlots.delete(s));
+                            pill.classList.remove('selected');
+                        } else {
+                            // Select all available slots
+                            availableSlots.forEach(s => bsSelectedSlots.add(s));
+                            pill.classList.add('selected');
+                        }
+                    } else {
+                        // Toggle individual slot
+                        if (bsSelectedSlots.has(slot)) {
+                            bsSelectedSlots.delete(slot);
+                            pill.classList.remove('selected');
+                        } else {
+                            bsSelectedSlots.add(slot);
+                            pill.classList.add('selected');
+                        }
+                    }
+
+                    syncSlotPillsWithDate();
+                };
+            });
+
             // Wire up block button
             const btn = $('#btn-block-slot');
             if (btn) {
-                btn.addEventListener('click', blockSlot);
+                btn.onclick = blockSlot;
             }
-            // Load list
+
+            syncSlotPillsWithDate();
+
+            // Load list and auto-clean passed slots
             await loadBlockedSlots();
         }
 
@@ -3008,11 +3179,39 @@
                     .order('block_date', { ascending: true })
                     .order('block_time', { ascending: true });
                 if (error) throw error;
-                if (!data || data.length === 0) {
-                    list.innerHTML = '<div class="text-secondary text-sm" style="text-align:center;padding:30px;"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i>No slots are currently blocked.</div>';
+
+                // Auto-detect and filter out expired slots
+                const expiredIds = [];
+                const activeSlots = [];
+
+                (data || []).forEach(row => {
+                    if (isSlotExpired(row.block_date, row.block_time)) {
+                        expiredIds.push(row.id);
+                    } else {
+                        activeSlots.push(row);
+                    }
+                });
+
+                // Auto-unblock expired slots by deleting them from Supabase in the background
+                if (expiredIds.length > 0) {
+                    client.from('blocked_slots').delete().in('id', expiredIds).then(({ error: delErr }) => {
+                        if (!delErr) {
+                            console.log(`Auto-cleaned ${expiredIds.length} passed blocked slots.`);
+                        }
+                    });
+                }
+
+                const countEl = $('#bs-active-count');
+                if (countEl) {
+                    countEl.textContent = activeSlots.length > 0 ? `(${activeSlots.length} active)` : '';
+                }
+
+                if (activeSlots.length === 0) {
+                    list.innerHTML = '<div class="text-secondary text-sm" style="text-align:center;padding:30px;"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i>No active slots are currently blocked.</div>';
                     return;
                 }
-                list.innerHTML = data.map(row => {
+
+                list.innerHTML = activeSlots.map(row => {
                     const dateDisp = new Date(row.block_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
                     const slotDisp = row.block_time === 'ALL_DAY' ? '🚫 All Day' : row.block_time;
                     const reason = row.reason ? `<span class="breason">${row.reason}</span>` : '';
@@ -3037,8 +3236,8 @@
                 if (msg) { msg.style.color = '#ef4444'; msg.innerText = '⚠️ Please select a date.'; }
                 return;
             }
-            if (!bsSelectedSlot) {
-                if (msg) { msg.style.color = '#ef4444'; msg.innerText = '⚠️ Please select a time slot.'; }
+            if (bsSelectedSlots.size === 0) {
+                if (msg) { msg.style.color = '#ef4444'; msg.innerText = '⚠️ Please select at least one time slot.'; }
                 return;
             }
             const reason = reasonInput ? reasonInput.value.trim() : '';
@@ -3049,24 +3248,25 @@
             if (btn) { btn.disabled = true; btn.innerText = 'Blocking...'; }
             if (msg) { msg.style.color = '#a78bfa'; msg.innerText = 'Saving...'; }
 
-            // If ALL_DAY, insert one row per slot
-            const ALL_SLOTS = ['9:00 AM - 11:00 AM','11:00 AM - 1:00 PM','1:00 PM - 3:00 PM','3:00 PM - 5:00 PM','5:00 PM - 7:00 PM','7:00 PM - 10:00 PM'];
-            const slotsToBlock = bsSelectedSlot === 'ALL_DAY' ? ALL_SLOTS : [bsSelectedSlot];
+            const slotsToBlock = Array.from(bsSelectedSlots);
             const rows = slotsToBlock.map(s => ({ block_date: dateVal, block_time: s, reason: reason || null }));
 
             try {
                 const { error } = await client.from('blocked_slots').insert(rows);
                 if (error) throw error;
-                if (msg) { msg.style.color = '#10b981'; msg.innerText = `✅ ${rows.length === 1 ? 'Slot' : 'All slots for the day'} blocked successfully!`; }
+                if (msg) {
+                    msg.style.color = '#10b981';
+                    msg.innerText = `✅ Successfully blocked ${rows.length} slot${rows.length > 1 ? 's' : ''}!`;
+                }
                 // Reset selection
-                document.querySelectorAll('#bs-slot-pills .bs-slot-pill').forEach(p => p.classList.remove('selected'));
-                bsSelectedSlot = null;
+                bsSelectedSlots.clear();
+                syncSlotPillsWithDate();
                 if (reasonInput) reasonInput.value = '';
                 await loadBlockedSlots();
             } catch(e) {
                 if (msg) { msg.style.color = '#ef4444'; msg.innerText = `Error: ${e.message}`; }
             }
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Block Selected Slot'; }
+            updateBlockBtnLabel();
         }
 
         window.unblockSlot = async function(id) {
