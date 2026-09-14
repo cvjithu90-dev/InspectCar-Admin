@@ -134,6 +134,7 @@
             margin-left: var(--sidebar-width);
             display: flex;
             flex-direction: column;
+            min-width: 0;
         }
 
         .topbar {
@@ -152,6 +153,7 @@
         .page-content {
             padding: 2rem;
             flex: 1;
+            min-width: 0;
         }
 
         /* Cards */
@@ -161,12 +163,27 @@
             border-radius: 8px;
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 0;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
-        .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+        .grid-5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+
+        .detail-kv-grid {
+            display: grid;
+            grid-template-columns: 85px minmax(0, 1fr);
+            gap: 0.6rem 1rem;
+            min-width: 0;
+        }
+        .detail-kv-grid > * {
+            min-width: 0;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
         
         .stat-card {
             display: flex;
@@ -613,7 +630,7 @@
                         <i class="fas fa-user-edit"></i> Edit Customer
                     </button>
                 </div>
-                <div class="grid-2 gap-2 text-sm" id="customer-view-mode">
+                <div class="detail-kv-grid text-sm" id="customer-view-mode">
                     <div class="text-secondary">Name:</div><div id="detail-customer-name"></div>
                     <div class="text-secondary">Phone:</div><div id="detail-customer-phone"></div>
                     <div class="text-secondary">Email:</div><div id="detail-customer-email"></div>
@@ -659,7 +676,7 @@
                         <i class="fas fa-edit"></i> Edit Details &amp; Schedule
                     </button>
                 </div>
-                <div class="grid-2 gap-2 text-sm" id="vehicle-view-mode">
+                <div class="detail-kv-grid text-sm" id="vehicle-view-mode">
                     <div class="text-secondary">Vehicle:</div><div id="detail-vehicle"></div>
                     <div class="text-secondary">Reg No:</div><div id="detail-reg"></div>
                     <div class="text-secondary">Package:</div><div id="detail-package"></div>
@@ -1975,7 +1992,25 @@
             $('#detail-customer-phone').textContent = b.customer_phone || 'N/A';
             $('#detail-customer-email').textContent = b.customer_email || 'N/A';
             if($('#detail-area')) $('#detail-area').textContent = b.area || 'N/A';
-            $('#detail-address').textContent = b.address || b.area;
+            
+            const rawAddress = b.address || b.area || 'N/A';
+            const urlMatch = rawAddress.match(/(https?:\/\/[^\s]+)/i);
+            if (urlMatch) {
+                const mapsUrl = urlMatch[1];
+                const textPart = rawAddress.replace(urlMatch[0], '').replace(/📍\s*Maps:?\s*$/i, '').trim();
+                const safeEscape = function(s) {
+                    return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                };
+                $('#detail-address').innerHTML = 
+                    (textPart ? `<div>${safeEscape(textPart)}</div>` : '') +
+                    `<div style="margin-top:6px;">
+                        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.35); color:#a5b4fc; padding:5px 12px; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none; transition:background 0.2s;" onmouseenter="this.style.background='rgba(99,102,241,0.3)'" onmouseleave="this.style.background='rgba(99,102,241,0.15)'">
+                            <i class="fas fa-map-marker-alt" style="color:#ef4444;"></i> View on Google Maps <i class="fas fa-external-link-alt" style="font-size:10px; opacity:0.7;"></i>
+                        </a>
+                    </div>`;
+            } else {
+                $('#detail-address').textContent = rawAddress;
+            }
 
             $('#detail-vehicle').textContent = `${b.vehicle_year || ''} ${b.vehicle_brand || ''} ${b.vehicle_model || ''} (${b.vehicle_fuel || 'Petrol'})`;
             $('#detail-reg').textContent = b.vehicle_reg || 'N/A';
