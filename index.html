@@ -3948,10 +3948,9 @@ function buildStep2() {
         '</div>' +
         '<div style="margin-top:12px;"><label style="font-size:10px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;">Verdict</label>' +
         '<div class="wz-verdict-grid">' + verdictHtml + '</div></div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Recommendation &amp; Summary</div>' +
+        '<div class="wz-card"><div class="wz-card-title">Final Recommendation</div>' +
         '<div class="wz-field-grid">' +
-        wzFta('wf-recommendation','Final Recommendation (1 line for customer)',d.recommendation||'',2) +
-        wzFta('wf-summary','Executive Summary (2–4 sentences)',d.summary||'',4) +
+        wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',4) +
         '</div></div>';
 }
 
@@ -4293,18 +4292,24 @@ function buildStep8() {
     if (typeof window.wzComputeLocalMarketAnalysis === 'function') {
         const computed = window.wzComputeLocalMarketAnalysis(d);
         if (computed) {
+            // If inspector notes is empty or lacks executive summary, combine them
             if (!d.inspector_notes) {
                 d.inspector_notes = computed.inspector_notes;
+            } else {
+                var summaryToAdd = d.summary || computed.summary || '';
+                if (summaryToAdd && !d.inspector_notes.includes(summaryToAdd.substring(0, 30))) {
+                    d.inspector_notes = d.inspector_notes.trim() + '\n\n' + summaryToAdd.trim();
+                }
             }
+            // Clean out any "by info." if present
+            d.inspector_notes = d.inspector_notes.replace(/by info\./gi, 'from on-site inspection.').replace(/by info\b/gi, '');
+
             if (!d.admin_remarks) {
                 d.admin_remarks = computed.admin_remarks;
             }
             const isDefaultRec = !d.recommendation || d.recommendation.trim() === 'Recommended to buy with price negotiation.' || d.recommendation.trim().length < 60;
             if (isDefaultRec && computed.recommendation) {
                 d.recommendation = computed.recommendation;
-            }
-            if (!d.summary && computed.summary) {
-                d.summary = computed.summary;
             }
             if (!d.engine_calibration && computed.engine_calibration) {
                 d.engine_calibration = computed.engine_calibration;
@@ -4327,13 +4332,12 @@ function buildStep8() {
                 '<span style="color:var(--text-secondary);">Changed <b style="color:var(--text-primary);">' + escW(e.field) + '</b></span></div>';
         }).join('');
     return '<div class="wz-step-header"><div class="wz-step-title">💬 Admin Remarks &amp; Additional AI Checks</div>' +
-        '<div class="wz-step-desc">Add inspector notes with checkpoint upload time, admin concerns from checklist &amp; service history, customer recommendation, and customize the Additional AI Check cards shown on Page 3 of the report.</div></div>' +
+        '<div class="wz-step-desc">Add inspector notes with checkpoint upload time and executive summary, admin concerns from checklist &amp; service history, customer recommendation, and customize the Additional AI Check cards shown on Page 3 of the report.</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">General Remarks &amp; Recommendation</div>' +
         '<div class="wz-field-grid">' +
-        wzFta('wf-inspector-notes','Inspector Notes (from field)',d.inspector_notes||'',4) +
-        wzFta('wf-admin-remarks','Admin Internal Remarks (Service History & Checklist Concerns)',d.admin_remarks||'',6) +
+        wzFta('wf-inspector-notes','Inspector Notes &amp; Executive Summary (from field)',d.inspector_notes||'',6) +
+        wzFta('wf-admin-remarks','Admin Internal Remarks (Service History &amp; Checklist Concerns)',d.admin_remarks||'',6) +
         wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',6) +
-        wzFta('wf-summary','Executive Summary',d.summary||'',4) +
         '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3) ' +
         '<button class="wz-api-btn" onclick="wzGenerateAiMarketAnalysis()"><i class="fas fa-magic"></i> ✨ AI Generate Market &amp; Remarks (Gemini AI)</button></div>' +
@@ -5487,14 +5491,17 @@ Return ONLY valid JSON format:
     if (generatedData.summary) d.summary = generatedData.summary;
     if (generatedData.recommendation) d.recommendation = generatedData.recommendation;
     if (generatedData.admin_remarks) d.admin_remarks = generatedData.admin_remarks;
-    if (!d.inspector_notes && localData.inspector_notes) d.inspector_notes = localData.inspector_notes;
+    if (!d.inspector_notes && localData.inspector_notes) {
+        d.inspector_notes = localData.inspector_notes;
+    } else if (generatedData.summary && d.inspector_notes && !d.inspector_notes.includes(generatedData.summary.substring(0, 30))) {
+        d.inspector_notes = d.inspector_notes.trim() + '\n\n' + generatedData.summary.trim();
+    }
 
     // Immediately update on-screen inputs if Step 8 is currently open
     const domFields = {
         'wf-market-price': d.market_price_analysis,
         'wf-engine-cal': d.engine_calibration,
         'wf-tyre-analysis': d.tyre_analysis_text,
-        'wf-summary': d.summary,
         'wf-recommendation': d.recommendation,
         'wf-admin-remarks': d.admin_remarks,
         'wf-inspector-notes': d.inspector_notes
