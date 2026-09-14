@@ -3651,6 +3651,19 @@ async function loadWzAnswers() {
         // Auto-populate hero exterior photos (fill any missing slots from inspector photos)
         autoPopulateHeroPhotos(photos || []);
 
+        // Track latest checkpoint upload timestamp from answers/photos
+        if (answers && answers.length > 0) {
+            const tsList = answers.map(a => a.created_at).filter(Boolean).sort().reverse();
+            if (tsList.length > 0) {
+                wz.checkpointUploadTime = tsList[0];
+            }
+        } else if (photos && photos.length > 0) {
+            const tsList = photos.map(p => p.created_at).filter(Boolean).sort().reverse();
+            if (tsList.length > 0) {
+                wz.checkpointUploadTime = tsList[0];
+            }
+        }
+
         // Auto-calculate score if not set
         if (!wz.draft.ai_score && answers && answers.length > 0) {
             wzAutoCalcScore();
@@ -4275,6 +4288,36 @@ function buildStep8() {
     if (d.inspector_notes && /Razorpay Ref|Charged:|Balance Due|google\.com\/maps|spinny\./i.test(d.inspector_notes)) {
         d.inspector_notes = '';
     }
+
+    // Auto-populate inspector notes, admin remarks, and unified recommendation if empty or default
+    if (typeof window.wzComputeLocalMarketAnalysis === 'function') {
+        const computed = window.wzComputeLocalMarketAnalysis(d);
+        if (computed) {
+            if (!d.inspector_notes) {
+                d.inspector_notes = computed.inspector_notes;
+            }
+            if (!d.admin_remarks) {
+                d.admin_remarks = computed.admin_remarks;
+            }
+            const isDefaultRec = !d.recommendation || d.recommendation.trim() === 'Recommended to buy with price negotiation.' || d.recommendation.trim().length < 60;
+            if (isDefaultRec && computed.recommendation) {
+                d.recommendation = computed.recommendation;
+            }
+            if (!d.summary && computed.summary) {
+                d.summary = computed.summary;
+            }
+            if (!d.engine_calibration && computed.engine_calibration) {
+                d.engine_calibration = computed.engine_calibration;
+            }
+            if (!d.tyre_analysis_text && computed.tyre_analysis_text) {
+                d.tyre_analysis_text = computed.tyre_analysis_text;
+            }
+            if (!d.market_price_analysis && computed.market_price_analysis) {
+                d.market_price_analysis = computed.market_price_analysis;
+            }
+        }
+    }
+
     const log = (d && d.audit_log) ? d.audit_log : [];
     const logHtml = log.length === 0 ?
         '<p style="color:var(--text-secondary);font-size:12px;">No changes recorded yet.</p>' :
@@ -4284,12 +4327,12 @@ function buildStep8() {
                 '<span style="color:var(--text-secondary);">Changed <b style="color:var(--text-primary);">' + escW(e.field) + '</b></span></div>';
         }).join('');
     return '<div class="wz-step-header"><div class="wz-step-title">💬 Admin Remarks &amp; Additional AI Checks</div>' +
-        '<div class="wz-step-desc">Add inspector notes, admin remarks, customer recommendation, and customize the Additional AI Check cards shown on Page 3 of the report.</div></div>' +
+        '<div class="wz-step-desc">Add inspector notes with checkpoint upload time, admin concerns from checklist &amp; service history, customer recommendation, and customize the Additional AI Check cards shown on Page 3 of the report.</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">General Remarks &amp; Recommendation</div>' +
         '<div class="wz-field-grid">' +
-        wzFta('wf-inspector-notes','Inspector Notes (from field)',d.inspector_notes||d.admin_notes||'',4) +
-        wzFta('wf-admin-remarks','Admin Internal Remarks',d.admin_remarks||'',4) +
-        wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',3) +
+        wzFta('wf-inspector-notes','Inspector Notes (from field)',d.inspector_notes||'',4) +
+        wzFta('wf-admin-remarks','Admin Internal Remarks (Service History & Checklist Concerns)',d.admin_remarks||'',6) +
+        wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',6) +
         wzFta('wf-summary','Executive Summary',d.summary||'',4) +
         '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3) ' +
@@ -5160,16 +5203,157 @@ async function callGeminiAI(prompt) {
     throw lastError || new Error("All Gemini models in cascade failed");
 }
 
+function wzFormatTimestampIST(isoStr) {
+    if (!isoStr) return '';
+    try {
+        const dt = new Date(isoStr);
+        if (isNaN(dt.getTime())) return String(isoStr);
+        return dt.toLocaleDateString('en-IN', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true,
+            timeZone: 'Asia/Kolkata'
+        });
+    } catch(e) {
+        return String(isoStr);
+    }
+}
+
 window.wzComputeLocalMarketAnalysis = function(d) {
     d = d || {};
     const year = parseInt(d.vehicle_year) || (new Date().getFullYear() - 3);
     const brand = (d.vehicle_brand || 'Vehicle').trim();
     const model = (d.vehicle_model || '').trim();
+    const fuel = (d.vehicle_fuel || 'Petrol').trim();
     const km = parseInt(d.odometer_km) || 40000;
     const score = parseInt(d.ai_score) || 80;
+    const verdict = d.verdict || (score >= 80 ? 'Good Condition' : 'Fair · Price Cut Needed');
+    const inspectorName = d.inspector_name || 'Field Inspector';
     const currentYear = new Date().getFullYear();
     const age = Math.max(1, currentYear - year);
 
+    // 1. Gather all checklist defect items
+    const checklistDefects = [];
+    const checklist = d.checklist || {};
+    Object.keys(checklist).forEach(function(cat) {
+        (checklist[cat] || []).forEach(function(item) {
+            const a = (item.answer || '').toLowerCase();
+            const s = (item.severity || '').toLowerCase();
+            const note = item.note || '';
+            const isWarnOrFail = a === 'warn' || a === 'fail' || s === 'high' || s === 'medium' ||
+                /repaint|scratch|dent|lip|resurface|dirty|leak|wear|replace|seep/i.test(note);
+            if (isWarnOrFail) {
+                checklistDefects.push({
+                    category: cat,
+                    item: item.item_name,
+                    answer: item.answer,
+                    note: note
+                });
+            }
+        });
+    });
+
+    const repaints = checklistDefects.filter(function(i) { return /repaint/i.test(i.note) || /paint/i.test(i.item); });
+    const brakes = checklistDefects.filter(function(i) { return /brake|rotor|disc|pad/i.test(i.item) || /rotor|lip|skimming/i.test(i.note); });
+    const tyres = checklistDefects.filter(function(i) { return /tyre|wheel/i.test(i.item) || /tread|sidewall/i.test(i.note); });
+    const interior = checklistDefects.filter(function(i) { return /interior|roof|seat|liner/i.test(i.item) || /dirty|cleaning/i.test(i.note); });
+    const mechanical = checklistDefects.filter(function(i) { return /engine|transmission|gear|coolant|oil|leak|seep/i.test(i.item) || /engine|leak|seep/i.test(i.note); });
+
+    // 2. Parse service history concerns
+    const svcHdr = d.service_history_note || '';
+    const hasAccidents = /accidental|insurance|accident/i.test(svcHdr);
+    const hasTurbo = /turbo/i.test(svcHdr);
+    const hasFuelOrOilPump = /fuel injector|oil pump|fuel-system|fuel rail/i.test(svcHdr);
+    const isHighConcernSvc = /high-concern|major verification|red flag/i.test(svcHdr);
+
+    const svcFlags = [];
+    if (hasAccidents) {
+        const accMatch = svcHdr.match(/Multiple accidental repairs[^\n•]+/i);
+        svcFlags.push(accMatch ? accMatch[0].trim() : 'Multiple past accidental / insurance body repairs recorded');
+    }
+    if (hasTurbo) {
+        svcFlags.push('Repeated turbocharger replacements recorded under warranty');
+    }
+    if (hasFuelOrOilPump) {
+        svcFlags.push('Fuel rail / injectors and oil pump assembly replaced under warranty');
+    }
+
+    // 3. Format Checkpoint Upload Timestamp for Inspector Notes
+    let uploadTs = (wz && wz.checkpointUploadTime) ? wz.checkpointUploadTime : null;
+    if (!uploadTs && wz && wz.answers && wz.answers.length > 0) {
+        const tsList = wz.answers.map(function(a){ return a.created_at; }).filter(Boolean).sort().reverse();
+        if (tsList.length > 0) uploadTs = tsList[0];
+    }
+    if (!uploadTs && wz && wz.photos && wz.photos.length > 0) {
+        const tsList = wz.photos.map(function(p){ return p.created_at; }).filter(Boolean).sort().reverse();
+        if (tsList.length > 0) uploadTs = tsList[0];
+    }
+
+    let timeStr = uploadTs ? wzFormatTimestampIST(uploadTs) : (d.completed_date || d.inspection_date || 'on-site');
+    const inspectorNotes = 'Physical multi-point inspection completed on ' + timeStr + (inspectorName ? ' by ' + inspectorName : '') + '. All 250+ checkpoints, tyre tread depths, paint gauge measurements, OBD-II diagnostic scans, and baseline photos captured and uploaded directly from the field.';
+
+    // 4. Admin Internal Remarks (Major Concerns from Service History & Checklist)
+    let adminRemarks = 'MAJOR CONCERNS & INTERNAL ADVISORY:\n\n' +
+        '1. Service History Concerns:\n';
+    if (svcFlags.length > 0) {
+        svcFlags.forEach(function(f) { adminRemarks += '• ' + f + '\n'; });
+    } else if (d.service_history && d.service_history.length > 0) {
+        adminRemarks += '• ' + d.service_history.length + ' service records verified. No major structural accident flags identified in dealer book.\n';
+    } else {
+        adminRemarks += '• Service history documentation pending customer/dealer verification.\n';
+    }
+
+    adminRemarks += '\n2. Checklist Errors & Inspection Defects:\n';
+    if (repaints.length > 0) {
+        adminRemarks += '• Body & Paint: Non-factory repainted panels detected (' + repaints.length + ' panel' + (repaints.length > 1 ? 's' : '') + ': ' + repaints.map(function(r){ return r.item; }).slice(0, 4).join(', ') + ').\n';
+    }
+    if (brakes.length > 0) {
+        adminRemarks += '• Brakes: Rotor lip scoring noted; disc skimming / resurfacing and pad review required.\n';
+    }
+    if (tyres.length > 0) {
+        adminRemarks += '• Tyres: Wear flagged on ' + tyres.map(function(t){ return t.item; }).slice(0, 2).join(', ') + '.\n';
+    }
+    if (interior.length > 0) {
+        adminRemarks += '• Interior: ' + interior.map(function(i){ return i.item + (i.note ? ' (' + i.note + ')' : ''); }).slice(0, 2).join(', ') + '.\n';
+    }
+    if (mechanical.length > 0) {
+        adminRemarks += '• Mechanical: Flagged checkpoints: ' + mechanical.map(function(m){ return m.item; }).slice(0, 2).join(', ') + '.\n';
+    }
+    if (checklistDefects.length === 0) {
+        adminRemarks += '• All checkpoints passed with zero critical defects.\n';
+    }
+
+    const totalNegs = (d.negotiations || []).reduce(function(s, n) { return s + (Number(n.amount) || 0); }, 0);
+    const negStr = totalNegs > 0 ? ('₹' + totalNegs.toLocaleString('en-IN')) : '₹30,000 – ₹50,000';
+    adminRemarks += '\n3. Commercial Guidance & Next Steps:\n' +
+        '• Total calculated negotiation offset: ' + negStr + '.\n';
+    if (hasAccidents || isHighConcernSvc) {
+        adminRemarks += '• NOTE: Prioritize customer disclosure on past accidental repairs and warranty powertrain replacements before purchase finalization.';
+    } else {
+        adminRemarks += '• Standard used-car negotiation margin recommended.';
+    }
+
+    // 5. Unified Final Recommendation + Executive Summary
+    let recStance = 'Recommended to Buy with Price Negotiation';
+    if (isHighConcernSvc || hasAccidents) {
+        recStance = '⚠️ Conditional Purchase Recommended with Strict Caution & Price Negotiation (' + negStr + ' Off)';
+    } else if (score >= 82) {
+        recStance = 'Strongly Recommended to Buy with Routine Negotiation (' + negStr + ' Off)';
+    }
+
+    let finalRecommendation = recStance + '.\n\n' +
+        'Executive Summary: The ' + year + ' ' + brand + ' ' + model + ' (' + fuel + ') scored ' + score + '/100 (' + verdict + ') across 250+ checkpoints with ' + km.toLocaleString('en-IN') + ' km on the odometer. The vehicle remains structurally capable and mechanically operational, but requires deliberate buyer attention regarding specific inspection wear and recorded service history items.\n\n' +
+        'Inspection Findings to Address:\n' +
+        '• Exterior: ' + (repaints.length > 0 ? repaints.length + ' panels show non-factory repaint finish requiring inspection for underlying cosmetic repairs.' : 'Minor exterior blemishes consistent with age and urban driving.') + '\n' +
+        '• Mechanical & Wear: ' + (brakes.length > 0 ? 'Front brake rotor lip scoring necessitates disc skimming and brake pad renewal.' : 'Standard brake and suspension wear.') + (tyres.length > 0 ? ' Spare tyre tread wear requires scheduled replacement.' : '') + '\n\n';
+
+    if (hasAccidents || hasTurbo || hasFuelOrOilPump) {
+        finalRecommendation += 'Service History Considerations:\n' +
+            '• Dealer records document past insurance/accidental body repairs and warranty powertrain component replacements (including turbocharger and fuel delivery parts). Request dealership job-cards for full transparency.\n\n';
+    }
+
+    finalRecommendation += 'Final Buyer Advisory: Proceed with purchase only after negotiating a price reduction of ' + negStr + ' to offset brake resurfacing, tyre replacement, and commercial depreciation from past body repairs.';
+
+    // 6. Market Price Estimation
     let baseNewPriceLakhs = 12;
     const brandLower = brand.toLowerCase();
     const modelLower = model.toLowerCase();
@@ -5208,39 +5392,28 @@ window.wzComputeLocalMarketAnalysis = function(d) {
     const lowVal = (estVal * 0.94).toFixed(1);
     const highVal = (estVal * 1.06).toFixed(1);
 
-    const totalNegs = (d.negotiations || []).reduce(function(s, n) { return s + (Number(n.amount) || 0); }, 0);
-    const bufferStr = totalNegs > 0 ? ('₹' + (Math.round(totalNegs / 500) * 500).toLocaleString('en-IN')) : '₹35,000 – ₹55,000';
-
-    const marketPrice = 'Fair secondary market value for a ' + year + ' ' + brand + ' ' + model + ' in Bangalore is approximately ₹' + lowVal + ' Lakhs – ₹' + highVal + ' Lakhs. An estimated price negotiation margin of ' + bufferStr + ' is recommended based on the vehicle\'s age, mileage (' + km.toLocaleString('en-IN') + ' km), and identified inspection checkpoints.';
+    const marketPrice = 'Fair secondary market value for a ' + year + ' ' + brand + ' ' + model + ' in Bangalore is approximately ₹' + lowVal + ' Lakhs – ₹' + highVal + ' Lakhs. An estimated price negotiation margin of ' + negStr + ' is recommended based on the vehicle\'s age, mileage (' + km.toLocaleString('en-IN') + ' km), and identified inspection checkpoints.';
 
     let engineText = 'OBD-II diagnostic scan completed with zero active trouble codes (DTCs). Engine parameters, ignition timing, and idle stability are operating within standard manufacturer tolerances.';
-    if (d.checklist) {
-        const engItems = Object.values(d.checklist).flat().filter(function(i) { return /engine|transmission|obd|exhaust/i.test(i.item_name || ''); });
-        const engWarns = engItems.filter(function(i) { return /fail|warn/i.test(i.answer || '') || /medium|high/i.test(i.severity || ''); });
-        if (engWarns.length > 0) {
-            engineText = 'OBD scan and mechanical evaluation flagged ' + engWarns.length + ' item(s) requiring attention (' + engWarns.map(function(i){ return i.item_name; }).slice(0, 2).join(', ') + '). Workshop review advised.';
-        }
+    if (mechanical.length > 0) {
+        engineText = 'OBD scan and mechanical evaluation flagged checkpoints: ' + mechanical.map(function(i){ return i.item; }).slice(0, 2).join(', ') + '. Workshop review advised.';
     }
 
     let tyreText = 'Tyres have healthy tread depth across all axles with uniform road contact, adequate grip, and sound sidewall condition.';
-    if (d.tyre_data && Object.values(d.tyre_data).some(function(t) { return t && t.tread_condition && /worn|replace|uneven/i.test(t.tread_condition); })) {
+    if (tyres.length > 0) {
         tyreText = 'Tyre inspection indicates visible tread wear and uneven abrasion across axles; budget for upcoming tyre replacement or rotation.';
     }
 
-    let rec = 'Recommended to buy with price negotiation based on inspection findings.';
-    if (score >= 82) rec = 'Strongly recommended to buy; vehicle is in well-maintained condition.';
-    else if (score >= 68) rec = 'Recommended to buy with price negotiation covering identified maintenance items.';
-    else if (score >= 50) rec = 'Proceed only with substantial price discount to account for upcoming repairs.';
-    else rec = 'Avoid purchase or proceed only with heavy commercial discount due to multiple critical issues.';
-
-    const summary = 'Vehicle scored ' + score + '/100 with an overall evaluation of ' + (d.verdict || 'Good Condition') + '. The powertrain, chassis, and body show consistent integrity for its ' + km.toLocaleString('en-IN') + ' km usage. Addressing the flagged cosmetic and scheduled service items will bring it to optimal driving condition.';
+    const summaryText = 'The ' + year + ' ' + brand + ' ' + model + ' scored ' + score + '/100 (' + verdict + ') across 250+ checkpoints with ' + km.toLocaleString('en-IN') + ' km on the odometer. Mechanically roadworthy with solid chassis integrity, requiring routine maintenance and consideration of recorded service history.';
 
     return {
+        inspector_notes: inspectorNotes,
+        admin_remarks: adminRemarks,
+        recommendation: finalRecommendation,
+        summary: summaryText,
         market_price_analysis: marketPrice,
         engine_calibration: engineText,
-        tyre_analysis_text: tyreText,
-        summary: summary,
-        recommendation: rec
+        tyre_analysis_text: tyreText
     };
 };
 
@@ -5252,21 +5425,35 @@ window.wzGenerateAiMarketAnalysis = async function() {
     let generatedData = null;
     let usedFallback = false;
 
+    // Summarize checklist errors & service history for the AI prompt
+    const totalNegs = (d.negotiations || []).reduce(function(s, n) { return s + (Number(n.amount) || 0); }, 0);
+    const negItems = (d.negotiations || []).map(function(n) { return '• ' + n.issue + ' (₹' + n.amount + '): ' + n.description; }).join('\n');
+
     try {
-        const prompt = `You are an expert used car valuation specialist in Bangalore, India.
+        const prompt = `You are a senior automobile valuation expert & technical inspection lead in Bangalore, India.
 Vehicle Details:
-- Year & Model: ${d.vehicle_year || 2022} ${d.vehicle_brand || 'Car'} ${d.vehicle_model || ''} (${d.vehicle_fuel || 'Petrol'})
+- Year, Brand & Model: ${d.vehicle_year || 2023} ${d.vehicle_brand || 'Car'} ${d.vehicle_model || ''} (${d.vehicle_fuel || 'Petrol'})
 - Location: ${d.area || 'Bangalore'} (${d.rto_code || 'KA RTO'})
 - Odometer: ${d.odometer_km ? Number(d.odometer_km).toLocaleString('en-IN') + ' km' : '35,000 km'}
 - Inspection Score: ${d.ai_score || 85}/100
 - Verdict: ${d.verdict || 'Good Buy'}
 
+Inspection Checklist Errors & Defect Items:
+${negItems || 'No major failure items noted.'}
+
+Service History Analysis & Key Red Flags:
+${d.service_history_note || 'Regular scheduled service history verified.'}
+
+Calculated Negotiation Offset:
+₹${totalNegs.toLocaleString('en-IN')}
+
 Please generate:
 1. "market_price_analysis": Realistic Bangalore secondhand market price range in ₹ Lakhs (e.g., ₹16.5 Lakhs - ₹18.5 Lakhs) and recommended negotiation buffer. 2-3 sentences.
 2. "engine_calibration": 1-2 sentences OBD & engine diagnostic summary.
 3. "tyre_analysis_text": 1-2 sentences tyre wear analysis summary.
-4. "summary": 2-3 sentences Executive Summary for the buyer.
-5. "recommendation": 1 concise sentence buying recommendation for customer (e.g., "Recommended to buy with price negotiation"). Do NOT include price figures or market valuation ranges here.
+4. "summary": Concise 2-3 sentence Executive Summary of vehicle condition, roadworthiness, and score.
+5. "recommendation": A comprehensive UNIFIED Final Recommendation for the customer that brings together the buying stance, executive summary, key inspection defects (repaints, brakes, tyres), and service history concerns (accidental claims, warranty repairs), ending with actionable price negotiation advice.
+6. "admin_remarks": Internal admin briefing summarizing the major concerns from service history and inspection checklist defects, plus internal commercial guidance.
 
 Return ONLY valid JSON format:
 {
@@ -5274,7 +5461,8 @@ Return ONLY valid JSON format:
   "engine_calibration": "...",
   "tyre_analysis_text": "...",
   "summary": "...",
-  "recommendation": "..."
+  "recommendation": "...",
+  "admin_remarks": "..."
 }`;
 
         const jsonText = await callGeminiAI(prompt);
@@ -5287,8 +5475,9 @@ Return ONLY valid JSON format:
         usedFallback = true;
     }
 
+    const localData = window.wzComputeLocalMarketAnalysis(d);
     if (!generatedData || !generatedData.market_price_analysis) {
-        generatedData = window.wzComputeLocalMarketAnalysis(d);
+        generatedData = localData;
         usedFallback = true;
     }
 
@@ -5297,6 +5486,8 @@ Return ONLY valid JSON format:
     if (generatedData.tyre_analysis_text) d.tyre_analysis_text = generatedData.tyre_analysis_text;
     if (generatedData.summary) d.summary = generatedData.summary;
     if (generatedData.recommendation) d.recommendation = generatedData.recommendation;
+    if (generatedData.admin_remarks) d.admin_remarks = generatedData.admin_remarks;
+    if (!d.inspector_notes && localData.inspector_notes) d.inspector_notes = localData.inspector_notes;
 
     // Immediately update on-screen inputs if Step 8 is currently open
     const domFields = {
@@ -5304,7 +5495,9 @@ Return ONLY valid JSON format:
         'wf-engine-cal': d.engine_calibration,
         'wf-tyre-analysis': d.tyre_analysis_text,
         'wf-summary': d.summary,
-        'wf-recommendation': d.recommendation
+        'wf-recommendation': d.recommendation,
+        'wf-admin-remarks': d.admin_remarks,
+        'wf-inspector-notes': d.inspector_notes
     };
     Object.keys(domFields).forEach(function(id) {
         const el = document.getElementById(id);
@@ -5313,9 +5506,9 @@ Return ONLY valid JSON format:
 
     updateWzPreview();
     if (usedFallback) {
-        showToast('✨ Generated Bangalore Market Valuation & Remarks (Smart Local Engine)!', 'success');
+        showToast('✨ Generated Comprehensive Recommendation & Remarks (Smart Local Engine)!', 'success');
     } else {
-        showToast('✨ Gemini AI generated Market Price Analysis & Remarks!', 'success');
+        showToast('✨ Gemini AI generated Unified Recommendation, Market Price & Remarks!', 'success');
     }
 };
 
