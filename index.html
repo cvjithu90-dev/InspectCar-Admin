@@ -4023,6 +4023,20 @@ function buildStep4() {
             }
         });
     }
+
+    // Auto-populate negotiations from checklist Warn / Fail items if empty or only generic placeholder
+    const isPlaceholderNegs = !d.negotiations || d.negotiations.length === 0 ||
+        (d.negotiations.length <= 2 && d.negotiations.some(function(n) { return (n.issue||'').includes('General Secondhand'); }));
+    if (isPlaceholderNegs && d.checklist && Object.keys(d.checklist).length > 0 && typeof window.wzComputeNegotiationsFromChecklist === 'function') {
+        const autoNegs = window.wzComputeNegotiationsFromChecklist(d.checklist, d.categories, d);
+        if (autoNegs && autoNegs.length > 0 && !autoNegs.every(function(n) { return (n.issue||'').includes('General Secondhand'); })) {
+            d.negotiations = autoNegs;
+        }
+    }
+
+    const currentNegs = d.negotiations || [];
+    const initialTotal = currentNegs.reduce(function(s, n) { return s + (Number(n.amount) || 0); }, 0);
+
     const cats = d.categories || [];
     const catsHtml = cats.map(function(c, i) {
         if (!c.description) {
@@ -4041,7 +4055,8 @@ function buildStep4() {
     }).join('');
     return '<div class="wz-step-header"><div class="wz-step-title">📊 Scoring &amp; Category Health</div>' +
         '<div class="wz-step-desc">Set each category\'s health status and add negotiation suggestions.</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Negotiation Suggestions ' +
+        '<div class="wz-card"><div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<span>Negotiation Suggestions <span id="neg-total-badge" style="font-size:12px;font-weight:700;color:#10B981;margin-left:8px;">Total Cut: ₹' + initialTotal.toLocaleString('en-IN') + '</span></span>' +
         '<button class="wz-api-btn" onclick="wzAutoGenNegotiations()"><i class="fas fa-magic"></i> Auto-Generate</button></div>' +
         '<table class="wz-table"><thead><tr><th>Issue</th><th>Description</th><th>Amount (₹)</th><th></th></tr></thead>' +
         '<tbody id="neg-table-body">' + buildNegRows() + '</tbody></table>' +
@@ -4112,6 +4127,9 @@ function buildTyreDataCard() {
 
 function buildNegRows() {
     const negs = (wz && wz.draft && wz.draft.negotiations) ? wz.draft.negotiations : [];
+    const total = negs.reduce(function(s, n) { return s + (Number(n.amount) || 0); }, 0);
+    const totalEl = document.getElementById('neg-total-badge');
+    if (totalEl) totalEl.textContent = 'Total Cut: ₹' + total.toLocaleString('en-IN');
     return negs.map(function(n, i) {
         return '<tr><td><input value="' + escW(n.issue||'') + '" oninput="wzUpdateNeg(' + i + ',\'issue\',this.value)"></td>' +
             '<td><input value="' + escW(n.description||'') + '" oninput="wzUpdateNeg(' + i + ',\'description\',this.value)"></td>' +
@@ -5157,75 +5175,295 @@ Return ONLY valid JSON format:
     }
 };
 
-window.wzAutoGenNegotiations = async function() {
-    if (!wz || !wz.draft || !wz.draft.checklist) return;
-    const d = wz.draft;
-    showToast('🤖 Gemini AI analyzing inspection findings for price negotiations...', 'info');
+window.wzComputeNegotiationsFromChecklist = function(checklist, categories, draft) {
+    checklist = checklist || {};
+    categories = categories || [];
+    draft = draft || {};
 
-    const failedItems = [];
-    Object.keys(d.checklist).forEach(cat => {
-        d.checklist[cat].filter(i => i.answer === 'Fail' || i.severity === 'high' || i.severity === 'medium').forEach(item => {
-            failedItems.push(`${cat}: ${item.item_name} (${item.note || item.answer})`);
+    var negs = [];
+
+    // Helper to check if an item is a warning or failure
+    function isWarnOrFail(item) {
+        if (!item) return false;
+        var ans = (item.answer || '').toLowerCase().trim();
+        var sev = (item.severity || '').toLowerCase().trim();
+        var note = (item.note || '').toLowerCase().trim();
+
+        if (ans === 'fail' || ans === 'warn' || ans === 'warning' || ans === 'poor' || ans === 'critical' || ans === 'broken' || ans === 'replace' || ans === 'damage' || ans === 'damaged' || ans === 'leak' || ans === 'leaking' || ans === 'scratch' || ans === 'dent' || ans === 'rust' || ans === 'worn') {
+            return true;
+        }
+        if (sev === 'high' || sev === 'critical' || sev === 'medium') {
+            return true;
+        }
+        if (note && !note.includes('good') && !note.includes('ok') && !note.includes('normal') && !note.includes('clear')) {
+            if (/repaint|resurface|scratch|dent|dirty|lip|scoring|leak|seep|damage|worn|replace|tear|stain|noise|vibrat/i.test(note)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    var flaggedItems = [];
+    Object.keys(checklist).forEach(function(cat) {
+        (checklist[cat] || []).forEach(function(item) {
+            if (isWarnOrFail(item)) {
+                flaggedItems.push({
+                    category: cat,
+                    item_name: item.item_name || '',
+                    answer: item.answer || '',
+                    note: item.note ? item.note.trim() : '',
+                    severity: item.severity || 'medium'
+                });
+            }
         });
     });
 
-    if (failedItems.length > 0) {
-        const prompt = `You are a used car price negotiator in India.
-Vehicle: ${d.vehicle_year || ''} ${d.vehicle_brand || ''} ${d.vehicle_model || ''}
-Identified Issues/Defects:
-${failedItems.slice(0, 10).join('\n')}
+    var groups = {
+        paint: [],
+        exterior: [],
+        brakes: [],
+        tyres: [],
+        interior: [],
+        engine: [],
+        transmission: [],
+        suspension: [],
+        ac: [],
+        electrical: [],
+        underbody: [],
+        other: []
+    };
 
-Generate 2 to 4 price negotiation items with realistic price cuts in INR (₹) that the buyer can request from the seller.
-Return ONLY valid JSON array:
-[
-  { "issue": "Short Title", "description": "1 sentence explanation", "amount": 4000 }
-]`;
+    flaggedItems.forEach(function(item) {
+        var itemText = (item.item_name + ' ' + item.note).toLowerCase();
+        var catText = (item.category || '').toLowerCase();
 
-        try {
-            const jsonText = await callGeminiAI(prompt);
-            const cleanJson = jsonText.replace(/```json\s*|\s*```/g, '').trim();
-            const negs = JSON.parse(cleanJson);
-            if (Array.isArray(negs) && negs.length > 0) {
-                d.negotiations = negs;
-                goToWzStep(4);
-                showToast(`✨ Generated ${negs.length} AI negotiation suggestions!`, 'success');
-                return;
-            }
-        } catch(e) {
-            console.warn("AI Negotiation fallback:", e);
-        }
-    }
-
-    // Fallback rule-based generation
-    var negs = [];
-    Object.keys(d.checklist).forEach(function(cat) {
-        var fails = d.checklist[cat].filter(function(i){return i.answer==='Fail'||i.severity==='high';});
-        if (fails.length > 0) {
-            negs.push({ issue: cat + ' — ' + fails.slice(0,2).map(function(f){return f.item_name;}).join(', '), description: fails.length + ' item(s) require attention.', amount: fails.length * 3000 });
+        if (itemText.includes('roof lining') || itemText.includes('seat') || itemText.includes('upholstery') || itemText.includes('dashboard') || itemText.includes('carpet') || itemText.includes('interior') || itemText.includes('floor mat')) {
+            groups.interior.push(item);
+        } else if (itemText.includes('brake') || itemText.includes('rotor') || itemText.includes('pad') || itemText.includes('caliper') || itemText.includes('handbrake') || itemText.includes('disc')) {
+            groups.brakes.push(item);
+        } else if (itemText.includes('paint thickness') || itemText.includes('repaint') || catText.includes('paint thickness')) {
+            groups.paint.push(item);
+        } else if (itemText.includes('tyre') || itemText.includes('tire') || itemText.includes('tread') || itemText.includes('rim') || itemText.includes('spare wheel')) {
+            groups.tyres.push(item);
+        } else if (itemText.includes('bumper') || itemText.includes('fender') || itemText.includes('door') || itemText.includes('quarter') || itemText.includes('bonnet') || itemText.includes('hood') || itemText.includes('windscreen') || itemText.includes('mirror') || catText.includes('exterior')) {
+            groups.exterior.push(item);
+        } else if (itemText.includes('engine') || itemText.includes('oil') || itemText.includes('coolant') || itemText.includes('radiator') || itemText.includes('smoke') || itemText.includes('turbo') || itemText.includes('leak') || itemText.includes('belt') || catText.includes('engine') || catText.includes('under hood')) {
+            groups.engine.push(item);
+        } else if (itemText.includes('clutch') || itemText.includes('gear') || itemText.includes('transmission')) {
+            groups.transmission.push(item);
+        } else if (itemText.includes('suspension') || itemText.includes('strut') || itemText.includes('shock') || itemText.includes('steering') || itemText.includes('bush')) {
+            groups.suspension.push(item);
+        } else if (itemText.includes('ac') || itemText.includes('air conditioning') || itemText.includes('cooling') || itemText.includes('compressor') || itemText.includes('blower')) {
+            groups.ac.push(item);
+        } else if (itemText.includes('battery') || itemText.includes('alternator') || itemText.includes('light') || itemText.includes('headlamp') || itemText.includes('camera') || itemText.includes('sensor') || itemText.includes('electrical')) {
+            groups.electrical.push(item);
+        } else if (itemText.includes('underbody') || itemText.includes('silencer') || itemText.includes('exhaust') || itemText.includes('chassis') || catText.includes('underbody')) {
+            groups.underbody.push(item);
+        } else {
+            groups.other.push(item);
         }
     });
-    if (negs.length === 0) {
-        negs = [
-            { issue: 'General Secondhand Market Negotiation', description: 'Standard margin for upcoming annual service and fluid refresh.', amount: 5000 },
-            { issue: 'Minor Paint Touchup & Detailing', description: 'Budget for minor bumper paint touchup and interior deep cleaning.', amount: 3500 }
-        ];
+
+    // Also check draft.tyre_data for worn tyres
+    if (draft.tyre_data) {
+        ['fl','fr','rl','rr'].forEach(function(pos) {
+            var t = draft.tyre_data[pos];
+            if (t && (t.tread_condition === 'Worn (1–3mm)' || t.tread_condition === 'Bald (<1mm)' || (t.tread_depth && Number(t.tread_depth) < 2.5))) {
+                if (!groups.tyres.some(function(i) { return i.item_name.toLowerCase().includes(pos); })) {
+                    groups.tyres.push({ category: 'Tyre Data', item_name: pos.toUpperCase() + ' Tyre', answer: 'Warn', note: 'Low tread depth (' + (t.tread_depth||'<3') + 'mm)', severity: 'medium' });
+                }
+            }
+        });
     }
+
+    // 1. Paint / Repainted Panels
+    if (groups.paint.length > 0) {
+        var panels = groups.paint.map(function(i) { return i.item_name.replace(/:\s*Defects/i, ''); }).filter(Boolean);
+        var uniquePanels = Array.from(new Set(panels));
+        var count = uniquePanels.length;
+        var pAmt = count >= 5 ? 12000 : count >= 3 ? 8500 : count >= 2 ? 6000 : 4000;
+        negs.push({
+            issue: 'Multiple Repainted Panels (' + count + ' Panels Detected)',
+            description: count + ' body panels (' + uniquePanels.slice(0, 4).join(', ') + (count > 4 ? ' + others' : '') + ') exhibit non-factory repaint thickness. Commercial depreciation margin requested.',
+            amount: pAmt
+        });
+    }
+
+    // 2. Exterior Body Blemishes & Fitment
+    if (groups.exterior.length > 0) {
+        var nonPaintExt = groups.exterior.filter(function(e) {
+            return !groups.paint.some(function(p) { return p.item_name === e.item_name; });
+        });
+        if (nonPaintExt.length > 0) {
+            var extNames = Array.from(new Set(nonPaintExt.map(function(i) { return i.item_name + (i.note ? ' [' + i.note + ']' : ''); })));
+            var extCount = nonPaintExt.length;
+            var extAmt = Math.min(10000, Math.max(3500, extCount * 2500));
+            negs.push({
+                issue: 'Exterior Body Blemishes & Panel Realignment',
+                description: 'Dents, scratches, or fitment gaps logged on: ' + extNames.slice(0, 3).join(', ') + '. Requires dent repair and panel alignment.',
+                amount: extAmt
+            });
+        }
+    }
+
+    // 3. Brakes (Rotors / Pads)
+    if (groups.brakes.length > 0) {
+        var brakeNotes = groups.brakes.map(function(b) { return b.item_name + (b.note ? ': ' + b.note : ''); }).join('; ');
+        var hasRotorLip = /lip|resurface|scoring|groove|disc/i.test(brakeNotes);
+        var hasPads = /pad|lining|worn/i.test(brakeNotes);
+
+        var bTitle = 'Brake Rotor Resurfacing & Pad Service';
+        var bAmt = 5000;
+        var bDesc = 'Brake disc rotors show visible lip and surface scoring; disc skimming / resurfacing required.';
+
+        if (hasRotorLip && hasPads) {
+            bAmt = 6500;
+            bDesc = 'Both brake rotor lip scoring and pad wear observed; requires front brake overhaul & disc skimming.';
+        } else if (hasRotorLip) {
+            bAmt = 4500;
+            bDesc = 'Brake disc rotors show visible lip and surface scoring; disc skimming / resurfacing required.';
+        } else {
+            bAmt = 3500;
+            bDesc = 'Brake pad thickness is near replacement threshold; budget for upcoming pad replacement.';
+        }
+
+        negs.push({
+            issue: bTitle,
+            description: bDesc,
+            amount: bAmt
+        });
+    }
+
+    // 4. Tyres & Wheels
+    if (groups.tyres.length > 0) {
+        var tyreCount = groups.tyres.length;
+        var tAmt = tyreCount >= 3 ? 18000 : tyreCount === 2 ? 12000 : 6000;
+        negs.push({
+            issue: 'Tyre Replacement / Tread Depreciation (' + tyreCount + ' Tyre' + (tyreCount > 1 ? 's' : '') + ')',
+            description: 'Low tread depth or sidewall wear noted on ' + groups.tyres.slice(0, 2).map(function(t){return t.item_name;}).join(', ') + '. Replacement required for highway safety.',
+            amount: tAmt
+        });
+    }
+
+    // 5. Interior Detailing & Cleaning
+    if (groups.interior.length > 0) {
+        var intNotes = groups.interior.map(function(i) { return i.item_name + (i.note ? ' (' + i.note + ')' : ''); }).join(', ');
+        negs.push({
+            issue: 'Interior Detailing & Roof Liner Cleaning',
+            description: 'Cabin blemishes identified: ' + intNotes + '. Professional interior dry-cleaning, foam extraction, and detailing required.',
+            amount: 3000
+        });
+    }
+
+    // 6. Engine & Mechanical
+    if (groups.engine.length > 0) {
+        var engNotes = groups.engine.map(function(e) { return e.item_name + (e.note ? ': ' + e.note : ''); }).join('; ');
+        var engAmt = /turbo/i.test(engNotes) ? 25000 : /leak|seep/i.test(engNotes) ? 7000 : /mount|vibrat/i.test(engNotes) ? 6500 : 6000;
+        negs.push({
+            issue: 'Engine & Mechanical Rectification',
+            description: 'Mechanical inspection flagged: ' + engNotes.substring(0, 100) + '. Requires workshop diagnosis and corrective repair.',
+            amount: engAmt
+        });
+    }
+
+    // 7. Suspension & Steering
+    if (groups.suspension.length > 0) {
+        var suspNotes = groups.suspension.map(function(s) { return s.item_name + (s.note ? ': ' + s.note : ''); }).join('; ');
+        negs.push({
+            issue: 'Suspension Bushing & Linkage Overhaul',
+            description: 'Suspension wear or play identified on: ' + suspNotes.substring(0, 100) + '. Bushing/link rod replacement due.',
+            amount: 6500
+        });
+    }
+
+    // 8. Air Conditioning
+    if (groups.ac.length > 0) {
+        negs.push({
+            issue: 'AC System Service & Gas Recharge',
+            description: 'Air conditioning cooling performance suboptimal. System gas recharge & compressor inspection due.',
+            amount: 3500
+        });
+    }
+
+    // 9. Electricals & Battery
+    if (groups.electrical.length > 0) {
+        var eleNotes = groups.electrical.map(function(e) { return e.item_name + (e.note ? ': ' + e.note : ''); }).join('; ');
+        var isBatt = /battery/i.test(eleNotes);
+        negs.push({
+            issue: isBatt ? 'Battery Replacement Due' : 'Electrical System / Sensor Inspection',
+            description: isBatt ? 'Battery health test shows degraded cold-cranking capacity. Replacement required.' : 'Electrical accessories or sensors require technician inspection: ' + eleNotes.substring(0, 80) + '.',
+            amount: isBatt ? 5000 : 3500
+        });
+    }
+
+    // 10. Check Categories marked 'attention' or 'critical' if not already covered
+    categories.forEach(function(c) {
+        if (c.status === 'attention' || c.status === 'critical') {
+            var catBase = (c.name || '').toLowerCase().replace(/s$/, '');
+            var alreadyCovered = negs.some(function(n) {
+                var fullN = (n.issue + ' ' + n.description).toLowerCase();
+                return fullN.includes(catBase) || catBase.includes(n.issue.toLowerCase());
+            });
+            if (!alreadyCovered) {
+                var isCrit = c.status === 'critical';
+                negs.push({
+                    issue: c.name + ' Maintenance (' + (isCrit ? 'Critical' : 'Attention Needed') + ')',
+                    description: (c.description || (c.name + ' inspection identified items requiring attention prior to purchase.')).substring(0, 120),
+                    amount: isCrit ? 8000 : 4500
+                });
+            }
+        }
+    });
+
+    // 11. Spotless car fallback
+    if (negs.length === 0) {
+        negs.push(
+            { issue: 'General Secondhand Market Negotiation', description: 'Standard margin for upcoming annual service, synthetic oil, and fluid refresh.', amount: 5000 },
+            { issue: 'Minor Detailing & Paint Protection', description: 'Allowance for deep interior shampooing and exterior paint decontamination.', amount: 3500 }
+        );
+    }
+
+    return negs;
+};
+
+window.wzAutoGenNegotiations = async function() {
+    if (!wz || !wz.draft) return;
+    const d = wz.draft;
+    showToast('🔍 Analyzing checklist warning & fail items for price negotiations...', 'info');
+
+    const negs = window.wzComputeNegotiationsFromChecklist(d.checklist, d.categories, d);
     d.negotiations = negs;
-    goToWzStep(4);
-    showToast(negs.length + ' negotiation suggestions generated', 'success');
+    const tb = document.getElementById('neg-table-body');
+    if (tb) tb.innerHTML = buildNegRows();
+    updateWzPreview();
+    showToast(`✨ Generated ${negs.length} negotiation suggestions based on checklist defects!`, 'success');
 };
 
 window.wzAutoGenRepairs = function() {
     if (!wz || !wz.draft || !wz.draft.checklist) return;
     var repairs = [];
     Object.keys(wz.draft.checklist).forEach(function(cat) {
-        wz.draft.checklist[cat].filter(function(i){return i.answer==='Fail'||i.severity==='high';}).forEach(function(item) {
-            repairs.push({ category: cat.split(' ')[0], component: item.item_name, description: item.note||'Requires attention', severity: item.severity||'medium', est_cost_min: 1500, est_cost_max: 5000 });
+        wz.draft.checklist[cat].filter(function(i){
+            var a = (i.answer||'').toLowerCase();
+            var s = (i.severity||'').toLowerCase();
+            return a==='fail'||a==='warn'||s==='high'||s==='medium';
+        }).forEach(function(item) {
+            var a = (item.answer||'').toLowerCase();
+            var s = (item.severity||'').toLowerCase();
+            var isCrit = a==='fail'||s==='high';
+            repairs.push({
+                category: cat.split(' ')[0],
+                component: item.item_name,
+                description: item.note || (isCrit ? 'Immediate repair recommended' : 'Inspection attention item'),
+                severity: isCrit ? 'high' : 'medium',
+                est_cost_min: isCrit ? 3000 : 1500,
+                est_cost_max: isCrit ? 8000 : 4000
+            });
         });
     });
     wz.draft.repairs = repairs;
     goToWzStep(7);
-    showToast(repairs.length + ' repair items generated', 'success');
+    showToast(repairs.length + ' repair items generated from checklist findings', 'success');
 };
 
 // ── API placeholders ──────────────────────────────────────────
