@@ -991,9 +991,36 @@ table.cp td.note { color: #8A8296; }
     const checkpointData = d.checklist || {};
     const cpContainer = document.getElementById('checkpoint-pages-container');
 
-    // Filter valid categories and remove baseline photo sub-keys
+    // Defined canonical category order (matches Inspector PWA CHECKLIST_CATEGORIES)
+    const CATEGORY_ORDER = [
+      'Baseline Photos & Docs',
+      'Exterior Structure & Trim',
+      'Glass & Mirrors',
+      'Paint Thickness Assessment',
+      'Water / Accident Exposure',
+      'Under Hood — Engine OFF',
+      'Interior Trim & Fixtures',
+      'Interior Electricals & HVAC',
+      'Driving Controls & Driver Aids',
+      'Under Hood — Engine ON',
+      'Lighting',
+      'Under Body / Suspension',
+      'Tyres, Wheels & Brakes',
+      'Tyre Data',
+      'OBD / Engine Scan'
+    ];
+
+    // Filter valid categories and remove baseline photo sub-keys, sorted by canonical order
     const rawCategories = [];
-    Object.keys(checkpointData).forEach(cat => {
+    const sortedCatKeys = Object.keys(checkpointData).sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a);
+      const bi = CATEGORY_ORDER.indexOf(b);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    sortedCatKeys.forEach(cat => {
       const items = (checkpointData[cat] || []).filter(i => !i.item_name || !i.item_name.includes('Exterior Baseline Photos_'));
       if (items.length > 0) {
         rawCategories.push({ name: cat, items });
