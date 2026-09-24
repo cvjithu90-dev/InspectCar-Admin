@@ -346,37 +346,66 @@
         .text-sm { font-size: 0.875rem; }
         .text-danger { color: var(--danger); }
         
-        /* Analytics Charts (CSS only) */
+        /* Analytics Charts */
         .bar-chart {
             display: flex;
-            align-items: flex-end;
-            height: 200px;
-            gap: 10px;
-            padding-top: 20px;
+            align-items: stretch;
+            height: 220px;
+            gap: 12px;
+            padding: 10px 10px 0 10px;
             border-bottom: 1px solid var(--border-color);
             border-left: 1px solid var(--border-color);
-            padding-left: 10px;
         }
-        .bar {
+        .bar-col {
             flex: 1;
-            background-color: var(--accent-primary);
-            border-radius: 4px 4px 0 0;
-            position: relative;
-            min-height: 5px;
-            transition: height 0.5s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            gap: 6px;
+            min-width: 0;
         }
-        .bar span {
-            position: absolute;
-            top: -20px;
-            width: 100%;
-            text-align: center;
+        .bar-val-label {
             font-size: 10px;
+            font-weight: 600;
+            color: var(--accent-light);
+            white-space: nowrap;
+            text-align: center;
+            height: 14px;
+        }
+        .bar-track {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            align-items: flex-end;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px 4px 0 0;
+            padding: 0 4px;
+        }
+        .bar-fill {
+            width: 100%;
+            border-radius: 4px 4px 0 0;
+            transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 4px;
+            position: relative;
+        }
+        .bar-fill:hover {
+            filter: brightness(1.25);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+        }
+        .bar-axis-label {
+            font-size: 11px;
             color: var(--text-secondary);
+            font-weight: 500;
+            text-align: center;
+            white-space: nowrap;
+            height: 16px;
         }
         
         .pie-chart {
-            width: 200px;
-            height: 200px;
+            width: 180px;
+            height: 180px;
             border-radius: 50%;
             background: conic-gradient(
                 var(--accent-primary) 0% 45%,
@@ -384,23 +413,29 @@
                 var(--accent-light) 75% 100%
             );
             margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            border: 4px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.4s ease;
         }
         .pie-legend {
-            margin-top: 1rem;
+            margin-top: 1.25rem;
             display: flex;
             justify-content: center;
+            flex-wrap: wrap;
             gap: 1rem;
         }
         .legend-item {
             display: flex;
             align-items: center;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
+            gap: 6px;
+            color: var(--text-primary);
         }
         .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 2px;
-            margin-right: 4px;
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            flex-shrink: 0;
         }
         
         /* Modal */
@@ -1316,7 +1351,7 @@
 
     <!-- Analytics View -->
     <template id="view-analytics">
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-center mb-4" style="flex-wrap: wrap; gap: 10px;">
             <h2>Analytics & Reports</h2>
             <select id="analytics-range" class="form-control" style="width: 200px;">
                 <option value="month">This Month</option>
@@ -1329,38 +1364,37 @@
             <div class="card stat-card">
                 <span class="stat-title">Total Revenue</span>
                 <span class="stat-value text-success" id="stat-rev">₹0</span>
+                <div class="text-xs text-secondary mt-1" id="stat-rev-sub">0 bookings</div>
             </div>
             <div class="card stat-card">
                 <span class="stat-title">Avg Booking Value</span>
                 <span class="stat-value" id="stat-avg">₹0</span>
+                <div class="text-xs text-secondary mt-1" id="stat-avg-sub">per booking</div>
             </div>
             <div class="card stat-card">
                 <span class="stat-title">Completion Rate</span>
                 <span class="stat-value text-accent-light" id="stat-rate">0%</span>
+                <div class="text-xs text-secondary mt-1" id="stat-rate-sub">0 of 0 completed</div>
             </div>
         </div>
 
         <div class="grid-2 gap-4">
             <div class="card">
-                <h3 class="mb-4">Revenue (Last 7 Days)</h3>
+                <div class="flex justify-between items-center mb-4" style="flex-wrap: wrap; gap: 6px;">
+                    <h3 id="chart-revenue-title" style="margin:0;">Revenue Breakdown</h3>
+                    <span class="text-xs text-secondary" id="chart-revenue-sub"></span>
+                </div>
                 <div class="bar-chart" id="chart-revenue">
-                    <!-- Dummy bars, normally generated by JS -->
-                    <div class="bar" style="height: 30%;"><span>M</span></div>
-                    <div class="bar" style="height: 50%;"><span>T</span></div>
-                    <div class="bar" style="height: 20%;"><span>W</span></div>
-                    <div class="bar" style="height: 80%;"><span>T</span></div>
-                    <div class="bar" style="height: 60%;"><span>F</span></div>
-                    <div class="bar" style="height: 90%;"><span>S</span></div>
-                    <div class="bar" style="height: 40%;"><span>S</span></div>
+                    <!-- Populated dynamically by JS -->
                 </div>
             </div>
             <div class="card">
-                <h3 class="mb-4">Packages Distribution</h3>
-                <div class="pie-chart"></div>
-                <div class="pie-legend">
-                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-primary);"></div> Expert-Drive</div>
-                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-secondary);"></div> Lux-Drive</div>
-                    <div class="legend-item"><div class="legend-color" style="background: var(--accent-light);"></div> Pre-Drive</div>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 style="margin:0;">Packages Distribution</h3>
+                </div>
+                <div class="pie-chart" id="pie-chart-pkg"></div>
+                <div class="pie-legend" id="pie-legend-pkg">
+                    <!-- Populated dynamically by JS -->
                 </div>
             </div>
         </div>
@@ -3286,22 +3320,257 @@
         };
 
         // --- ANALYTICS ---
+        let analyticsCache = null;
+
+        function formatCompactINR(num) {
+            if (!num || isNaN(num)) return '₹0';
+            if (num >= 10000000) return '₹' + (num / 10000000).toFixed(1).replace(/\.0$/, '') + 'Cr';
+            if (num >= 100000) return '₹' + (num / 100000).toFixed(1).replace(/\.0$/, '') + 'L';
+            if (num >= 1000) return '₹' + (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+            return '₹' + Math.round(num).toLocaleString('en-IN');
+        }
+
+        function applyAnalyticsView(allBookings, range) {
+            if (!allBookings) return;
+
+            const now = new Date();
+
+            function getBookingDate(b) {
+                if (b.created_at) return new Date(b.created_at);
+                if (b.inspection_date) return new Date(b.inspection_date);
+                return null;
+            }
+
+            function getPrice(b) {
+                return b.status !== 'cancelled' ? (Number(b.total_price) || Number(b.base_price) || 0) : 0;
+            }
+
+            let filtered = [];
+            let chartTitle = '';
+            let chartSubtitle = '';
+            let bars = [];
+
+            if (range === 'week') {
+                // Current week: Monday 00:00 to Sunday 23:59
+                const day = now.getDay();
+                const diff = (day === 0 ? -6 : 1) - day;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() + diff);
+                monday.setHours(0, 0, 0, 0);
+
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                sunday.setHours(23, 59, 59, 999);
+
+                filtered = allBookings.filter(b => {
+                    const dt = getBookingDate(b);
+                    return dt && dt >= monday && dt <= sunday;
+                });
+
+                chartTitle = 'Daily Revenue (This Week)';
+                chartSubtitle = `${monday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${sunday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+
+                const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                bars = dayNames.map((dName, i) => {
+                    const dayStart = new Date(monday);
+                    dayStart.setDate(monday.getDate() + i);
+                    const dayEnd = new Date(dayStart);
+                    dayEnd.setHours(23, 59, 59, 999);
+
+                    const dayBookings = filtered.filter(b => {
+                        const dt = getBookingDate(b);
+                        return dt && dt >= dayStart && dt <= dayEnd;
+                    });
+                    const rev = dayBookings.reduce((s, b) => s + getPrice(b), 0);
+                    const dateFormatted = dayStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                    return {
+                        label: dName,
+                        subLabel: dateFormatted,
+                        rev,
+                        count: dayBookings.length,
+                        tooltip: `${dName} (${dateFormatted}): ${formatCurrency(rev)} (${dayBookings.length} booking${dayBookings.length === 1 ? '' : 's'})`
+                    };
+                });
+
+            } else if (range === 'month') {
+                // Current month: 1st 00:00 to last day 23:59
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+                const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+                filtered = allBookings.filter(b => {
+                    const dt = getBookingDate(b);
+                    return dt && dt >= monthStart && dt <= monthEnd;
+                });
+
+                const monthName = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                chartTitle = `Weekly Revenue (${monthName})`;
+                chartSubtitle = `${filtered.length} total bookings`;
+
+                const totalDays = monthEnd.getDate();
+                const weekBuckets = [
+                    { label: 'W1', subLabel: '1–7', start: 1, end: 7 },
+                    { label: 'W2', subLabel: '8–14', start: 8, end: 14 },
+                    { label: 'W3', subLabel: '15–21', start: 15, end: 21 },
+                    { label: 'W4', subLabel: '22–28', start: 22, end: 28 },
+                    { label: 'W5', subLabel: `29–${totalDays}`, start: 29, end: totalDays }
+                ];
+
+                bars = weekBuckets.map(wb => {
+                    const wbBookings = filtered.filter(b => {
+                        const dt = getBookingDate(b);
+                        if (!dt) return false;
+                        const dayNum = dt.getDate();
+                        return dayNum >= wb.start && dayNum <= wb.end;
+                    });
+                    const rev = wbBookings.reduce((s, b) => s + getPrice(b), 0);
+                    return {
+                        label: wb.label,
+                        subLabel: wb.subLabel,
+                        rev,
+                        count: wbBookings.length,
+                        tooltip: `Week ${wb.label} (${wb.subLabel} ${monthName.split(' ')[0]}): ${formatCurrency(rev)} (${wbBookings.length} booking${wbBookings.length === 1 ? '' : 's'})`
+                    };
+                });
+
+            } else {
+                // All time
+                filtered = [...allBookings];
+                chartTitle = 'Monthly Revenue (All Time)';
+                chartSubtitle = `Total ${filtered.length} bookings`;
+
+                const monthMap = {};
+                filtered.forEach(b => {
+                    const dt = getBookingDate(b);
+                    if (!dt) return;
+                    const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+                    const label = dt.toLocaleString('en-US', { month: 'short' });
+                    const fullLabel = dt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                    if (!monthMap[key]) monthMap[key] = { label, fullLabel, rev: 0, count: 0, sortKey: key };
+                    monthMap[key].rev += getPrice(b);
+                    monthMap[key].count++;
+                });
+
+                bars = Object.values(monthMap)
+                    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+                    .map(m => ({
+                        label: m.label,
+                        subLabel: m.fullLabel.split(' ')[1] || '',
+                        rev: m.rev,
+                        count: m.count,
+                        tooltip: `${m.fullLabel}: ${formatCurrency(m.rev)} (${m.count} booking${m.count === 1 ? '' : 's'})`
+                    }));
+            }
+
+            // Stat Calculations
+            const totalRev = filtered.reduce((s, b) => s + getPrice(b), 0);
+            const validCount = filtered.filter(b => b.status !== 'cancelled').length;
+            const completedCount = filtered.filter(b => b.status === 'completed').length;
+            const avgRev = validCount ? Math.round(totalRev / validCount) : 0;
+            const compRate = filtered.length ? Math.round((completedCount / filtered.length) * 100) : 0;
+
+            // Render Stat Cards
+            if ($('#stat-rev')) $('#stat-rev').textContent = formatCurrency(totalRev);
+            if ($('#stat-avg')) $('#stat-avg').textContent = formatCurrency(avgRev);
+            if ($('#stat-rate')) $('#stat-rate').textContent = compRate + '%';
+
+            if ($('#stat-rev-sub')) $('#stat-rev-sub').textContent = `${validCount} active booking${validCount === 1 ? '' : 's'}`;
+            if ($('#stat-avg-sub')) $('#stat-avg-sub').textContent = 'per active booking';
+            if ($('#stat-rate-sub')) $('#stat-rate-sub').textContent = `${completedCount} of ${filtered.length} completed`;
+
+            // Render Bar Chart
+            if ($('#chart-revenue-title')) $('#chart-revenue-title').textContent = chartTitle;
+            if ($('#chart-revenue-sub')) $('#chart-revenue-sub').textContent = chartSubtitle;
+
+            const chartEl = $('#chart-revenue');
+            if (chartEl) {
+                chartEl.innerHTML = '';
+                const maxRev = Math.max(...bars.map(b => b.rev), 1);
+
+                bars.forEach(b => {
+                    const hasRev = b.rev > 0;
+                    const pct = hasRev ? Math.max(8, Math.round((b.rev / maxRev) * 100)) : 0;
+                    const barBg = hasRev
+                        ? 'linear-gradient(180deg, #818cf8, #6366f1)'
+                        : 'rgba(255, 255, 255, 0.05)';
+                    const valText = hasRev ? formatCompactINR(b.rev) : '';
+
+                    chartEl.innerHTML += `
+                        <div class="bar-col" title="${b.tooltip.replace(/"/g, '&quot;')}">
+                            <div class="bar-val-label">${valText}</div>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="height: ${pct}%; background: ${barBg};"></div>
+                            </div>
+                            <div class="bar-axis-label">${b.label}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            // Render Package Distribution
+            const pkgCounts = { 'Expert-Drive': 0, 'Lux-Drive': 0, 'Pre-Drive': 0 };
+            filtered.forEach(b => {
+                const name = (b.package_name || '').toLowerCase();
+                if (name.includes('lux')) pkgCounts['Lux-Drive']++;
+                else if (name.includes('pre')) pkgCounts['Pre-Drive']++;
+                else pkgCounts['Expert-Drive']++;
+            });
+
+            const totalPkg = pkgCounts['Expert-Drive'] + pkgCounts['Lux-Drive'] + pkgCounts['Pre-Drive'];
+            const pExpert = totalPkg ? Math.round((pkgCounts['Expert-Drive'] / totalPkg) * 100) : 0;
+            const pLux = totalPkg ? Math.round((pkgCounts['Lux-Drive'] / totalPkg) * 100) : 0;
+            const pPre = totalPkg ? Math.max(0, 100 - pExpert - pLux) : 0;
+
+            const pieEl = $('#pie-chart-pkg');
+            const legendEl = $('#pie-legend-pkg');
+
+            if (pieEl) {
+                if (totalPkg === 0) {
+                    pieEl.style.background = 'rgba(255, 255, 255, 0.05)';
+                } else {
+                    const s1 = pExpert;
+                    const s2 = pExpert + pLux;
+                    pieEl.style.background = `conic-gradient(#6366F1 0% ${s1}%, #8B5CF6 ${s1}% ${s2}%, #A78BFA ${s2}% 100%)`;
+                }
+            }
+
+            if (legendEl) {
+                legendEl.innerHTML = `
+                    <div class="legend-item"><div class="legend-color" style="background: #6366F1;"></div> Expert-Drive: <b>${pkgCounts['Expert-Drive']}</b> <span class="text-secondary" style="font-size:11px; margin-left:3px;">(${pExpert}%)</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #8B5CF6;"></div> Lux-Drive: <b>${pkgCounts['Lux-Drive']}</b> <span class="text-secondary" style="font-size:11px; margin-left:3px;">(${pLux}%)</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #A78BFA;"></div> Pre-Drive: <b>${pkgCounts['Pre-Drive']}</b> <span class="text-secondary" style="font-size:11px; margin-left:3px;">(${pPre}%)</span></div>
+                `;
+            }
+        }
+
         async function renderAnalytics() {
             const client = dbClient || window.supabase;
             if(!client) return;
-            const { data } = await client.from('bookings').select('total_price, status, package_name');
-            if(data) {
-                let rev = 0;
-                let completed = 0;
-                data.forEach(b => {
-                    if(b.status !== 'cancelled') rev += (Number(b.total_price) || 0);
-                    if(b.status === 'completed') completed++;
-                });
-                
-                if($('#stat-rev')) $('#stat-rev').textContent = formatCurrency(rev);
-                if($('#stat-avg')) $('#stat-avg').textContent = formatCurrency(data.length ? rev/data.length : 0);
-                if($('#stat-rate')) $('#stat-rate').textContent = data.length ? Math.round((completed/data.length)*100) + '%' : '0%';
+
+            const rangeSelect = $('#analytics-range');
+            let currentRange = rangeSelect ? rangeSelect.value : 'month';
+
+            // Fetch latest bookings for analytics
+            try {
+                const { data, error } = await client
+                    .from('bookings')
+                    .select('id, booking_ref, created_at, inspection_date, total_price, base_price, status, package_name');
+                if (error) {
+                    console.error("Analytics fetch error:", error);
+                    return;
+                }
+                analyticsCache = data || [];
+            } catch(e) {
+                console.error("Analytics error:", e);
             }
+
+            if (rangeSelect) {
+                rangeSelect.onchange = () => {
+                    currentRange = rangeSelect.value;
+                    applyAnalyticsView(analyticsCache, currentRange);
+                };
+            }
+
+            applyAnalyticsView(analyticsCache, currentRange);
         }
 
         // --- CAR DATABASE ---
