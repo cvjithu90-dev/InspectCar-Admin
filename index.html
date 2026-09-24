@@ -590,7 +590,7 @@
                 -webkit-overflow-scrolling: touch;
             }
             table {
-                min-width: 680px;
+                min-width: 820px;
             }
             th, td {
                 padding: 0.75rem 0.5rem;
@@ -774,9 +774,8 @@
         <div class="grid-2">
             <div class="card">
                 <h3 class="mb-4">Live Booking Feed</h3>
-                <div class="brand-logo text-center mb-4">
-                    <h1><i class="fas fa-shield-alt" style="color:var(--accent-primary);"></i> InspectCar Admin</h1>
-                    <p class="text-secondary text-sm">Control Panel</p>
+                <div id="live-feed">
+                    <p class="text-secondary text-sm">Loading recent bookings...</p>
                 </div>
             </div>
             <div class="card">
@@ -804,7 +803,7 @@
         <div class="flex justify-between items-center mb-4" style="flex-wrap: wrap; gap: 10px;">
             <h2>All Bookings</h2>
             <div class="flex gap-2" style="flex-wrap: wrap;">
-                <input type="text" id="bookings-search" class="form-control" placeholder="Search ref, name, phone..." style="width: 220px;">
+                <input type="text" id="bookings-search" class="form-control" placeholder="Search ref, name, phone, inspector..." style="width: 230px;">
                 <select id="bookings-status-filter" class="form-control">
                     <option value="">All Statuses</option>
                     <option value="pending">Pending</option>
@@ -837,12 +836,13 @@
                             Inspection Date &amp; Time <i id="sort-icon-inspection" class="fas fa-sort" style="color: #6b7280; margin-left: 4px; opacity: 0.6;"></i>
                         </th>
                         <th>Package</th>
+                        <th>Inspector</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="bookings-table-body">
-                    <tr><td colspan="9" class="text-center">Loading...</td></tr>
+                    <tr><td colspan="10" class="text-center">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -2048,17 +2048,32 @@
             if($('#dash-pending-bookings')) $('#dash-pending-bookings').textContent = pendingBookings || 0;
 
             // Live Feed
-            const { data: recent } = await client.from('bookings').select('*').order('created_at', { ascending: false }).limit(5);
+            let dashInspectorsMap = {};
+            try {
+                const { data: profs } = await client.from('profiles').select('id, full_name');
+                if (profs && profs.length > 0) {
+                    profs.forEach(p => { if (p.id) dashInspectorsMap[p.id] = p.full_name; });
+                }
+            } catch (e) {}
+
+            const { data: recent } = await client.from('bookings').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(5);
             const feedContainer = $('#live-feed');
             if(feedContainer) {
                 feedContainer.innerHTML = '';
                 if(recent && recent.length > 0) {
                     recent.forEach(b => {
+                        let insName = null;
+                        if (b.profiles) {
+                            insName = Array.isArray(b.profiles) ? b.profiles[0]?.full_name : b.profiles.full_name;
+                        }
+                        if (!insName && b.inspector_id && dashInspectorsMap[b.inspector_id]) {
+                            insName = dashInspectorsMap[b.inspector_id];
+                        }
                         feedContainer.innerHTML += `
                             <div class="flex justify-between items-center py-3 border-b" style="border-color: var(--border-color);">
                                 <div>
-                                    <div class="font-bold">${b.customer_name}</div>
-                                    <div class="text-xs text-secondary">${b.vehicle_brand} ${b.vehicle_model} • ${formatDate(b.inspection_date)}</div>
+                                    <div class="font-bold">${b.customer_name || 'N/A'}</div>
+                                    <div class="text-xs text-secondary">${b.vehicle_brand || ''} ${b.vehicle_model || ''} • ${formatDate(b.inspection_date)} ${insName ? `• <span class="text-accent-light" style="font-weight:600;"><i class="fas fa-user-shield" style="font-size:10px;"></i> ${insName}</span>` : ''}</div>
                                 </div>
                                 <span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span>
                             </div>
@@ -2151,13 +2166,39 @@
                      sortAsc = false;
                  }
 
+                 // Preload inspectors map for 100% reliable inspector name resolution
+                 let inspectorsMap = {};
+                 try {
+                     const { data: profs } = await client.from('profiles').select('id, full_name');
+                     if (profs && profs.length > 0) {
+                         profs.forEach(p => { if (p.id) inspectorsMap[p.id] = p.full_name; });
+                     }
+                 } catch (e) {
+                     console.warn("Could not preload inspectors map:", e);
+                 }
+
                  let query = client.from('bookings').select('*, profiles(full_name)').order(sortField, { ascending: sortAsc, nullsFirst: false }).limit(100);
                  
                  if(statusFilter && statusFilter.value) query = query.eq('status', statusFilter.value);
                  if(searchInput && searchInput.value) {
                      const term = searchInput.value.trim();
                      if(term) {
-                         query = query.or(`booking_ref.ilike.%${term}%,customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,vehicle_brand.ilike.%${term}%,vehicle_model.ilike.%${term}%,area.ilike.%${term}%,address.ilike.%${term}%`);
+                         let filterParts = [
+                             `booking_ref.ilike.%${term}%`,
+                             `customer_name.ilike.%${term}%`,
+                             `customer_phone.ilike.%${term}%`,
+                             `vehicle_brand.ilike.%${term}%`,
+                             `vehicle_model.ilike.%${term}%`,
+                             `area.ilike.%${term}%`,
+                             `address.ilike.%${term}%`
+                         ];
+                         const matchedInspectorIds = Object.keys(inspectorsMap).filter(id => 
+                             inspectorsMap[id].toLowerCase().includes(term.toLowerCase())
+                         );
+                         if (matchedInspectorIds.length > 0) {
+                             filterParts.push(`inspector_id.in.(${matchedInspectorIds.join(',')})`);
+                         }
+                         query = query.or(filterParts.join(','));
                      }
                  }
 
@@ -2165,17 +2206,26 @@
                  tbody.innerHTML = '';
                  
                  if(error) {
-                     tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
+                     tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
                      return;
                  }
 
                  if(!data || data.length === 0) {
-                     tbody.innerHTML = `<tr><td colspan="9" class="text-center">No bookings found</td></tr>`;
+                     tbody.innerHTML = `<tr><td colspan="10" class="text-center">No bookings found</td></tr>`;
                      return;
                  }
 
                  data.forEach(b => {
-                     const inspectorName = b.profiles ? b.profiles.full_name : 'Unassigned';
+                     let inspectorName = null;
+                     if (b.profiles) {
+                         inspectorName = Array.isArray(b.profiles) ? b.profiles[0]?.full_name : b.profiles.full_name;
+                     }
+                     if (!inspectorName && b.inspector_id && inspectorsMap[b.inspector_id]) {
+                         inspectorName = inspectorsMap[b.inspector_id];
+                     }
+                     const isAssigned = !!inspectorName;
+                     const displayInspector = inspectorName || 'Unassigned';
+
                      const bookedDate = b.created_at ? formatDate(b.created_at) : '—';
                      const bookedTime = b.created_at ? formatTime(b.created_at) : '';
                      const areaText = b.area || (b.address ? b.address.split(',')[0] : 'Bangalore');
@@ -2206,6 +2256,16 @@
                                 <div class="text-xs text-secondary">${b.inspection_time || '—'}</div>
                             </td>
                             <td>${b.package_name || '—'}</td>
+                            <td>
+                                ${isAssigned ? `
+                                    <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.28); padding:3px 8px; border-radius:6px;">
+                                        <i class="fas fa-user-shield" style="color:var(--accent-light); font-size:11px;"></i>
+                                        <span class="font-medium" style="color:#e5e7eb; font-size:12px; white-space:nowrap;">${displayInspector}</span>
+                                    </div>
+                                ` : `
+                                    <span class="text-xs text-secondary" style="font-style:italic; opacity:0.65;">Unassigned</span>
+                                `}
+                            </td>
                             <td><span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span></td>
                             <td><a href="#/booking/${b.id}" class="btn btn-secondary text-sm">View</a></td>
                         </tr>
