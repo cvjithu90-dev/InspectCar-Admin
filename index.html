@@ -6150,7 +6150,7 @@ window.wzComputeLocalMarketAnalysis = function(d) {
     }
 
     let timeStr = uploadTs ? wzFormatTimestampIST(uploadTs) : (d.completed_date || d.inspection_date || 'on-site');
-    const inspectorNotes = 'Physical multi-point inspection completed on ' + timeStr + (inspectorName ? ' by ' + inspectorName : '') + '. All 250+ checkpoints, tyre tread depths, paint gauge measurements, OBD-II diagnostic scans, and baseline photos captured and uploaded directly from the field.';
+    const inspectorNotes = 'Physical multi-point inspection completed on ' + timeStr + (inspectorName ? ' by ' + inspectorName : '') + '. All 300+ checkpoints, tyre tread depths, paint gauge measurements, OBD-II diagnostic scans, and baseline photos captured and uploaded directly from the field.';
 
     // 4. Admin Internal Remarks (Major Concerns from Service History & Checklist)
     let adminRemarks = 'MAJOR CONCERNS & INTERNAL ADVISORY:\n\n' +
@@ -6202,7 +6202,7 @@ window.wzComputeLocalMarketAnalysis = function(d) {
     }
 
     let finalRecommendation = recStance + '.\n\n' +
-        'Executive Summary: The ' + year + ' ' + brand + ' ' + model + ' (' + fuel + ') scored ' + score + '/100 (' + verdict + ') across 250+ checkpoints with ' + km.toLocaleString('en-IN') + ' km on the odometer. The vehicle remains structurally capable and mechanically operational, but requires deliberate buyer attention regarding specific inspection wear and recorded service history items.\n\n' +
+        'Executive Summary: The ' + year + ' ' + brand + ' ' + model + ' (' + fuel + ') scored ' + score + '/100 (' + verdict + ') across 300+ checkpoints with ' + km.toLocaleString('en-IN') + ' km on the odometer. The vehicle remains structurally capable and mechanically operational, but requires deliberate buyer attention regarding specific inspection wear and recorded service history items.\n\n' +
         'Inspection Findings to Address:\n' +
         '• Exterior: ' + (repaints.length > 0 ? repaints.length + ' panels show non-factory repaint finish requiring inspection for underlying cosmetic repairs.' : 'Minor exterior blemishes consistent with age and urban driving.') + '\n' +
         '• Mechanical & Wear: ' + (brakes.length > 0 ? 'Front brake rotor lip scoring necessitates disc skimming and brake pad renewal.' : 'Standard brake and suspension wear.') + (tyres.length > 0 ? ' Spare tyre tread wear requires scheduled replacement.' : '') + '\n\n';
@@ -6265,7 +6265,7 @@ window.wzComputeLocalMarketAnalysis = function(d) {
         tyreText = 'Tyre inspection indicates visible tread wear and uneven abrasion across axles; budget for upcoming tyre replacement or rotation.';
     }
 
-    const summaryText = 'The ' + year + ' ' + brand + ' ' + model + ' scored ' + score + '/100 (' + verdict + ') across 250+ checkpoints with ' + km.toLocaleString('en-IN') + ' km on the odometer. Mechanically roadworthy with solid chassis integrity, requiring routine maintenance and consideration of recorded service history.';
+    const summaryText = 'The ' + year + ' ' + brand + ' ' + model + ' scored ' + score + '/100 (' + verdict + ') across 300+ checkpoints with ' + km.toLocaleString('en-IN') + ' km on the odometer. Mechanically roadworthy with solid chassis integrity, requiring routine maintenance and consideration of recorded service history.';
 
     return {
         inspector_notes: inspectorNotes,
