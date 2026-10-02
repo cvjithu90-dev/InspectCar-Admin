@@ -6124,7 +6124,7 @@ window.wzHandleDocDrop = function(e) {
     if (area) area.classList.remove('dragover');
     wzHandleDocUpload(e.dataTransfer.files);
 };
-window.wzHandleDocUpload = function(files) {
+window.wzHandleDocUpload = async function(files) {
     if (!wz.draft.documents) wz.draft.documents = [];
     var typeEl = document.getElementById('doc-type-select');
     var docType = typeEl ? typeEl.value : 'other';
