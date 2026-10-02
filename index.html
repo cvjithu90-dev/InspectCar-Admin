@@ -4742,9 +4742,9 @@ function getDefaultCatSummary(name, status) {
             critical: 'Worn out brake pads, spongy brake pedal response, or handbrake slippage observed.'
         },
         'Underbody': {
-            good: 'Underbody and chassis frame inspected on lift. Floor pan, silencer, and lower crossmembers show no major rust or scraping.',
-            attention: 'Minor surface oxidation or light underbody scraping observed on heat shields or lower floor guard.',
-            critical: 'Significant underbody corrosion, structural bend, or active fluid seepage detected from undercarriage.'
+            good: 'Visually inspected the underbody and chassis frame from ground level (without lift). Floor pan, exhaust system, and lower crossmembers examined for rust, leaks, and structural damage. No major concerns observed.',
+            attention: 'Minor surface oxidation or light underbody scraping visually observed on heat shields or lower floor guard. Detailed lift inspection recommended for confirmation.',
+            critical: 'Significant underbody corrosion, structural deformation, or active fluid seepage visually detected from undercarriage. Immediate lift inspection strongly advised.'
         },
         'Engine Analysis': {
             good: 'Engine idle, sound, mounting vibration, oil quality, and coolant level thoroughly checked. Operates clean with no abnormal noise.',
@@ -4772,9 +4772,9 @@ function getDefaultCatSummary(name, status) {
             critical: 'Leaking shock absorber or prominent clunking sound over uneven surfaces.'
         },
         'Gear & Transmission': {
-            good: 'Clutch pedal play, gear shift smoothness, clutch engagement point, and drive transmission checked. Smooth gear transitions.',
-            attention: 'Clutch pedal travel slightly firm or minor stiffness during gear engagement when cold.',
-            critical: 'Clutch slipping or harsh gear shift jerks / transmission noise detected during test drive.'
+            good: wzGetGearCatDesc((wz && wz.draft && wz.draft.transmission) || 'Manual', 'good'),
+            attention: wzGetGearCatDesc((wz && wz.draft && wz.draft.transmission) || 'Manual', 'attention'),
+            critical: wzGetGearCatDesc((wz && wz.draft && wz.draft.transmission) || 'Manual', 'critical')
         },
         'Inspection Info': {
             good: 'Comprehensive 300+ point inspection conducted at doorstep/yard by certified technician with full photo verification.',
@@ -4876,8 +4876,74 @@ function escW(s) { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/"/
 function buildStep1() {
     const d = wz.draft;
     if (!d.vehicle_fuel) d.vehicle_fuel = 'Petrol';
-    return '<div class="wz-step-header"><div class="wz-step-title">Vehicle Information</div>' +
-        '<div class="wz-step-desc">Verify and complete all vehicle and owner details. Use the auto-fetch buttons for VAHAN data population.</div></div>' +
+    if (!d.car_type) d.car_type = 'used';
+    if (!d.transmission) d.transmission = 'Manual';
+    const isNew = d.car_type === 'new';
+    function wzFiLocked(label, value) {
+        return '<div class="wz-field"><label>' + label + '</label><input type="text" value="' + escW(value) + '" readonly style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);color:var(--text-secondary);cursor:not-allowed;font-style:italic;" title="Not applicable for New Car"></div>';
+    }
+    const ctUsedBorder = isNew ? 'var(--border-color)' : '#6366F1';
+    const ctUsedBg = isNew ? 'transparent' : 'rgba(99,102,241,0.12)';
+    const ctNewBorder = isNew ? '#10B981' : 'var(--border-color)';
+    const ctNewBg = isNew ? 'rgba(16,185,129,0.1)' : 'transparent';
+    const carTypeCard =
+        '<div class="wz-card" style="border:2px solid rgba(99,102,241,0.4);">' +
+        '<div class="wz-card-title" style="color:var(--accent-primary);">🚗 Inspection Type</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">Select the inspection type. This adjusts the entire report for New vs. Used vehicle evaluation.</div>' +
+        '<div style="display:flex;gap:14px;">' +
+            '<label style="flex:1;cursor:pointer;">' +
+            '<input type="radio" name="wz-car-type" value="used" ' + (isNew ? '' : 'checked') + ' onchange="wzOnCarTypeChange(this.value)" style="display:none;">' +
+            '<div style="border:2px solid ' + ctUsedBorder + ';border-radius:12px;padding:14px;text-align:center;background:' + ctUsedBg + ';">' +
+            '<div style="font-size:22px;margin-bottom:6px;">🚗</div>' +
+            '<div style="font-weight:700;font-size:13px;">Used Car</div>' +
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:3px;">Pre-Purchase Inspection</div>' +
+            '</div></label>' +
+            '<label style="flex:1;cursor:pointer;">' +
+            '<input type="radio" name="wz-car-type" value="new" ' + (isNew ? 'checked' : '') + ' onchange="wzOnCarTypeChange(this.value)" style="display:none;">' +
+            '<div style="border:2px solid ' + ctNewBorder + ';border-radius:12px;padding:14px;text-align:center;background:' + ctNewBg + ';">' +
+            '<div style="font-size:22px;margin-bottom:6px;">🆕</div>' +
+            '<div style="font-weight:700;font-size:13px;">New Car</div>' +
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:3px;">Pre-Delivery Inspection (PDI)</div>' +
+            '</div></label>' +
+        '</div></div>';
+
+    const datesSection = isNew ?
+        '<div class="wz-card">' +
+        '<div class="wz-card-title">Validity &amp; Dates <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">Not applicable — unregistered new vehicle</span></div>' +
+        '<div class="wz-field-grid">' +
+        wzFiLocked('Registration Date', 'New Car — Pending Registration') +
+        wzFiLocked('Insurance Valid Till', 'Not Applicable') +
+        wzFiLocked('PUC Valid Till', 'Not Applicable') +
+        wzFiLocked('Tax and Fitness Valid Till', 'Not Applicable') +
+        '</div></div>' :
+        '<div class="wz-card">' +
+        '<div class="wz-card-title">Validity &amp; Dates ' +
+        '<div style="display:flex;gap:6px;">' +
+        '<button class="wz-api-btn" onclick="wzFetchInsurance()"><i class="fas fa-shield-alt"></i> Insurance</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchPUC()"><i class="fas fa-leaf"></i> PUC</button>' +
+        '</div></div>' +
+        '<div class="wz-field-grid">' +
+        wzFi('wf-reg-date','Registration Date',d.reg_date||'','date') +
+        wzFi('wf-insurance-expiry','Insurance Valid Till',d.insurance_expiry||'','date') +
+        wzFi('wf-puc-expiry','PUC Valid Till',d.puc_expiry||'','date') +
+        wzFi('wf-tax-expiry','Tax and Fitness Valid Till',d.tax_expiry||'','date') +
+        '</div></div>';
+
+    const apiCard = isNew ? '' :
+        '<div class="wz-card">' +
+        '<div class="wz-card-title">API Integration Placeholders</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+        '<button class="wz-api-btn" onclick="wzFetchFasTag()"><i class="fas fa-road"></i> FASTag</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchLoan()"><i class="fas fa-university"></i> Loan / Hypothecation</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchAccident()"><i class="fas fa-car-crash"></i> Accident History</button>' +
+        '<button class="wz-api-btn" onclick="wzFetchMarketPrice()"><i class="fas fa-rupee-sign"></i> Market Valuation</button>' +
+        '<button class="wz-api-btn" onclick="wzDecodeVIN()"><i class="fas fa-barcode"></i> VIN Decoder</button>' +
+        '</div><div id="api-result-panel" style="margin-top:8px;"></div></div>';
+
+    return carTypeCard +
+        '<div class="wz-step-header"><div class="wz-step-title">Vehicle Information</div>' +
+        '<div class="wz-step-desc">Verify and complete all vehicle and owner details.' +
+        (isNew ? ' <span style="color:#10B981;font-weight:600;">🆕 New Car PDI Mode active.</span>' : ' Use the auto-fetch buttons for VAHAN data.') + '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Booking &amp; Customer <span style="font-size:11px;color:var(--text-secondary);">' + escW(d.booking_ref) + '</span></div>' +
         '<div class="wz-field-grid">' +
         wzFi('wf-customer-name','Customer Name',d.customer_name||'') +
@@ -4888,40 +4954,25 @@ function buildStep1() {
         wzFi('wf-area','Location / Area',d.area||'') +
         '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Vehicle Details ' +
-        '<button class="wz-api-btn" onclick="wzFetchVahan()"><i class="fas fa-bolt"></i> Auto-Fetch VAHAN</button></div>' +
-        '<div class="wz-field-grid">' +
+        (isNew ? '<span style="font-size:11px;padding:3px 10px;background:rgba(16,185,129,0.15);color:#10B981;border-radius:20px;">🆕 PDI Mode</span>' :
+                 '<button class="wz-api-btn" onclick="wzFetchVahan()"><i class="fas fa-bolt"></i> Auto-Fetch VAHAN</button>') +
+        '</div><div class="wz-field-grid">' +
         wzFi('wf-vehicle-brand','Make / Brand',d.vehicle_brand||'') +
         wzFi('wf-vehicle-model','Model',d.vehicle_model||'') +
         wzFi('wf-vehicle-year','Year',d.vehicle_year||'') +
         wzFsel('wf-vehicle-fuel','Fuel Type',d.vehicle_fuel||'',['Petrol','Diesel','CNG','Electric','Hybrid']) +
-        wzFi('wf-vehicle-reg','Registration No.',d.vehicle_reg||'') +
+        wzFsel('wf-transmission','Transmission',d.transmission||'Manual',['Manual','Automatic']) +
+        wzFi('wf-vehicle-reg', isNew ? 'Registration No. (Pending)' : 'Registration No.',d.vehicle_reg||'') +
         wzFi('wf-vin-number','VIN / Chassis No.',d.vin_number||'') +
         wzFi('wf-engine-number','Engine Number',d.engine_number||'') +
         wzFi('wf-color','Color',d.color||'') +
         wzFi('wf-body-type','Body Type',d.body_type||'') +
         wzFi('wf-odometer-km','Odometer (km)',d.odometer_km||'','number') +
-        wzFi('wf-owner-count','Owner Count',d.owner_count||'','number') +
-        wzFi('wf-rto-code','RTO / Authority',d.rto_code||'') +
+        (isNew ? wzFiLocked('Owner Count','Not Applicable — New Vehicle') : wzFi('wf-owner-count','Owner Count',d.owner_count||'','number')) +
+        (isNew ? wzFiLocked('RTO / Authority','Not Applicable — Unregistered') : wzFi('wf-rto-code','RTO / Authority',d.rto_code||'')) +
         '</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Validity &amp; Dates ' +
-        '<div style="display:flex;gap:6px;">' +
-        '<button class="wz-api-btn" onclick="wzFetchInsurance()"><i class="fas fa-shield-alt"></i> Insurance</button>' +
-        '<button class="wz-api-btn" onclick="wzFetchPUC()"><i class="fas fa-leaf"></i> PUC</button>' +
-        '</div></div>' +
-        '<div class="wz-field-grid">' +
-        wzFi('wf-reg-date','Registration Date',d.reg_date||'','date') +
-        wzFi('wf-insurance-expiry','Insurance Valid Till',d.insurance_expiry||'','date') +
-        wzFi('wf-puc-expiry','PUC Valid Till',d.puc_expiry||'','date') +
-        wzFi('wf-tax-expiry','Tax & Fitness Valid Till',d.tax_expiry||'','date') +
-        '</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">API Integration Placeholders</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
-        '<button class="wz-api-btn" onclick="wzFetchFasTag()"><i class="fas fa-road"></i> FASTag</button>' +
-        '<button class="wz-api-btn" onclick="wzFetchLoan()"><i class="fas fa-university"></i> Loan / Hypothecation</button>' +
-        '<button class="wz-api-btn" onclick="wzFetchAccident()"><i class="fas fa-car-crash"></i> Accident History</button>' +
-        '<button class="wz-api-btn" onclick="wzFetchMarketPrice()"><i class="fas fa-rupee-sign"></i> Market Valuation</button>' +
-        '<button class="wz-api-btn" onclick="wzDecodeVIN()"><i class="fas fa-barcode"></i> VIN Decoder</button>' +
-        '</div><div id="api-result-panel" style="margin-top:8px;"></div></div>';
+        datesSection +
+        apiCard;
 }
 
 function buildStep2() {
@@ -5049,6 +5100,51 @@ function buildStep4() {
         }
     }
 
+    const isNewCar = (d.car_type === 'new');
+
+    // For new cars: reset Vahan Info description
+    if (isNewCar && d.categories && d.categories.length > 0) {
+        d.categories.forEach(function(c) {
+            if (c.name === 'Vahan Info' && c._isAutoDesc !== false) {
+                c.description = 'Vehicle is brand new and not yet registered. VAHAN records are not available as registration is pending with the RTO.';
+            }
+        });
+    }
+
+    // Sync Gear & Transmission description from current transmission setting
+    if (d.categories && d.categories.length > 0 && d.transmission) {
+        d.categories.forEach(function(c) {
+            if (c.name === 'Gear & Transmission' && c._isAutoDesc !== false) {
+                c.description = wzGetGearCatDesc(d.transmission, c.status || 'good');
+            }
+        });
+    }
+
+    // Sync checklist answers to category statuses
+    if (d.categories && d.categories.length > 0 && d.checklist && Object.keys(d.checklist).length > 0) {
+        const allCheckItems = [];
+        Object.keys(d.checklist).forEach(function(cat) {
+            (d.checklist[cat] || []).forEach(function(item) {
+                allCheckItems.push({ cat: cat, answer: (item.answer || '').toLowerCase(), severity: (item.severity || '').toLowerCase(), item_name: (item.item_name || '').toLowerCase() });
+            });
+        });
+        const catKeyMap = { 'Exterior': ['exterior','paint','panel','body'], 'Tyres': ['tyre','tire','wheel'], 'Brakes': ['brake'], 'Underbody': ['underbody','under body','chassis'], 'Engine Analysis': ['engine','oil','coolant','belt'], 'Interior': ['interior','seat','dashboard','cabin'], 'Lighting': ['light','lamp','indicator'], 'AC': ['ac ','a/c','air con'], 'Suspension': ['suspension','shock','strut'], 'Gear & Transmission': ['gear','clutch','transmission'], 'Inspection Info': ['inspection'], 'Vahan Info': ['vahan','registration','rc ','owner'] };
+        d.categories.forEach(function(c) {
+            const keys = catKeyMap[c.name] || [];
+            const relItems = allCheckItems.filter(function(i) { return keys.some(function(k) { return i.cat.toLowerCase().includes(k) || i.item_name.includes(k); }); });
+            if (relItems.length === 0) return;
+            const hasFail = relItems.some(function(i) { return i.answer === 'fail' || i.severity === 'high' || i.answer === 'critical'; });
+            const hasWarn = relItems.some(function(i) { return i.answer === 'warn' || i.answer === 'warning' || i.severity === 'medium' || ['scratch','dent','rust','worn'].includes(i.answer); });
+            const newStatus = hasFail ? 'critical' : hasWarn ? 'attention' : 'good';
+            if (c._isAutoDesc !== false || c.status !== newStatus) {
+                if (c.status !== newStatus) {
+                    c.status = newStatus;
+                    if (c._isAutoDesc !== false) c.description = getDefaultCatSummary(c.name, newStatus);
+                }
+            }
+        });
+    }
+
     const currentNegs = d.negotiations || [];
     const initialTotal = currentNegs.reduce(function(s, n) { return s + (Number(n.amount) || 0); }, 0);
 
@@ -5068,14 +5164,30 @@ function buildStep4() {
             '<input type="text" placeholder="Category summary (e.g. No issues found...)" value="' + escW(c.description||'') + '" oninput="wzUpdateCategory(' + i + ',\'description\',this.value)" style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 11px;border-radius:8px;font-size:12px;font-family:inherit;">' +
             '</div>';
     }).join('');
-    return '<div class="wz-step-header"><div class="wz-step-title">📊 Scoring &amp; Category Health</div>' +
-        '<div class="wz-step-desc">Set each category\'s health status and add negotiation suggestions.</div></div>' +
+    const negCard = isNewCar ?
+        '<div class="wz-card" style="border:1px solid rgba(16,185,129,0.3);">' +
+        '<div class="wz-card-title" style="color:#10B981;">💡 Negotiation Tips — New Car</div>' +
+        '<div style="background:rgba(16,185,129,0.06);border-radius:10px;padding:14px;font-size:13px;color:var(--text-primary);line-height:1.6;">' +
+        '<b>Price negotiation is not applicable for new vehicles.</b><br><br>' +
+        'However, you can suggest the following value additions from the dealership:<br>' +
+        '<ul style="margin:10px 0 0 16px;padding:0;">' +
+        '<li>Free accessories (seat covers, floor mats, sunfilm, dashcam)</li>' +
+        '<li>Extended warranty upgrade (3yr/5yr)</li>' +
+        '<li>Free first service</li>' +
+        '<li>Dealer-arranged insurance with zero depreciation</li>' +
+        '<li>Free fastag activation &amp; RTO registration assistance</li>' +
+        '</ul>' +
+        '</div></div>' :
         '<div class="wz-card"><div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
         '<span>Negotiation Suggestions <span id="neg-total-badge" style="font-size:12px;font-weight:700;color:#10B981;margin-left:8px;">Total Cut: ₹' + initialTotal.toLocaleString('en-IN') + '</span></span>' +
         '<button class="wz-api-btn" onclick="wzAutoGenNegotiations()"><i class="fas fa-magic"></i> Auto-Generate</button></div>' +
         '<table class="wz-table"><thead><tr><th>Issue</th><th>Description</th><th>Amount (₹)</th><th></th></tr></thead>' +
         '<tbody id="neg-table-body">' + buildNegRows() + '</tbody></table>' +
-        '<button class="wz-add-row-btn" onclick="wzAddNegRow()">+ Add Negotiation Item</button></div>' +
+        '<button class="wz-add-row-btn" onclick="wzAddNegRow()">+ Add Negotiation Item</button></div>';
+
+    return '<div class="wz-step-header"><div class="wz-step-title">📊 Scoring &amp; Category Health</div>' +
+        '<div class="wz-step-desc">Set each category\'s health status and add negotiation suggestions.</div></div>' +
+        negCard +
         '<div class="wz-card"><div class="wz-card-title">12-Category Health Breakdown</div>' +
         (catsHtml || '<p style="color:var(--text-secondary);">No categories loaded.</p>') + '</div>' +
         buildTyreDataCard();
@@ -5154,7 +5266,8 @@ function buildNegRows() {
 }
 
 function buildStep5() {
-    const svc = (wz && wz.draft && wz.draft.service_history) ? wz.draft.service_history : [];
+    const d = (wz && wz.draft) ? wz.draft : {};
+    const svc = d.service_history || [];
     const rows = svc.map(function(s, i) {
         const typeOpts = ['dealer','authorized','local','oem','free service','periodic','accidental','warranty'].map(function(t) {
             return '<option value="' + t + '"' + (s.service_type===t?' selected':'') + '>' + t + '</option>';
@@ -5207,6 +5320,18 @@ function buildStep5() {
         '</div>' +
         '<textarea id="wz-svc-summary-input" rows="6" oninput="wzUpdateSvcSummary(this.value)" placeholder="e.g. This vehicle has 10 recorded service visits on file ranging from 2015-04-07 to 2021-07-28..." style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;">' + escW(currentSummary) + '</textarea>' +
     '</div>';
+
+    if (d.car_type === 'new') {
+        return '<div class="wz-step-header"><div class="wz-step-title">Service History</div>' +
+            '<div class="wz-step-desc">Not applicable for brand new vehicles.</div></div>' +
+            '<div class="wz-card" style="border:1px solid rgba(16,185,129,0.3);">' +
+            '<div class="wz-card-title" style="color:#10B981;">🆕 Brand New Vehicle — No Service History</div>' +
+            '<div style="background:rgba(16,185,129,0.06);border-radius:10px;padding:16px;font-size:13px;color:var(--text-primary);line-height:1.7;">' +
+            'This is a factory-fresh vehicle with <b>zero prior service records</b>. No service history exists at the time of PDI inspection.<br><br>' +
+            'First service is due as per the manufacturer\'s recommended schedule (typically 1,000–1,500 km break-in service, followed by the first scheduled service at 5,000–10,000 km).<br><br>' +
+            'Advise the customer to retain all dealer service records from the first visit onwards to maintain warranty validity.' +
+            '</div></div>';
+    }
 
     return '<div class="wz-step-header"><div class="wz-step-title">Service History</div>' +
         '<div class="wz-step-desc">Upload a service PDF to auto-capture records, or add manually.</div></div>' +
@@ -5272,6 +5397,19 @@ function buildStep7() {
             '<td><button class="wz-del-btn" onclick="wzDelRepair(' + i + ')">✕</button></td></tr>';
     }).join('');
     const total = repairs.reduce(function(s,r){return s+(Number(r.est_cost_max)||Number(r.est_cost_min)||0);},0);
+    if (wz && wz.draft && wz.draft.car_type === 'new') {
+        return '<div class="wz-step-header"><div class="wz-step-title">🔩 Repair Estimate</div>' +
+            '<div class="wz-step-desc">Not applicable for new car PDI.</div></div>' +
+            '<div class="wz-card" style="border:1px solid rgba(245,158,11,0.3);">' +
+            '<div class="wz-card-title" style="color:#F59E0B;">🆕 New Car PDI — Repair Cost Estimate Not Applicable</div>' +
+            '<div style="background:rgba(245,158,11,0.06);border-radius:10px;padding:16px;font-size:13px;color:var(--text-primary);line-height:1.7;">' +
+            '<b>Cost estimates are not applicable for new car PDI inspections.</b><br><br>' +
+            'If any defect, damage, fitment issue, or quality concern is identified during this Pre-Delivery Inspection, it must be <b>reported to the dealership for rectification before delivery is accepted</b>.<br><br>' +
+            '⚠️ <b>Do not accept delivery</b> until all PDI issues are resolved and acknowledged in writing by the showroom.<br><br>' +
+            'Document all identified issues in the Technical Checklist (Step 3) and list them in the Admin Remarks / Final Recommendation for the customer.' +
+            '</div></div>';
+    }
+
     return '<div class="wz-step-header"><div class="wz-step-title">🔩 Repair Estimate</div>' +
         '<div class="wz-step-desc">Add estimated repair costs by category. Auto-generate from checklist fails.</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Repair Line Items ' +
@@ -5309,6 +5447,12 @@ function buildStep8() {
             if (!d.admin_remarks) {
                 d.admin_remarks = computed.admin_remarks;
             }
+            const newCarDefaultRec = 'This vehicle underwent a comprehensive Pre-Delivery Inspection (PDI) by InspectCar. All key systems including engine, transmission, interior, electricals, AC, tyres, and documentation have been examined. Any identified concerns should be rectified by the dealership before accepting delivery. Do not accept delivery until all PDI issues are resolved in writing by the showroom. Ensure all accessories, spare wheel, user manual, and vehicle documents are verified at the time of delivery.';
+            if (d.car_type === 'new' && (!d.recommendation || d.recommendation.trim().length < 60)) {
+                d.recommendation = newCarDefaultRec;
+                const recEl = document.getElementById('wf-recommendation');
+                if (recEl) recEl.value = d.recommendation;
+            }
             const isDefaultRec = !d.recommendation || d.recommendation.trim() === 'Recommended to buy with price negotiation.' || d.recommendation.trim().length < 60;
             if (isDefaultRec && computed.recommendation) {
                 d.recommendation = computed.recommendation;
@@ -5342,12 +5486,12 @@ function buildStep8() {
         wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',6) +
         '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3) ' +
-        '<button class="wz-api-btn" onclick="wzGenerateAiMarketAnalysis()"><i class="fas fa-magic"></i> ✨ AI Generate Market &amp; Remarks (Gemini AI)</button></div>' +
+        (d.car_type !== 'new' ? '<button class="wz-api-btn" onclick="wzGenerateAiMarketAnalysis()"><i class="fas fa-magic"></i> ✨ AI Generate Market &amp; Remarks (Gemini AI)</button>' : '') + '</div>' +
         '<div class="wz-field-grid">' +
         wzFta('wf-engine-cal','Engine Calibration / OBD Diagnostics Note',d.engine_calibration||'No active or pending diagnostic trouble codes found.',2) +
         wzFta('wf-tyre-analysis','Tyre Analysis Note',d.tyre_analysis_text||'Tyre condition assessment based on inspection data.',2) +
-        wzFta('wf-service-history-note','Service History Check Note',d.service_history_note||'Full service history captured separately — see Service History section.',2) +
-        wzFta('wf-market-price','Market Price Analysis Note',d.market_price_analysis||'Market price analysis pending.',2) +
+        wzFta('wf-service-history-note','Service History Check Note', d.car_type === 'new' ? (d.service_history_note||'Not applicable — brand new vehicle with no prior service history.') : (d.service_history_note||'Full service history captured separately — see Service History section.'),2) +
+        wzFta('wf-market-price','Market Price Analysis Note', d.car_type === 'new' ? (d.market_price_analysis||'Not applicable — this is a brand new vehicle. Reference the manufacturer ex-showroom price. Suggest free accessories, extended warranty, or insurance as value additions from the dealer.') : (d.market_price_analysis||'Market price analysis pending.'),2) +
         '</div></div>' +
         '<div class="wz-card"><div class="wz-card-title">Audit Log <span style="font-size:10px;color:var(--text-secondary);">Last 20 edits this session</span></div>' +
         '<div>' + logHtml + '</div></div>';
@@ -5406,14 +5550,73 @@ const WZ_FIELD_MAP = {
     'wf-completed-date':'completed_date','wf-recommendation':'recommendation','wf-summary':'summary',
     'wf-inspector-notes':'inspector_notes','wf-admin-remarks':'admin_remarks',
     'wf-engine-cal':'engine_calibration','wf-tyre-analysis':'tyre_analysis_text',
-    'wf-service-history-note':'service_history_note','wf-market-price':'market_price_analysis'
+    'wf-service-history-note':'service_history_note','wf-market-price':'market_price_analysis',
+    'wf-transmission':'transmission'
 };
+
+// ── Car Type Change Handler ───────────────────
+window.wzOnCarTypeChange = function(val) {
+    if (!wz || !wz.draft) return;
+    wz.draft.car_type = val;
+    const isNew = (val === 'new');
+    if (isNew) {
+        wz.draft.owner_count = '';
+        wz.draft.rto_code = '';
+        wz.draft.reg_date = '';
+        wz.draft.insurance_expiry = '';
+        wz.draft.puc_expiry = '';
+        wz.draft.tax_expiry = '';
+        // Reset Vahan Info category for new car
+        if (wz.draft.categories && wz.draft.categories.length > 0) {
+            wz.draft.categories.forEach(function(c) {
+                if (c.name === 'Vahan Info') {
+                    c.description = 'Vehicle is brand new and not yet registered. VAHAN records are not available as registration is pending with the RTO.';
+                    c._isAutoDesc = false;
+                }
+            });
+        }
+    }
+    goToWzStep(1);
+    updateWzPreview();
+};
+
+// ── Transmission Change Handler ───────────────
+window.wzOnTransmissionChange = function(val) {
+    if (!wz || !wz.draft) return;
+    wz.draft.transmission = val;
+    // Auto-update Gear & Transmission category description
+    if (wz.draft.categories && wz.draft.categories.length > 0) {
+        wz.draft.categories.forEach(function(c) {
+            if (c.name === 'Gear & Transmission') {
+                const status = c.status || 'good';
+                c.description = wzGetGearCatDesc(val, status);
+                c._isAutoDesc = false;
+            }
+        });
+    }
+    updateWzPreview();
+};
+
+function wzGetGearCatDesc(transmission, status) {
+    const isAuto = transmission === 'Automatic';
+    const s = status || 'good';
+    if (isAuto) {
+        if (s === 'good') return 'Automatic transmission gear shifts, torque converter response, drive/reverse/park/neutral selector, and gear progression tested. Smooth and jerk-free operation confirmed.';
+        if (s === 'attention') return 'Slight hesitation during gear shifts or minor delay in automatic gear progression noted. Transmission fluid condition recommended to be checked.';
+        return 'Jerky or harsh automatic gear shifts detected. Torque converter or transmission control module inspection recommended.';
+    } else {
+        if (s === 'good') return 'Clutch pedal play, gear shift smoothness, clutch engagement point, and drive transmission checked. All gear slots engage cleanly with no crunching or slip.';
+        if (s === 'attention') return 'Clutch pedal travel slightly firm or minor stiffness during gear engagement. Clutch adjustment may be required.';
+        return 'Clutch slipping or harsh gear shift jerks / transmission noise detected during test drive. Clutch kit inspection recommended.';
+    }
+}
 
 window.wzFieldChange = function(inputId) {
     if (!wz || !wz.draft) return;
     const el = document.getElementById(inputId);
     if (!el) return;
     const key = WZ_FIELD_MAP[inputId];
+    if (inputId === 'wf-transmission') { wzOnTransmissionChange(el.value); return; }
     if (key) {
         const old = wz.draft[key];
         wz.draft[key] = el.value;
@@ -6263,6 +6466,17 @@ function wzFormatTimestampIST(isoStr) {
 }
 
 window.wzComputeLocalMarketAnalysis = function(d) {
+    if (d.car_type === 'new') {
+        return {
+            inspector_notes: d.inspector_notes || '',
+            admin_remarks: 'New Car PDI — No negotiation margin applicable. Report any pre-delivery issues to the dealership before accepting the vehicle.',
+            recommendation: d.recommendation || '',
+            engine_calibration: d.engine_calibration || 'No active diagnostic trouble codes found.',
+            tyre_analysis_text: d.tyre_analysis_text || 'Brand new tyres — factory fresh. Verify tyre brand, size, and manufacturing date match vehicle specifications.',
+            market_price_analysis: 'Not applicable — brand new vehicle. Reference the manufacturer ex-showroom price. Suggest free accessories or extended warranty as value additions.',
+            negotiations: []
+        };
+    }
     d = d || {};
     const year = parseInt(d.vehicle_year) || (new Date().getFullYear() - 3);
     const brand = (d.vehicle_brand || 'Vehicle').trim();
@@ -6909,7 +7123,8 @@ function buildPreviewPayload() {
         negotiations:d.negotiations||[], repairs:d.repairs||[],
         service_history:d.service_history||[], documents:d.documents||[],
         hero_photos:d.hero_photos||{}, checklist:d.checklist||{},
-        tyre_data:d.tyre_data||{}, tyre_summary:d.tyre_summary||''
+        tyre_data:d.tyre_data||{}, tyre_summary:d.tyre_summary||'',
+        car_type:d.car_type||'used', transmission:d.transmission||'Manual'
     };
 }
 
