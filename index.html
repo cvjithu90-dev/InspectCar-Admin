@@ -4276,6 +4276,137 @@ let wzBroadcastChannel = null;
 const WZ_LS_KEY = 'inspectcar_active_report';
 const WZ_CHANNEL = 'inspectcar_report_channel';
 
+// ============================================================
+// RESILIENT REPORT STORAGE (IndexedDB + Safe Quota-Managed LocalStorage)
+// ============================================================
+const idbReportStore = {
+    _db: null,
+    async getDb() {
+        if (this._db) return this._db;
+        return new Promise(function(resolve) {
+            if (!('indexedDB' in window)) return resolve(null);
+            try {
+                var req = indexedDB.open('InspectCarReportStore', 1);
+                req.onupgradeneeded = function(e) {
+                    var db = e.target.result;
+                    if (!db.objectStoreNames.contains('reports')) {
+                        db.createObjectStore('reports');
+                    }
+                };
+                req.onsuccess = function(e) {
+                    idbReportStore._db = e.target.result;
+                    resolve(idbReportStore._db);
+                };
+                req.onerror = function() { resolve(null); };
+            } catch(e) { resolve(null); }
+        });
+    },
+    async set(key, val) {
+        try {
+            var db = await this.getDb();
+            if (!db) return false;
+            return new Promise(function(resolve) {
+                var tx = db.transaction('reports', 'readwrite');
+                tx.objectStore('reports').put(val, key);
+                tx.oncomplete = function() { resolve(true); };
+                tx.onerror = function() { resolve(false); };
+            });
+        } catch(e) { return false; }
+    },
+    async get(key) {
+        try {
+            var db = await this.getDb();
+            if (!db) return null;
+            return new Promise(function(resolve) {
+                var tx = db.transaction('reports', 'readonly');
+                var req = tx.objectStore('reports').get(key);
+                req.onsuccess = function() { resolve(req.result || null); };
+                req.onerror = function() { resolve(null); };
+            });
+        } catch(e) { return null; }
+    },
+    async delete(key) {
+        try {
+            var db = await this.getDb();
+            if (!db) return;
+            var tx = db.transaction('reports', 'readwrite');
+            tx.objectStore('reports').delete(key);
+        } catch(e) {}
+    }
+};
+
+// Purge any huge stale report keys or legacy bloated base64 from localStorage
+function pruneReportLocalStorage(keepBookingId) {
+    try {
+        var keepKey = keepBookingId ? (WZ_LS_KEY + '_' + keepBookingId) : null;
+        var keysToRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (!k) continue;
+            if (k.indexOf(WZ_LS_KEY + '_') === 0 && k !== keepKey) {
+                keysToRemove.push(k);
+            } else if (k === WZ_LS_KEY && !keepBookingId) {
+                keysToRemove.push(k);
+            }
+        }
+        keysToRemove.forEach(function(k) {
+            try { localStorage.removeItem(k); } catch(e) {}
+        });
+    } catch(e) {}
+}
+
+// Deep clone object but replace huge base64 images (>500 chars) with lightweight placeholders for localStorage
+function createSanitizedDraftForLocalStorage(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) {
+        return obj.map(createSanitizedDraftForLocalStorage);
+    }
+    var copy = {};
+    for (var prop in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, prop)) continue;
+        var val = obj[prop];
+        if (typeof val === 'string' && val.indexOf('data:image') === 0 && val.length > 500) {
+            // Replace large base64 with a tiny marker; full image is preserved in cloud Supabase & IndexedDB
+            copy[prop] = '[image_cached_in_db]';
+        } else if (typeof val === 'object' && val !== null) {
+            copy[prop] = createSanitizedDraftForLocalStorage(val);
+        } else {
+            copy[prop] = val;
+        }
+    }
+    return copy;
+}
+
+// Resilient localStorage write that never throws QuotaExceededError
+function safeSetLocalReport(key, data, currentBookingId) {
+    // 1. Always save full unsanitized payload to IndexedDB
+    try {
+        idbReportStore.set(key, data);
+    } catch(e) {}
+
+    // 2. Try saving to localStorage safely
+    try {
+        pruneReportLocalStorage(currentBookingId);
+        var jsonStr = JSON.stringify(data);
+        localStorage.setItem(key, jsonStr);
+    } catch(e) {
+        // QuotaExceededError or storage error:
+        // Try saving sanitized version without large base64 images
+        try {
+            var sanitized = createSanitizedDraftForLocalStorage(data);
+            localStorage.setItem(key, JSON.stringify(sanitized));
+        } catch(e2) {
+            try { localStorage.removeItem(key); } catch(e3) {}
+            console.warn('LocalStorage quota exhausted; safely preserved in Supabase & IndexedDB.');
+        }
+    }
+}
+
+// Run cleanup immediately to free any existing quota bottleneck in browser
+try {
+    pruneReportLocalStorage(null);
+} catch(e) {}
+
 const WIZARD_STEPS = [
     { id:1, label:'Vehicle Info',      icon:'fa-car' },
     { id:2, label:'Summary',           icon:'fa-star' },
@@ -4563,14 +4694,28 @@ function autoPopulateHeroPhotos(photos) {
 
 async function loadWzDraft() {
     const client = dbClient || window.supabase;
-    if (!client || !wz) return;
-    try {
-        const { data } = await client.from('report_drafts').select('*').eq('booking_id', wz.bookingId).single();
-        if (data && data.draft_data) {
-            wz.draft = Object.assign({}, wz.draft, data.draft_data);
-            wz.draft.currentStep = data.current_step || 1;
-        }
-    } catch(e) {
+    if (!wz) return;
+    let loaded = false;
+    if (client) {
+        try {
+            const { data } = await client.from('report_drafts').select('*').eq('booking_id', wz.bookingId).single();
+            if (data && data.draft_data) {
+                wz.draft = Object.assign({}, wz.draft, data.draft_data);
+                wz.draft.currentStep = data.current_step || 1;
+                loaded = true;
+            }
+        } catch(e) {}
+    }
+    if (!loaded) {
+        try {
+            const idbDraft = await idbReportStore.get(WZ_LS_KEY + '_' + wz.bookingId);
+            if (idbDraft) {
+                wz.draft = Object.assign({}, wz.draft, idbDraft);
+                loaded = true;
+            }
+        } catch(e) {}
+    }
+    if (!loaded) {
         try {
             const raw = localStorage.getItem(WZ_LS_KEY + '_' + wz.bookingId);
             if (raw) wz.draft = Object.assign({}, wz.draft, JSON.parse(raw));
@@ -5385,24 +5530,53 @@ window.wzDeleteChecklistPhoto = function(cat, itemIdx, photoIdx) {
     updateWzPreview();
 };
 
-window.wzUploadChecklistPhoto = function(cat, itemIdx, input) {
+async function uploadWzFileOrCompress(file, folder) {
+    var client = dbClient || window.supabase;
+    var bookingId = (wz && wz.bookingId) ? wz.bookingId : 'general';
+    if (client && client.storage) {
+        try {
+            var ext = (file.name && file.name.split('.').pop()) || 'jpg';
+            var fileName = (folder || 'admin') + '_' + bookingId + '_' + Date.now() + '_' + Math.random().toString(36).substring(2,7) + '.' + ext;
+            var filePath = 'photos/' + bookingId + '/' + fileName;
+            var res = await client.storage.from('report-documents').upload(filePath, file, {
+                contentType: file.type || 'image/jpeg',
+                upsert: true
+            });
+            if (res && !res.error) {
+                var pubRes = client.storage.from('report-documents').getPublicUrl(filePath);
+                if (pubRes && pubRes.data && pubRes.data.publicUrl) return pubRes.data.publicUrl;
+            }
+        } catch(err) {
+            console.warn('Storage upload note, using compressed fallback:', err);
+        }
+    }
+    // Fallback: compress to optimized base64
+    return new Promise(function(resolve) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            compressWzImage(e.target.result, 900, 675, 0.7).then(resolve);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+window.wzUploadChecklistPhoto = async function(cat, itemIdx, input) {
     if (!input.files || !input.files[0]) return;
     if (!wz || !wz.draft || !wz.draft.checklist || !wz.draft.checklist[cat] || !wz.draft.checklist[cat][itemIdx]) return;
     var file = input.files[0];
-    showToast('Compressing and adding photo...', 'info');
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        compressWzImage(e.target.result, 1200, 900, 0.75).then(function(compressed) {
-            if (!wz.draft.checklist[cat][itemIdx].photos) {
-                wz.draft.checklist[cat][itemIdx].photos = [];
-            }
-            wz.draft.checklist[cat][itemIdx].photos.push(compressed);
-            goToWzStep(3);
-            updateWzPreview();
-            showToast('Photo added to checkpoint!', 'success');
-        });
-    };
-    reader.readAsDataURL(file);
+    showToast('Uploading photo...', 'info');
+    try {
+        var photoUrl = await uploadWzFileOrCompress(file, 'chk');
+        if (!wz.draft.checklist[cat][itemIdx].photos) {
+            wz.draft.checklist[cat][itemIdx].photos = [];
+        }
+        wz.draft.checklist[cat][itemIdx].photos.push(photoUrl);
+        goToWzStep(3);
+        updateWzPreview();
+        showToast('Photo added to checkpoint!', 'success');
+    } catch(err) {
+        showToast('Failed to add photo: ' + err.message, 'error');
+    }
 };
 
 // Negotiations
@@ -5954,26 +6128,35 @@ window.wzHandleDocUpload = function(files) {
     if (!wz.draft.documents) wz.draft.documents = [];
     var typeEl = document.getElementById('doc-type-select');
     var docType = typeEl ? typeEl.value : 'other';
-    Array.from(files).forEach(function(file) {
-        var reader = new FileReader();
-        reader.onload = function(ev) {
-            wz.draft.documents.push({ file_name: file.name, doc_type: docType, file_size: file.size, mime_type: file.type, file_url: ev.target.result });
-            goToWzStep(6); updateWzPreview();
-        };
-        reader.readAsDataURL(file);
-    });
+    var fileList = Array.from(files);
+    for (var i = 0; i < fileList.length; i++) {
+        var file = fileList[i];
+        showToast('Uploading ' + file.name + '...', 'info');
+        try {
+            var fileUrl = await uploadWzFileOrCompress(file, 'doc');
+            wz.draft.documents.push({ file_name: file.name, doc_type: docType, file_size: file.size, mime_type: file.type, file_url: fileUrl });
+        } catch(err) {
+            console.warn('Doc upload error:', err);
+        }
+    }
+    goToWzStep(6);
+    updateWzPreview();
+    showToast('Documents updated!', 'success');
 };
-window.wzSetHeroPhoto = function(side, input) {
+window.wzSetHeroPhoto = async function(side, input) {
     if (!input.files[0]) return;
     if (!wz.draft.hero_photos) wz.draft.hero_photos = {};
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        compressWzImage(e.target.result, 1200, 800, 0.75).then(function(compressed) {
-            wz.draft.hero_photos[side] = compressed;
-            goToWzStep(6); updateWzPreview();
-        });
-    };
-    reader.readAsDataURL(input.files[0]);
+    var file = input.files[0];
+    showToast('Uploading hero photo...', 'info');
+    try {
+        var photoUrl = await uploadWzFileOrCompress(file, 'hero_' + side);
+        wz.draft.hero_photos[side] = photoUrl;
+        goToWzStep(6);
+        updateWzPreview();
+        showToast('Hero photo updated!', 'success');
+    } catch(err) {
+        showToast('Hero photo upload failed: ' + err.message, 'error');
+    }
 };
 window.wzClearHeroPhoto = function(side) {
     if (wz.draft.hero_photos) delete wz.draft.hero_photos[side];
@@ -6695,7 +6878,7 @@ function updateWzPreview() {
     if (!wz || !wz.draft) return;
     var payload = buildPreviewPayload();
     try {
-        localStorage.setItem(WZ_LS_KEY, JSON.stringify(payload));
+        safeSetLocalReport(WZ_LS_KEY, payload, wz.bookingId);
         if (wzBroadcastChannel) wzBroadcastChannel.postMessage({ type: 'REPORT_UPDATE', payload: payload });
     } catch(e) {}
     if (wz.currentStep === 9) {
@@ -6769,12 +6952,19 @@ window.wzSaveDraft = async function() {
     try {
         var client = dbClient || window.supabase;
         var payload = { booking_id: wz.bookingId, draft_data: wz.draft, current_step: wz.currentStep, last_saved: new Date().toISOString() };
-        if (client) await client.from('report_drafts').upsert(payload, { onConflict: 'booking_id' });
-        localStorage.setItem(WZ_LS_KEY + '_' + wz.bookingId, JSON.stringify(wz.draft));
+        if (client) {
+            var res = await client.from('report_drafts').upsert(payload, { onConflict: 'booking_id' });
+            if (res && res.error) console.warn('Supabase draft save note:', res.error);
+        }
+        safeSetLocalReport(WZ_LS_KEY + '_' + wz.bookingId, wz.draft, wz.bookingId);
+        safeSetLocalReport(WZ_LS_KEY, buildPreviewPayload(), wz.bookingId);
         var badge = document.getElementById('wz-autosave-badge');
         if (badge) { badge.style.display = 'flex'; setTimeout(function(){badge.style.display='none';}, 3000); }
         showToast('Draft saved!', 'success');
-    } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+    } catch(e) {
+        console.error('wzSaveDraft error:', e);
+        showToast('Save failed: ' + e.message, 'error');
+    }
 };
 
 function startWzAutoSave() {

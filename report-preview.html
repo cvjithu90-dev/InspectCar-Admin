@@ -1264,11 +1264,38 @@ table.cp td.note { color: #8A8296; }
     bc.onmessage = e => { if (e.data && e.data.type === 'REPORT_UPDATE') renderReport(e.data.payload); };
   } catch(e) {}
 
-  // ── Load from localStorage on open ───────────────────────────
-  function loadFromStorage() {
+  // ── Persistent storage loader (IndexedDB + localStorage) ───
+  const idbReportStore = {
+    async get(key) {
+      if (!('indexedDB' in window)) return null;
+      return new Promise(function(resolve) {
+        try {
+          var req = indexedDB.open('InspectCarReportStore', 1);
+          req.onsuccess = function(e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains('reports')) return resolve(null);
+            var tx = db.transaction('reports', 'readonly');
+            var r = tx.objectStore('reports').get(key);
+            r.onsuccess = function() { resolve(r.result || null); };
+            r.onerror = function() { resolve(null); };
+          };
+          req.onerror = function() { resolve(null); };
+        } catch(e) { resolve(null); }
+      });
+    }
+  };
+
+  async function loadFromStorage() {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (raw) renderReport(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        renderReport(parsed);
+      }
+    } catch(e) {}
+    try {
+      const idbData = await idbReportStore.get(LS_KEY);
+      if (idbData) renderReport(idbData);
     } catch(e) {}
   }
   loadFromStorage();
