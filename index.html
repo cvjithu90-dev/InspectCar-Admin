@@ -4737,9 +4737,9 @@ function getDefaultCatSummary(name, status) {
             critical: 'Low tread depth (<2mm) or sidewall damage detected on one or more tyres. Replacement recommended.'
         },
         'Brakes': {
-            good: 'Brake pads, rotors, pedal travel, and handbrake efficiency tested. Operating smoothly with optimal stopping power.',
-            attention: 'Moderate wear on brake pads or minor surface rust on brake discs noted during test.',
-            critical: 'Worn out brake pads, spongy brake pedal response, or handbrake slippage observed.'
+            good: 'Brake pads, visible disc rotors, pedal resistance, and handbrake hold inspected stationary when idle. Operating smoothly with proper pedal feel and positive handbrake hold.',
+            attention: 'Moderate wear on brake pads or minor surface rust on brake discs visually noted during stationary check. Routine pad monitoring recommended.',
+            critical: 'Excessively worn brake pads, scored rotors, or spongy brake pedal feel noted during stationary check. Brake overhaul recommended.'
         },
         'Underbody': {
             good: 'Visually inspected the underbody and chassis frame from ground level (without lift). Floor pan, exhaust system, and lower crossmembers examined for rust, leaks, and structural damage. No major concerns observed.',
@@ -4767,9 +4767,9 @@ function getDefaultCatSummary(name, status) {
             critical: 'AC compressor failing to engage or insufficient cooling output detected.'
         },
         'Suspension': {
-            good: 'Front struts, rear shock absorbers, bush arm condition, and driveability tested. No thudding noise over bumps.',
-            attention: 'Slight stiffness or minor rubber bush aging observed on front lower suspension arms.',
-            critical: 'Leaking shock absorber or prominent clunking sound over uneven surfaces.'
+            good: 'Visually inspected front struts, rear shock absorbers, suspension bush arms, and linkages while stationary. No oil leak or wear found.',
+            attention: 'Visually inspected suspension components while stationary. Minor surface aging or hairline cracking observed on rubber bushes; no oil leaks detected on shock absorbers.',
+            critical: 'Visually inspected suspension components. Visible oil leakage detected on shock absorber/strut, or torn dust boot / damaged suspension bush found.'
         },
         'Gear & Transmission': {
             good: wzGetGearCatDesc((wz && wz.draft && wz.draft.transmission) || 'Manual', 'good'),
@@ -4777,8 +4777,8 @@ function getDefaultCatSummary(name, status) {
             critical: wzGetGearCatDesc((wz && wz.draft && wz.draft.transmission) || 'Manual', 'critical')
         },
         'Inspection Info': {
-            good: 'Comprehensive 300+ point inspection conducted at doorstep/yard by certified technician with full photo verification.',
-            attention: 'Inspection completed with limited access to highway speed test drive due to traffic/yard constraints.',
+            good: 'Comprehensive 300+ point stationary inspection conducted at doorstep/yard by certified technician with full photo verification.',
+            attention: 'Stationary inspection completed at doorstep/yard at idle as per standard non-drive vehicle inspection protocol.',
             critical: 'Partial inspection completed due to vehicle non-start or battery discharge.'
         },
         'Vahan Info': {
@@ -5601,13 +5601,13 @@ function wzGetGearCatDesc(transmission, status) {
     const isAuto = transmission === 'Automatic';
     const s = status || 'good';
     if (isAuto) {
-        if (s === 'good') return 'Automatic transmission gear shifts, torque converter response, drive/reverse/park/neutral selector, and gear progression tested. Smooth and jerk-free operation confirmed.';
-        if (s === 'attention') return 'Slight hesitation during gear shifts or minor delay in automatic gear progression noted. Transmission fluid condition recommended to be checked.';
-        return 'Jerky or harsh automatic gear shifts detected. Torque converter or transmission control module inspection recommended.';
+        if (s === 'good') return 'Inspected gear transition when idle across Park, Reverse, Neutral, and Drive modes while stationary. Gear selector engagement tested; smooth transition confirmed without abnormal vibration, lag, or jerk.';
+        if (s === 'attention') return 'Inspected gear transition when idle while stationary. Minor hesitation or slight delay noted during gear selector engagement. Transmission fluid level and condition recommended to be checked.';
+        return 'Inspected gear transition when idle while stationary. Harsh engagement jerk or clunk detected when shifting selector into Drive or Reverse. Transmission inspection recommended.';
     } else {
-        if (s === 'good') return 'Clutch pedal play, gear shift smoothness, clutch engagement point, and drive transmission checked. All gear slots engage cleanly with no crunching or slip.';
-        if (s === 'attention') return 'Clutch pedal travel slightly firm or minor stiffness during gear engagement. Clutch adjustment may be required.';
-        return 'Clutch slipping or harsh gear shift jerks / transmission noise detected during test drive. Clutch kit inspection recommended.';
+        if (s === 'good') return 'Inspected gear transition and clutch pedal feel when idle while stationary. Clutch pedal play, travel, and stationary gear slot engagement verified smooth with no crunching or abnormal resistance.';
+        if (s === 'attention') return 'Inspected gear transition when idle while stationary. Clutch pedal travel slightly firm or minor stiffness noted during stationary gear slot engagement. Clutch adjustment or fluid check recommended.';
+        return 'Inspected gear transition when idle while stationary. Clutch pedal abnormally hard, spongy, or gears grinding/difficult to engage at idle. Clutch kit inspection recommended.';
     }
 }
 
