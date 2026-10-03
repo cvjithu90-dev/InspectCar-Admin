@@ -2588,7 +2588,13 @@
             }
 
             $('#detail-vehicle').textContent = `${b.vehicle_year || ''} ${b.vehicle_brand || ''} ${b.vehicle_model || ''} (${b.vehicle_fuel || 'Petrol'})`;
-            $('#detail-reg').textContent = b.vehicle_reg || 'N/A';
+            if ($('#detail-reg')) {
+                if (b.vehicle_reg) {
+                    $('#detail-reg').innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px; background:rgba(99,102,241,0.18); border:1px solid rgba(99,102,241,0.4); color:#c7d2fe; padding:2px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px;"><i class="fas fa-id-card" style="font-size:11px; color:#818cf8;"></i> ${b.vehicle_reg}</span>`;
+                } else {
+                    $('#detail-reg').innerHTML = `<span class="text-secondary" style="font-style:italic;">Reg: Pending / New</span>`;
+                }
+            }
             $('#detail-package').textContent = b.package_name;
             $('#detail-price').textContent = formatCurrency(b.total_price);
             $('#detail-datetime').textContent = `${formatDate(b.inspection_date)} at ${b.inspection_time}`;
@@ -4677,6 +4683,57 @@ function buildWizardShell() {
     </div>`;
 }
 
+// ── Header Subtitle & Booking Synchronization Helpers ──────────
+function updateWzSubtitle() {
+    const subEl = document.getElementById('wz-subtitle-text');
+    if (!subEl || !wz) return;
+    const d = wz.draft || {};
+    const b = wz.booking || {};
+    const brand = d.vehicle_brand || b.vehicle_brand || '';
+    const model = d.vehicle_model || b.vehicle_model || '';
+    const reg = (d.vehicle_reg || b.vehicle_reg || '').trim();
+    const cust = d.customer_name || b.customer_name || '';
+    const vName = [brand, model].filter(Boolean).join(' ');
+    subEl.textContent = (vName || 'Vehicle') + (reg ? ' (' + reg + ')' : '') + (cust ? ' — ' + cust : '');
+}
+
+async function syncWzDraftToBooking() {
+    if (!wz || !wz.bookingId || !wz.draft) return;
+    const client = dbClient || window.supabase;
+    if (!client) return;
+    const d = wz.draft;
+    const updatePayload = {};
+
+    if (d.vehicle_reg !== undefined) {
+        const cleanedReg = (d.vehicle_reg || '').trim().toUpperCase();
+        updatePayload.vehicle_reg = cleanedReg || null;
+    }
+    if (d.vehicle_brand) updatePayload.vehicle_brand = d.vehicle_brand;
+    if (d.vehicle_model) updatePayload.vehicle_model = d.vehicle_model;
+    if (d.vehicle_year) updatePayload.vehicle_year = d.vehicle_year;
+    if (d.vehicle_fuel) updatePayload.vehicle_fuel = d.vehicle_fuel;
+    if (d.vin_number !== undefined) updatePayload.vin_number = d.vin_number || null;
+    if (d.engine_number !== undefined) updatePayload.engine_number = d.engine_number || null;
+    if (d.color !== undefined) updatePayload.color = d.color || null;
+    if (d.body_type !== undefined) updatePayload.body_type = d.body_type || null;
+    if (d.odometer_km !== undefined) updatePayload.odometer_km = d.odometer_km ? Number(d.odometer_km) : null;
+    if (d.owner_count !== undefined) updatePayload.owner_count = d.owner_count ? Number(d.owner_count) : null;
+    if (d.rto_code !== undefined) updatePayload.rto_code = d.rto_code || null;
+    if (d.reg_date !== undefined) updatePayload.reg_date = d.reg_date || null;
+    if (d.insurance_expiry !== undefined) updatePayload.insurance_expiry = d.insurance_expiry || null;
+    if (d.puc_expiry !== undefined) updatePayload.puc_expiry = d.puc_expiry || null;
+    if (d.tax_expiry !== undefined) updatePayload.tax_expiry = d.tax_expiry || null;
+
+    if (Object.keys(updatePayload).length > 0) {
+        try {
+            await client.from('bookings').update(updatePayload).eq('id', wz.bookingId);
+            if (wz.booking) Object.assign(wz.booking, updatePayload);
+        } catch(e) {
+            console.warn('syncWzDraftToBooking note:', e);
+        }
+    }
+}
+
 // ── Data loaders ─────────────────────────────────────────────
 async function loadWzBooking() {
     const client = dbClient || window.supabase;
@@ -4705,9 +4762,8 @@ async function loadWzBooking() {
                 booking_internal_notes: data.notes || ''
             });
             const titleEl = document.getElementById('wz-title-text');
-            const subEl   = document.getElementById('wz-subtitle-text');
             if (titleEl) titleEl.textContent = 'Report: ' + data.booking_ref;
-            if (subEl)   subEl.textContent = (data.vehicle_brand||'') + ' ' + (data.vehicle_model||'') + (data.vehicle_reg ? ' (' + data.vehicle_reg + ')' : '') + ' — ' + (data.customer_name||'');
+            updateWzSubtitle();
         }
     } catch(e) { console.warn('loadWzBooking:', e); }
 }
@@ -4925,6 +4981,10 @@ async function loadWzDraft() {
     if (wz.draft && wz.draft.categories && wz.draft.categories.length > 0) {
         wz.draft._categoriesChecklistSynced = true;
     }
+    updateWzSubtitle();
+    if (wz.draft && (wz.draft.vehicle_reg || wz.draft.vin_number || wz.draft.odometer_km)) {
+        syncWzDraftToBooking();
+    }
 }
 
 function getDefaultCatSummary(name, status) {
@@ -5028,6 +5088,9 @@ function autoPopulateCategories() {
 // ── Navigation ───────────────────────────────────────────────
 function goToWzStep(step) {
     if (!wz) return;
+    if (wz.currentStep === 1 && wz.draft) {
+        syncWzDraftToBooking();
+    }
     const n = Math.max(1, Math.min(10, step));
     wz.currentStep = n;
     if (wz.draft) wz.draft.currentStep = n;
@@ -5840,9 +5903,20 @@ window.wzFieldChange = function(inputId) {
     const key = WZ_FIELD_MAP[inputId];
     if (inputId === 'wf-transmission') { wzOnTransmissionChange(el.value); return; }
     if (key) {
+        if (key === 'vehicle_reg') {
+            el.value = el.value.trim().toUpperCase();
+        }
         const old = wz.draft[key];
         wz.draft[key] = el.value;
         wzLogAudit(key, old, el.value);
+
+        if (['vehicle_reg', 'vehicle_brand', 'vehicle_model', 'customer_name'].includes(key)) {
+            updateWzSubtitle();
+        }
+        if (['vehicle_reg', 'vin_number', 'engine_number', 'color', 'body_type', 'odometer_km', 'owner_count', 'rto_code', 'vehicle_brand', 'vehicle_model', 'vehicle_year', 'vehicle_fuel'].includes(key)) {
+            if (window._wzSyncTimer) clearTimeout(window._wzSyncTimer);
+            window._wzSyncTimer = setTimeout(function() { syncWzDraftToBooking(); }, 1200);
+        }
     }
     updateWzPreview();
 };
@@ -7400,12 +7474,14 @@ window.wzSaveDraft = async function() {
         if (client) {
             var res = await client.from('report_drafts').upsert(payload, { onConflict: 'booking_id' });
             if (res && res.error) console.warn('Supabase draft save note:', res.error);
+            await syncWzDraftToBooking();
         }
+        updateWzSubtitle();
         safeSetLocalReport(WZ_LS_KEY + '_' + wz.bookingId, wz.draft, wz.bookingId);
         safeSetLocalReport(WZ_LS_KEY, buildPreviewPayload(), wz.bookingId);
         var badge = document.getElementById('wz-autosave-badge');
         if (badge) { badge.style.display = 'flex'; setTimeout(function(){badge.style.display='none';}, 3000); }
-        showToast('Draft saved!', 'success');
+        showToast('Draft & booking details saved!', 'success');
     } catch(e) {
         console.error('wzSaveDraft error:', e);
         showToast('Save failed: ' + e.message, 'error');
@@ -7426,6 +7502,7 @@ window.wzPublishReport = async function() {
         var client = dbClient || window.supabase;
         var payload = buildPreviewPayload();
         await wzSaveDraft();
+        await syncWzDraftToBooking();
         if (client) {
             var { data: versions } = await client.from('report_versions').select('version_number').eq('booking_id', wz.bookingId).order('version_number', { ascending: false }).limit(1);
             var nextVersion = ((versions && versions[0] ? versions[0].version_number : 0) || 0) + 1;
