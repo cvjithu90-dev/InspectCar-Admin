@@ -632,7 +632,7 @@ table.cp td.note { color: #8A8296; }
     </tbody>
   </table>
 
-  <div style="margin-top:20px;">
+  <div id="svc-docs-section" style="margin-top:20px;">
     <div class="subhead">Supporting Documents</div>
     <div class="doc-grid" id="doc-grid">
       <!-- Documents populated dynamically -->
@@ -644,6 +644,9 @@ table.cp td.note { color: #8A8296; }
     <div>Page 6</div>
   </div>
 </div>
+
+<!-- Dynamic Continuation Page for Service History (Page 6B) if > 8 records -->
+<div id="svc-continuation-container"></div>
 
 <!-- ============================================================
      PAGES 7+: PHOTO GALLERY + CHECKPOINTS (Dynamically Paginated)
@@ -904,60 +907,110 @@ table.cp td.note { color: #8A8296; }
       tables.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No repair estimates added yet.</p>';
     }
 
-    // Service History
+    // Service History & Supporting Documents (Multi-Page Paginated)
     const services = d.service_history || [];
     const tbody = document.getElementById('svc-tbody');
     const summaryBox = document.getElementById('svc-summary-box');
     const summaryText = document.getElementById('svc-summary-text');
+    const svcDocsSection = document.getElementById('svc-docs-section');
+    const svcContContainer = document.getElementById('svc-continuation-container');
+    const docs = d.documents || [];
+
+    const docsHtml = docs.length > 0 ? docs.map(doc => `
+      <div class="doc-card">
+        <div class="doc-icon">📄</div>
+        <div class="doc-info">
+          <div class="doc-name">${escHtml(doc.file_name||doc.doc_type||'Document')}</div>
+          <div class="doc-type">${escHtml(doc.doc_type||'')}</div>
+        </div>
+      </div>`).join('') : '<p style="color:#9CA3AF; font-size:10px; padding:6px 0;">No supporting documents attached.</p>';
 
     if (services.length > 0) {
-      tbody.innerHTML = services.map(s => `<tr>
-        <td>${fmt(s.service_date)}</td>
-        <td>${escHtml(s.dealer_name||s.service_center||'—')}</td>
-        <td>${s.odometer_km ? Number(s.odometer_km).toLocaleString('en-IN') + ' km' : '—'}</td>
-        <td>${fmt(s.service_type)}</td>
-        <td>${escHtml(s.description||'—')}</td>
-        <td>₹${s.cost ? Number(s.cost).toLocaleString('en-IN') : '—'}</td>
-      </tr>`).join('');
-
-      // Auto-generate service history summary
-      const count = services.length;
-      const dates = services.map(s => s.service_date).filter(Boolean).sort();
-      const odos = services.map(s => Number(s.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>a-b);
-      const totalCost = services.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
-
-      let summary = d.service_history_note || `This vehicle has <b>${count} recorded service visit${count > 1 ? 's' : ''}</b> on file`;
-      if (!d.service_history_note) {
-        if (dates.length > 0) {
-          summary += ` ranging from <b>${fmt(dates[0])}</b> to <b>${fmt(dates[dates.length - 1])}</b>`;
-        }
-        if (odos.length > 0) {
-          summary += `. Odometer readings span from <b>${odos[0].toLocaleString('en-IN')} km</b> up to <b>${odos[odos.length - 1].toLocaleString('en-IN')} km</b>`;
-        }
-        if (totalCost > 0) {
-          summary += `, with total recorded maintenance cost of <b>₹${totalCost.toLocaleString('en-IN')}</b>`;
-        }
-        summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.`;
-      }
-
-      if (summaryText) summaryText.innerHTML = d.service_history_note ? escHtml(d.service_history_note).replace(/\n/g, '<br>') : summary;
+      if (summaryText) summaryText.innerHTML = d.service_history_note ? escHtml(d.service_history_note).replace(/\n/g, '<br>') : '';
       if (summaryBox) summaryBox.style.display = 'block';
+
+      if (services.length <= 8) {
+        // Fits on Page 6
+        tbody.innerHTML = services.map(s => `<tr>
+          <td>${fmt(s.service_date)}</td>
+          <td>${escHtml(s.dealer_name||s.service_center||'—')}</td>
+          <td>${s.odometer_km ? Number(s.odometer_km).toLocaleString('en-IN') + ' km' : '—'}</td>
+          <td>${fmt(s.service_type)}</td>
+          <td>${escHtml(s.description||'—')}</td>
+          <td>₹${s.cost ? Number(s.cost).toLocaleString('en-IN') : '—'}</td>
+        </tr>`).join('');
+
+        if (svcDocsSection) svcDocsSection.style.display = 'block';
+        const docGrid = document.getElementById('doc-grid');
+        if (docGrid) docGrid.innerHTML = docsHtml;
+        if (svcContContainer) svcContContainer.innerHTML = '';
+      } else {
+        // Spans to Continuation Page (Page 7)
+        const firstBatch = services.slice(0, 7);
+        const secondBatch = services.slice(7);
+
+        tbody.innerHTML = firstBatch.map(s => `<tr>
+          <td>${fmt(s.service_date)}</td>
+          <td>${escHtml(s.dealer_name||s.service_center||'—')}</td>
+          <td>${s.odometer_km ? Number(s.odometer_km).toLocaleString('en-IN') + ' km' : '—'}</td>
+          <td>${fmt(s.service_type)}</td>
+          <td>${escHtml(s.description||'—')}</td>
+          <td>₹${s.cost ? Number(s.cost).toLocaleString('en-IN') : '—'}</td>
+        </tr>`).join('');
+
+        if (svcDocsSection) svcDocsSection.style.display = 'none';
+
+        if (svcContContainer) {
+          svcContContainer.innerHTML = `
+            <div class="page" id="pg-service-cont">
+              <div class="hdr">
+                <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+                <div class="hdr-right">Service History (Continued)<br/>Verified service records</div>
+              </div>
+
+              <div class="pill-purple">Service History</div>
+              <div class="section-title">Vehicle Service Records (Continued)</div>
+              <div class="section-sub">Remaining verified service history intervals & supporting documents.</div>
+
+              <table class="svc">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Service Center / Dealer</th><th>Odometer</th><th>Service Type</th><th>Description</th><th>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${secondBatch.map(s => `<tr>
+                    <td>${fmt(s.service_date)}</td>
+                    <td>${escHtml(s.dealer_name||s.service_center||'—')}</td>
+                    <td>${s.odometer_km ? Number(s.odometer_km).toLocaleString('en-IN') + ' km' : '—'}</td>
+                    <td>${fmt(s.service_type)}</td>
+                    <td>${escHtml(s.description||'—')}</td>
+                    <td>₹${s.cost ? Number(s.cost).toLocaleString('en-IN') : '—'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+
+              <div style="margin-top:20px;">
+                <div class="subhead">Supporting Documents</div>
+                <div class="doc-grid">
+                  ${docsHtml}
+                </div>
+              </div>
+
+              <div class="footer">
+                <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+                <div>Page 7</div>
+              </div>
+            </div>
+          `;
+        }
+      }
     } else {
       if (summaryBox) summaryBox.style.display = 'none';
-    }
-
-    // Documents
-    const docs = d.documents || [];
-    const docGrid = document.getElementById('doc-grid');
-    if (docs.length > 0) {
-      docGrid.innerHTML = docs.map(doc => `
-        <div class="doc-card">
-          <div class="doc-icon">📄</div>
-          <div class="doc-info">
-            <div class="doc-name">${escHtml(doc.file_name||doc.doc_type||'Document')}</div>
-            <div class="doc-type">${escHtml(doc.doc_type||'')}</div>
-          </div>
-        </div>`).join('');
+      if (svcDocsSection) svcDocsSection.style.display = 'block';
+      const docGrid = document.getElementById('doc-grid');
+      if (docGrid) docGrid.innerHTML = docsHtml;
+      if (svcContContainer) svcContContainer.innerHTML = '';
     }
 
     // Hero Photos & Checkpoint Pages (Dynamically Paginated across multiple A4 pages)
@@ -1091,7 +1144,7 @@ table.cp td.note { color: #8A8296; }
       cpPages.push([{ name: 'Diagnostic Checkpoints', items: [] }]);
     }
 
-    const startPageNumber = 7;
+    const startPageNumber = (services.length > 8) ? 8 : 7;
     if (cpContainer) {
       cpContainer.innerHTML = cpPages.map((pageCats, pIdx) => {
         const pageNum = startPageNumber + pIdx;

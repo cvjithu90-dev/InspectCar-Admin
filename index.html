@@ -780,6 +780,8 @@
     </style>
     <!-- PDF.js: client-side PDF text extraction for Service History auto-capture -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SheetJS (xlsx): client-side Excel/CSV parsing for Service History auto-capture -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div id="toast-container"></div>
@@ -5587,28 +5589,42 @@ function buildStep5() {
             '<td><button class="wz-del-btn" onclick="wzDelSvc(' + i + ')">✕</button></td></tr>';
     }).join('');
 
-    // PDF upload zone HTML
+    // Multi-Format Service History Upload Zone (PDF, Scanned PDF, Images, Excel/CSV)
     const pdfUploadZone =
         '<div id="svc-pdf-upload-area" style="' +
-            'margin-bottom:14px;border:2px dashed var(--border-color);border-radius:10px;' +
+            'margin-bottom:14px;border:2px dashed #7C3AED;border-radius:12px;' +
             'padding:22px 18px;text-align:center;cursor:pointer;transition:all 0.2s;' +
-            'background:var(--bg-color);' +
+            'background:rgba(124,58,237,0.03);' +
         '" ' +
         'onclick="document.getElementById(\'svc-pdf-input\').click()" ' +
-        'ondragover="event.preventDefault();this.style.borderColor=\'#7C3AED\';this.style.background=\'rgba(124,58,237,0.06)\';" ' +
-        'ondragleave="this.style.borderColor=\'\';this.style.background=\'\';" ' +
+        'ondragover="event.preventDefault();this.style.borderColor=\'#A78BFA\';this.style.background=\'rgba(124,58,237,0.08)\';" ' +
+        'ondragleave="this.style.borderColor=\'#7C3AED\';this.style.background=\'rgba(124,58,237,0.03)\';" ' +
         'ondrop="wzSvcHandleDrop(event)">' +
-            '<input type="file" id="svc-pdf-input" accept=".pdf" multiple style="display:none;" onchange="wzSvcHandleFiles(this.files)">' +
-            '<div style="font-size:22px;margin-bottom:6px;">📄</div>' +
-            '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:3px;">Upload Service History PDF</div>' +
-            '<div style="font-size:11px;color:var(--text-secondary);">Drop your dealer invoice or service booklet — data auto-fills below</div>' +
-            '<button class="wz-api-btn" style="margin-top:10px;" onclick="event.stopPropagation();document.getElementById(\'svc-pdf-input\').click()">' +
-                '<i class="fas fa-file-pdf" style="color:#EF4444;"></i> Choose PDF' +
-            '</button>' +
+            '<input type="file" id="svc-pdf-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv" multiple style="display:none;" onchange="wzSvcHandleFiles(this.files)">' +
+            '<div style="display:flex;justify-content:center;gap:14px;font-size:26px;margin-bottom:8px;">' +
+                '<span title="PDF Documents">📄</span>' +
+                '<span title="Excel & CSV Spreadsheets">📊</span>' +
+                '<span title="Mobile / Scanned Images">📷</span>' +
+            '</div>' +
+            '<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">Upload Service History (PDF, Image, Scanned PDF, or Excel/CSV)</div>' +
+            '<div style="font-size:11.5px;color:var(--text-secondary);max-width:580px;margin:0 auto 12px;line-height:1.5;">' +
+                'Drop your dealer invoice, service booklet photos, Excel sheets, or scanned documents. The AI engine automatically parses service intervals, costs, odometer readings, and generates an Executive Summary with major points & complaints.' +
+            '</div>' +
+            '<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">' +
+                '<button type="button" class="wz-api-btn" style="padding:6px 12px;font-size:11.5px;" onclick="event.stopPropagation();wzTriggerSvcUpload(\'.pdf\')">' +
+                    '<i class="fas fa-file-pdf" style="color:#EF4444;margin-right:5px;"></i> Upload PDF' +
+                '</button>' +
+                '<button type="button" class="wz-api-btn" style="padding:6px 12px;font-size:11.5px;" onclick="event.stopPropagation();wzTriggerSvcUpload(\'.xlsx,.xls,.csv\')">' +
+                    '<i class="fas fa-file-excel" style="color:#10B981;margin-right:5px;"></i> Upload Excel / CSV' +
+                '</button>' +
+                '<button type="button" class="wz-api-btn" style="padding:6px 12px;font-size:11.5px;" onclick="event.stopPropagation();wzTriggerSvcUpload(\'.jpg,.jpeg,.png,.webp\')">' +
+                    '<i class="fas fa-camera" style="color:#3B82F6;margin-right:5px;"></i> Upload Photos / Bills' +
+                '</button>' +
+            '</div>' +
         '</div>' +
-        '<div id="svc-pdf-processing" style="display:none;text-align:center;padding:14px;color:var(--text-secondary);font-size:12px;">' +
-            '<span id="svc-pdf-spinner" style="display:inline-block;width:16px;height:16px;border:2px solid var(--border-color);border-top-color:#7C3AED;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:8px;vertical-align:middle;"></span>' +
-            '<span id="svc-pdf-msg">Reading PDF…</span>' +
+        '<div id="svc-pdf-processing" style="display:none;text-align:center;padding:16px;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:10px;margin-bottom:14px;color:var(--text-secondary);font-size:12.5px;">' +
+            '<span id="svc-pdf-spinner" style="display:inline-block;width:18px;height:18px;border:2.5px solid var(--border-color);border-top-color:#7C3AED;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:10px;vertical-align:middle;"></span>' +
+            '<span id="svc-pdf-msg" style="font-weight:600;color:#C4B5FD;">Analyzing service document…</span>' +
         '</div>';
 
     // Executive Summary Card HTML
@@ -6128,13 +6144,8 @@ window.wzUpdateSvcSummary = function(val) {
     updateWzPreview();
 };
 
-window.wzAutoGenerateSvcSummary = function() {
-    if (!wz || !wz.draft) return;
-    const services = wz.draft.service_history || [];
-    if (!services.length) {
-        showToast('No service records added yet to summarize.', 'error');
-        return;
-    }
+window.wzBuildExecutiveSummaryText = function(services, extraInsights) {
+    if (!services || !services.length) return '';
     const count = services.length;
     const dates = services.map(s => s.service_date).filter(Boolean).sort();
     const odos = services.map(s => Number(s.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>a-b);
@@ -6150,8 +6161,83 @@ window.wzAutoGenerateSvcSummary = function() {
     if (totalCost > 0) {
         summary += `, with total recorded maintenance cost of <b>₹${totalCost.toLocaleString('en-IN')}</b>`;
     }
-    summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.`;
+    summary += `. Service records indicate regular scheduled maintenance with no major structural red flags noted.\n\n🔴 Major Points & Highlights:`;
 
+    const highlights = [];
+    const turboVisits = [];
+    const emissionVisits = [];
+    const brakeVisits = [];
+    const bodyVisits = [];
+    const suspensionVisits = [];
+    const clutchVisits = [];
+    const electricalVisits = [];
+
+    services.forEach(s => {
+        const text = ((s.description || '') + ' ' + (s.service_type || '')).toLowerCase();
+        const odoStr = s.odometer_km ? `${Number(s.odometer_km).toLocaleString('en-IN')} km` : (s.service_date || '');
+
+        if (/turbo/i.test(text)) turboVisits.push(odoStr);
+        if (/emission|dpf|egr|catalytic/i.test(text)) emissionVisits.push(odoStr);
+        if (/brake|pad|disc|rotor|caliper|shoe/i.test(text)) brakeVisits.push({ odo: odoStr, desc: s.description });
+        if (/door|bumper|fender|quarter|paint|dent|accident|collision|panel/i.test(text)) bodyVisits.push({ odo: odoStr, desc: s.description });
+        if (/suspension|strut|shock|bush|arm|link rod|tie rod/i.test(text)) suspensionVisits.push(odoStr);
+        if (/clutch|flywheel|pressure plate/i.test(text)) clutchVisits.push(odoStr);
+        if (/alternator|battery|starter|wiring|sensor|fuse/i.test(text)) electricalVisits.push(odoStr);
+    });
+
+    if (turboVisits.length > 0) {
+        highlights.push(`• Turbocharger maintenance noted across ${turboVisits.join(' → ')}.`);
+    }
+    if (emissionVisits.length > 0) {
+        highlights.push(`• Emission control / DPF maintenance recorded at ${emissionVisits.join(' → ')}.`);
+    }
+    if (brakeVisits.length > 0) {
+        highlights.push(`• Brake system work recorded multiple times (${brakeVisits.map(b => b.odo).join(', ')}).`);
+    }
+    if (bodyVisits.length > 0) {
+        highlights.push(`• Body/cosmetic repair noted around ${bodyVisits.map(b => b.odo).join(', ')} (${bodyVisits[0].desc}).`);
+    }
+    if (suspensionVisits.length > 0) {
+        highlights.push(`• Suspension components serviced at ${suspensionVisits.join(', ')}.`);
+    }
+    if (clutchVisits.length > 0) {
+        highlights.push(`• Clutch overhaul / maintenance documented at ${clutchVisits.join(', ')}.`);
+    }
+    if (electricalVisits.length > 0) {
+        highlights.push(`• Electrical / battery service noted at ${electricalVisits.join(', ')}.`);
+    }
+
+    if (extraInsights && Array.isArray(extraInsights.major_replacements)) {
+        extraInsights.major_replacements.forEach(item => {
+            if (item && !highlights.some(h => h.toLowerCase().includes(item.toLowerCase().substring(0, 15)))) {
+                highlights.push(`• Major Replacement: ${item}`);
+            }
+        });
+    }
+    if (extraInsights && Array.isArray(extraInsights.recurring_complaints)) {
+        extraInsights.recurring_complaints.forEach(item => {
+            if (item && !highlights.some(h => h.toLowerCase().includes(item.toLowerCase().substring(0, 15)))) {
+                highlights.push(`• Recurring Complaint: ${item}`);
+            }
+        });
+    }
+
+    if (highlights.length === 0) {
+        highlights.push('• Routine scheduled service visits maintained with standard oil, fluid, and filter replacements.');
+        highlights.push('• No major structural repairs or recurring mechanical complaints noted across service records.');
+    }
+
+    return summary + '\n' + highlights.join('\n');
+};
+
+window.wzAutoGenerateSvcSummary = function() {
+    if (!wz || !wz.draft) return;
+    const services = wz.draft.service_history || [];
+    if (!services.length) {
+        showToast('No service records added yet to summarize.', 'error');
+        return;
+    }
+    const summary = window.wzBuildExecutiveSummaryText(services);
     wz.draft.service_history_note = summary;
     const el = document.getElementById('wz-svc-summary-input');
     if (el) el.value = summary;
@@ -6169,9 +6255,231 @@ if (typeof pdfjsLib !== 'undefined') {
 window.wzSvcHandleDrop = function(e) {
     e.preventDefault();
     const area = document.getElementById('svc-pdf-upload-area');
-    if (area) { area.style.borderColor = ''; area.style.background = ''; }
-    const files = Array.from(e.dataTransfer.files).filter(function(f) { return f.type === 'application/pdf'; });
+    if (area) { area.style.borderColor = '#7C3AED'; area.style.background = 'rgba(124,58,237,0.03)'; }
+    const validExts = /\.(pdf|xlsx|xls|csv|png|jpg|jpeg|webp)$/i;
+    const files = Array.from(e.dataTransfer.files).filter(function(f) {
+        return validExts.test(f.name) || f.type.includes('pdf') || f.type.includes('image') || f.type.includes('sheet') || f.type.includes('csv');
+    });
     if (files.length) wzSvcHandleFiles(files);
+};
+
+window.wzTriggerSvcUpload = function(acceptType) {
+    const input = document.getElementById('svc-pdf-input');
+    if (input) {
+        if (acceptType) input.setAttribute('accept', acceptType);
+        else input.setAttribute('accept', '.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv');
+        input.click();
+    }
+};
+
+// ── Multi-Format Service History Engines ──────────────────────────────────────
+window.wzParseExcelServiceHistory = async function(file) {
+    if (typeof XLSX === 'undefined') {
+        throw new Error('Excel parser library (SheetJS) is loading, please try again.');
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const records = [];
+
+    const normExcelDate = function(val) {
+        if (!val) return '';
+        if (typeof val === 'number') {
+            const utc_days = Math.floor(val - 25569);
+            const dt = new Date(utc_days * 86400 * 1000);
+            const y = dt.getUTCFullYear();
+            const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(dt.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        const str = String(val).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+        const m1 = str.match(/^(\d{1,2})[-\/. ](\d{1,2})[-\/. ](\d{2,4})$/);
+        if (m1) {
+            let d = m1[1].padStart(2, '0');
+            let m = m1[2].padStart(2, '0');
+            const y = m1[3].length === 2 ? '20' + m1[3] : m1[3];
+            if (parseInt(m, 10) > 12 && parseInt(d, 10) <= 12) {
+                const tmp = d; d = m; m = tmp;
+            }
+            return `${y}-${m}-${d}`;
+        }
+        const MON = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' };
+        const m2 = str.match(/^(\d{1,2})[-\/\s]([A-Za-z]{3,})[-\/\s,]+(\d{2,4})$/);
+        if (m2) {
+            const mo = MON[m2[2].toLowerCase().substring(0,3)] || '01';
+            const yr = m2[3].length === 2 ? '20' + m2[3] : m2[3];
+            return yr + '-' + mo + '-' + m2[1].padStart(2, '0');
+        }
+        return str;
+    };
+
+    workbook.SheetNames.forEach(sheetName => {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        if (!rows || rows.length < 2) return;
+
+        let headerIdx = -1;
+        const colMap = {};
+        for (let r = 0; r < Math.min(rows.length, 10); r++) {
+            const row = rows[r];
+            if (!Array.isArray(row)) continue;
+            const rowStr = row.map(c => String(c||'').toLowerCase()).join(' ');
+            if (rowStr.includes('date') || rowStr.includes('odo') || rowStr.includes('km') || rowStr.includes('service') || rowStr.includes('dealer')) {
+                headerIdx = r;
+                row.forEach((cell, cIdx) => {
+                    const h = String(cell||'').trim().toLowerCase();
+                    if (h.includes('date') || h.includes('dt') || h.includes('opened') || h.includes('entry')) colMap.date = cIdx;
+                    else if (h.includes('dealer') || h.includes('center') || h.includes('workshop') || h.includes('garage') || h.includes('location')) colMap.dealer = cIdx;
+                    else if (h.includes('odo') || h.includes('km') || h.includes('mileage') || h.includes('reading') || h.includes('meter')) colMap.odometer = cIdx;
+                    else if (h.includes('type') || h.includes('nature') || h.includes('category')) colMap.type = cIdx;
+                    else if (h.includes('desc') || h.includes('work') || h.includes('repair') || h.includes('particular') || h.includes('job') || h.includes('remark')) colMap.desc = cIdx;
+                    else if (h.includes('cost') || h.includes('amount') || h.includes('total') || h.includes('bill') || h.includes('charge') || h.includes('price') || h.includes('₹') || h.includes('rs')) colMap.cost = cIdx;
+                });
+                break;
+            }
+        }
+
+        if (headerIdx === -1) {
+            headerIdx = 0;
+            colMap.date = 0; colMap.dealer = 1; colMap.odometer = 2; colMap.type = 3; colMap.desc = 4; colMap.cost = 5;
+        }
+
+        for (let r = headerIdx + 1; r < rows.length; r++) {
+            const row = rows[r];
+            if (!row || !Array.isArray(row) || row.length === 0) continue;
+            const rawDate = colMap.date !== undefined ? normExcelDate(row[colMap.date]) : '';
+            const rawDealer = colMap.dealer !== undefined ? String(row[colMap.dealer]||'').trim() : '';
+            const rawOdo = colMap.odometer !== undefined ? String(row[colMap.odometer]||'').replace(/[^\d.]/g, '').trim() : '';
+            let rawType = colMap.type !== undefined ? String(row[colMap.type]||'').trim().toLowerCase() : '';
+            const rawDesc = colMap.desc !== undefined ? String(row[colMap.desc]||'').trim() : '';
+            const rawCost = colMap.cost !== undefined ? String(row[colMap.cost]||'').replace(/[^\d.]/g, '').trim() : '';
+
+            if (!rawType) {
+                if (/free/i.test(rawDesc)) rawType = 'free service';
+                else if (/periodic|scheduled/i.test(rawDesc)) rawType = 'periodic';
+                else if (/accident|damage|dent|collision/i.test(rawDesc)) rawType = 'accidental';
+                else if (/warranty|recall/i.test(rawDesc)) rawType = 'warranty';
+                else if (/running|repair|replace|noise/i.test(rawDesc)) rawType = 'running repair';
+                else rawType = 'dealer';
+            }
+
+            if (rawDate || rawOdo || rawDesc) {
+                records.push({
+                    service_date: rawDate,
+                    dealer_name: rawDealer || 'Authorized Service Center',
+                    odometer_km: rawOdo ? Number(rawOdo) : '',
+                    service_type: rawType || 'dealer',
+                    description: rawDesc || 'Scheduled Maintenance / Service',
+                    cost: rawCost ? Number(rawCost) : ''
+                });
+            }
+        }
+    });
+
+    return { records };
+};
+
+window.wzParseImageServiceHistory = async function(file) {
+    const base64DataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(ev.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+    const mimeType = file.type || 'image/jpeg';
+    const base64Payload = base64DataUrl.split(',')[1];
+
+    const prompt = `You are an expert car service history analyst for InspectCar.
+Analyze this car service booklet / invoice / job card / service record image carefully.
+Extract all individual service interval visits into structured data, and identify key statistics, major component replacements, and recurring complaints.
+
+Return valid JSON format ONLY:
+{
+  "summary": "2-3 sentences executive summary of service history",
+  "major_replacements": ["e.g. Turbocharger replacement at 68,000 km", "e.g. Front brake pads replacement"],
+  "recurring_complaints": ["e.g. Recurrent brake shudder reported across multiple visits"],
+  "records": [
+    {
+      "service_date": "YYYY-MM-DD",
+      "dealer_name": "Dealer or Workshop Name",
+      "odometer_km": 45000,
+      "service_type": "free service | periodic | running repair | accidental | warranty | dealer",
+      "description": "Short description of work done or job description",
+      "cost": 4500
+    }
+  ]
+}`;
+
+    const jsonText = await callGeminiAI(prompt, { mimeType: mimeType, base64: base64Payload });
+    const match = jsonText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Could not parse JSON response from image analysis');
+    return JSON.parse(match[0]);
+};
+
+window.wzParseScannedPdfWithVision = async function(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+    const maxPages = Math.min(pdf.numPages, 4);
+    const allRecords = [];
+    const allMajor = [];
+    const allRecurring = [];
+
+    for (let p = 1; p <= maxPages; p++) {
+        const page = await pdf.getPage(p);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
+        const base64 = dataUrl.split(',')[1];
+
+        const prompt = `You are an expert car service history analyst for InspectCar.
+Extract all service history records visible on this scanned PDF document page (Page ${p} of ${pdf.numPages}).
+Return valid JSON format ONLY:
+{
+  "major_replacements": ["e.g. Clutch overhauled at 55,000 km"],
+  "recurring_complaints": ["e.g. Suspension noise observed"],
+  "records": [
+    {
+      "service_date": "YYYY-MM-DD",
+      "dealer_name": "Dealer or Workshop Name",
+      "odometer_km": 45000,
+      "service_type": "free service | periodic | running repair | accidental | warranty | dealer",
+      "description": "Short description of work done",
+      "cost": 4500
+    }
+  ]
+}`;
+        try {
+            const jsonText = await callGeminiAI(prompt, { mimeType: 'image/jpeg', base64: base64 });
+            const match = jsonText.match(/\{[\s\S]*\}/);
+            if (match) {
+                const parsed = JSON.parse(match[0]);
+                if (parsed.records && Array.isArray(parsed.records)) {
+                    allRecords.push(...parsed.records);
+                }
+                if (parsed.major_replacements && Array.isArray(parsed.major_replacements)) {
+                    allMajor.push(...parsed.major_replacements);
+                }
+                if (parsed.recurring_complaints && Array.isArray(parsed.recurring_complaints)) {
+                    allRecurring.push(...parsed.recurring_complaints);
+                }
+            }
+        } catch(e) {
+            console.warn(`Scanned PDF page ${p} AI vision error:`, e);
+        }
+    }
+
+    return {
+        records: allRecords,
+        extraInsights: {
+            major_replacements: allMajor,
+            recurring_complaints: allRecurring
+        }
+    };
 };
 
 window.wzSvcHandleFiles = async function(fileList) {
@@ -6183,29 +6491,62 @@ window.wzSvcHandleFiles = async function(fileList) {
     if (processing) processing.style.display = 'block';
     if (uploadArea) uploadArea.style.opacity = '0.4';
 
+    let totalNewCaptured = 0;
+    let accumulatedInsights = { major_replacements: [], recurring_complaints: [] };
+
     for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
-        if (msgEl) msgEl.textContent = `Analyzing Service PDF: ${file.name} (${idx + 1}/${files.length})…`;
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (msgEl) msgEl.textContent = `Analyzing ${file.name} (${idx + 1}/${files.length})…`;
+
         try {
-            const rawText = await wzExtractPdfText(file);
-            console.log('Extracted PDF text length:', rawText.length);
+            let parsed = null;
 
-            // 1. Run our comprehensive structured & tabular PDF parser
-            let parsed = wzParseServicePdf(rawText);
+            // Route 1: Excel or CSV file
+            if (['xlsx', 'xls', 'csv'].includes(ext) || file.type.includes('sheet') || file.type.includes('csv')) {
+                if (msgEl) msgEl.textContent = `Parsing spreadsheet ${file.name}…`;
+                parsed = await wzParseExcelServiceHistory(file);
+            }
+            // Route 2: Image file (JPG, PNG, WEBP)
+            else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext) || file.type.startsWith('image/')) {
+                if (msgEl) msgEl.textContent = `Analyzing image with AI Vision: ${file.name}…`;
+                parsed = await wzParseImageServiceHistory(file);
+                if (parsed) {
+                    if (parsed.major_replacements) accumulatedInsights.major_replacements.push(...parsed.major_replacements);
+                    if (parsed.recurring_complaints) accumulatedInsights.recurring_complaints.push(...parsed.recurring_complaints);
+                }
+            }
+            // Route 3: PDF Document (Digital or Scanned)
+            else if (ext === 'pdf' || file.type === 'application/pdf') {
+                if (msgEl) msgEl.textContent = `Reading PDF document ${file.name}…`;
+                const rawText = await wzExtractPdfText(file);
+                console.log('Extracted PDF text length:', rawText.length);
 
-            // 2. If no records were found, optionally try Gemini AI with short timeout
-            if (!parsed || !parsed.records || parsed.records.length === 0) {
-                try {
-                    if (msgEl) msgEl.textContent = `Attempting AI analysis: ${file.name}…`;
-                    const aiParsed = await Promise.race([
-                        wzParseSvcWithGemini(rawText),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout')), 5000))
-                    ]);
-                    if (aiParsed && aiParsed.records && aiParsed.records.length > 0) {
-                        parsed = aiParsed;
+                // If digital text is present (>= 80 chars)
+                if (rawText && rawText.trim().length >= 80) {
+                    parsed = wzParseServicePdf(rawText);
+                    if (!parsed || !parsed.records || parsed.records.length === 0) {
+                        try {
+                            if (msgEl) msgEl.textContent = `Attempting AI text analysis: ${file.name}…`;
+                            const aiParsed = await Promise.race([
+                                wzParseSvcWithGemini(rawText),
+                                new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout')), 6000))
+                            ]);
+                            if (aiParsed && aiParsed.records && aiParsed.records.length > 0) {
+                                parsed = aiParsed;
+                            }
+                        } catch (aiErr) {
+                            console.warn('AI fallback skipped or timed out:', aiErr.message);
+                        }
                     }
-                } catch (aiErr) {
-                    console.warn('AI fallback skipped or timed out:', aiErr.message);
+                } else {
+                    // Scanned / Image PDF: Render pages as images and process with Gemini Vision
+                    if (msgEl) msgEl.textContent = `Scanned PDF detected. Running AI Vision analysis: ${file.name}…`;
+                    parsed = await wzParseScannedPdfWithVision(file);
+                    if (parsed && parsed.extraInsights) {
+                        if (parsed.extraInsights.major_replacements) accumulatedInsights.major_replacements.push(...parsed.extraInsights.major_replacements);
+                        if (parsed.extraInsights.recurring_complaints) accumulatedInsights.recurring_complaints.push(...parsed.extraInsights.recurring_complaints);
+                    }
                 }
             }
 
@@ -6213,29 +6554,15 @@ window.wzSvcHandleFiles = async function(fileList) {
 
             if (parsed && parsed.records && parsed.records.length > 0) {
                 parsed.records.forEach(function(rec) {
-                    var key = (rec.service_date||'') + '|' + (rec.odometer_km||'');
+                    var key = (rec.service_date||'') + '|' + (rec.odometer_km||'') + '|' + (rec.description||'').substring(0, 15);
                     var exists = wz.draft.service_history.some(function(r) {
-                        return ((r.service_date||'') + '|' + (r.odometer_km||'')) === key;
+                        return ((r.service_date||'') + '|' + (r.odometer_km||'') + '|' + (r.description||'').substring(0, 15)) === key;
                     });
                     if (!exists) {
                         wz.draft.service_history.push(rec);
+                        totalNewCaptured++;
                     }
                 });
-
-                // Set executive summary note
-                if (parsed.summary) {
-                    wz.draft.service_history_note = parsed.summary;
-                }
-
-                // If vehicle details in draft are empty, auto-populate from service PDF
-                if (parsed.vehicle) {
-                    if (parsed.vehicle.reg && !wz.draft.vehicle_reg) {
-                        wz.draft.vehicle_reg = parsed.vehicle.reg;
-                    }
-                    if (parsed.vehicle.model && !wz.draft.vehicle_model) {
-                        wz.draft.vehicle_model = parsed.vehicle.model;
-                    }
-                }
 
                 // Auto-populate latest odometer in Step 1 if odometer_km is empty
                 if (!wz.draft.odometer_km) {
@@ -6245,7 +6572,17 @@ window.wzSvcHandleFiles = async function(fileList) {
                     }
                 }
 
-                // Attach uploaded PDF to documents list if not already there
+                // If vehicle registration or model found in parsed document
+                if (parsed.vehicle) {
+                    if (parsed.vehicle.reg && !wz.draft.vehicle_reg) wz.draft.vehicle_reg = parsed.vehicle.reg;
+                    if (parsed.vehicle.model && !wz.draft.vehicle_model) wz.draft.vehicle_model = parsed.vehicle.model;
+                }
+
+                // Automatically generate the comprehensive Executive Summary with major points and complaints
+                const summary = window.wzBuildExecutiveSummaryText(wz.draft.service_history, accumulatedInsights);
+                wz.draft.service_history_note = summary;
+
+                // Attach file to documents list
                 if (!wz.draft.documents) wz.draft.documents = [];
                 const alreadyHasDoc = wz.draft.documents.some(d => d.file_name === file.name);
                 if (!alreadyHasDoc) {
@@ -6261,27 +6598,29 @@ window.wzSvcHandleFiles = async function(fileList) {
                                 file_name: file.name,
                                 doc_type: 'service_history',
                                 file_size: file.size,
-                                mime_type: file.type || 'application/pdf',
+                                mime_type: file.type || ('application/' + ext),
                                 file_url: fileDataUrl
                             });
                         }
                     } catch(dErr) {
-                        console.warn('Could not store PDF file to documents:', dErr);
+                        console.warn('Could not store file to documents:', dErr);
                     }
                 }
-
-                showToast(`✨ Captured ${parsed.records.length} service records & Executive Summary!`, 'success');
-            } else {
-                showToast('No service records found in PDF. You can add records manually.', 'info');
             }
         } catch (err) {
-            console.error('PDF error:', err);
-            showToast('Could not read PDF: ' + err.message, 'error');
+            console.error('File parsing error:', err);
+            showToast(`Could not parse ${file.name}: ${err.message}`, 'error');
         }
     }
 
     if (processing) processing.style.display = 'none';
     if (uploadArea) uploadArea.style.opacity = '1';
+
+    if (totalNewCaptured > 0) {
+        showToast(`✨ Captured ${totalNewCaptured} service records & updated Executive Summary!`, 'success');
+    } else {
+        showToast('No new service records detected. You can add or edit rows manually.', 'info');
+    }
     goToWzStep(5);
 };
 
@@ -6728,20 +7067,30 @@ const GEMINI_MODELS = [
     'gemini-flash-latest'
 ];
 
-async function callGeminiAI(prompt) {
+async function callGeminiAI(prompt, inlineData) {
     if (!GEMINI_API_KEY) throw new Error("Gemini API key is missing");
     let lastError = null;
+
+    const parts = [{ text: prompt }];
+    if (inlineData && inlineData.mimeType && inlineData.base64) {
+        parts.push({
+            inline_data: {
+                mime_type: inlineData.mimeType,
+                data: inlineData.base64
+            }
+        });
+    }
 
     for (const model of GEMINI_MODELS) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(function() { controller.abort(); }, 9000);
+            const timeoutId = setTimeout(function() { controller.abort(); }, 18000);
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }]
+                    contents: [{ parts: parts }]
                 }),
                 signal: controller.signal
             });
