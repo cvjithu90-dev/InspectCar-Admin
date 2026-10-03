@@ -926,7 +926,14 @@ table.cp td.note { color: #8A8296; }
       </div>`).join('') : '<p style="color:#9CA3AF; font-size:10px; padding:6px 0;">No supporting documents attached.</p>';
 
     if (services.length > 0) {
-      if (summaryText) summaryText.innerHTML = d.service_history_note ? escHtml(d.service_history_note).replace(/\n/g, '<br>') : '';
+      if (summaryText) {
+        const rawNote = d.service_history_note || '';
+        const formattedNote = escHtml(rawNote)
+          .replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>')
+          .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+          .replace(/\n/g, '<br>');
+        summaryText.innerHTML = formattedNote;
+      }
       if (summaryBox) summaryBox.style.display = 'block';
 
       if (services.length <= 8) {
