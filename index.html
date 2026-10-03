@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <title>InspectCar Admin Dashboard</title>
     
@@ -5665,7 +5668,10 @@ function buildStep5() {
         '<div class="wz-card"><div class="wz-card-title">Upload Service PDF' +
         '<button class="wz-api-btn" onclick="wzFetchServiceHistory()"><i class="fas fa-bolt"></i> Fetch from API</button></div>' +
         pdfUploadZone + '</div>' +
-        '<div class="wz-card"><div class="wz-card-title">Service Records</div>' +
+        '<div class="wz-card"><div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span>Service Records</span>' +
+        (svc.length > 0 ? '<button type="button" class="wz-api-btn" onclick="wzClearServiceHistory()" style="font-size:11px;padding:4px 10px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#FCA5A5;cursor:pointer;"><i class="fas fa-trash-alt"></i> Clear All Records</button>' : '') +
+        '</div>' +
         '<table class="wz-table"><thead><tr><th>Date</th><th>Dealer / Center</th><th>Odometer</th><th>Type</th><th>Description</th><th>Cost (₹)</th><th></th></tr></thead>' +
         '<tbody id="svc-table-body">' + rows + '</tbody></table>' +
         '<button class="wz-add-row-btn" onclick="wzAddSvcRow()">+ Add Service Record</button></div>';
@@ -6405,6 +6411,22 @@ window.wzGenerateKeyServiceSummaryPdf = function(data) {
     }
 };
 
+
+window.wzClearServiceHistory = function() {
+    if (!wz || !wz.draft) return;
+    if (confirm('Clear all service history records and executive summary? You can then re-upload your document to auto-capture clean data.')) {
+        wz.draft.service_history = [];
+        wz.draft.service_history_note = '';
+        wz.draft.key_service_summary = null;
+        if (wz.draft.documents) {
+            wz.draft.documents = wz.draft.documents.filter(function(d){ return d.file_name !== 'Key_Service_History_Summary.pdf'; });
+        }
+        updateWzPreview();
+        goToWzStep(5);
+        showToast('Service history cleared. Ready for fresh AI upload.', 'info');
+    }
+};
+
 window.wzDownloadKeyServiceSummaryPdf = function() {
     if (!wz || !wz.draft) return;
     const summaryData = wz.draft.key_service_summary;
@@ -6489,10 +6511,18 @@ window.wzParseExcelServiceHistory = async function(file) {
             const rowStr = row.map(c => String(c||'').toLowerCase()).join(' ');
             if (rowStr.includes('date') || rowStr.includes('odo') || rowStr.includes('km') || rowStr.includes('service') || rowStr.includes('dealer')) {
                 headerIdx = r;
+                let datePriority = 0;
                 row.forEach((cell, cIdx) => {
                     const h = String(cell||'').trim().toLowerCase();
-                    if (h.includes('date') || h.includes('dt') || h.includes('opened') || h.includes('entry')) colMap.date = cIdx;
-                    else if (h.includes('dealer') || h.includes('center') || h.includes('workshop') || h.includes('garage') || h.includes('location')) colMap.dealer = cIdx;
+                    // Prioritize RO Created Date, Entry Date, Service Date over Delivery Date
+                    if (/ro\s*(created|date)|entry\s*date|service\s*(created|date)|jc\s*date|job\s*card\s*date|gate\s*in/i.test(h)) {
+                        colMap.date = cIdx;
+                        datePriority = 2;
+                    } else if ((h.includes('date') || h.includes('dt') || h.includes('opened') || h.includes('entry')) && !h.includes('delivery') && !h.includes('print') && datePriority < 2) {
+                        colMap.date = cIdx;
+                        datePriority = 1;
+                    }
+                    if (h.includes('dealer') || h.includes('center') || h.includes('workshop') || h.includes('garage') || h.includes('location')) colMap.dealer = cIdx;
                     else if (h.includes('odo') || h.includes('km') || h.includes('mileage') || h.includes('reading') || h.includes('meter')) colMap.odometer = cIdx;
                     else if (h.includes('type') || h.includes('nature') || h.includes('category')) colMap.type = cIdx;
                     else if (h.includes('desc') || h.includes('work') || h.includes('repair') || h.includes('particular') || h.includes('job') || h.includes('remark')) colMap.desc = cIdx;
@@ -6554,20 +6584,35 @@ window.wzParseImageServiceHistory = async function(file) {
 
     const prompt = `You are an expert car service history analyst for InspectCar.
 Analyze this car service booklet / invoice / job card / service record image carefully.
-Extract all individual service interval visits into structured data, and identify key statistics, major component replacements, and recurring complaints.
+
+CRITICAL SERVICE DATE EXTRACTION RULES:
+1. DO NOT USE DELIVERY DATE OR PRINT DATE:
+   - The vehicle delivery date or invoice delivery date is NOT the service date!
+   - Every single service visit took place on a totally different date across the lifespan of the car.
+2. CAPTURE ACTUAL SERVICE VISIT DATES:
+   - In dealer DMS systems, look for "RO Created Date", "RO Date", "Entry Date", "Gate In Date", "Service Created Date", or "Visit Date".
+   - Ensure EVERY service visit has its own distinct, chronological date. Dates must never be identical or repeating!
+3. GROUP PARTS INTO CONSOLIDATED VISITS:
+   - Do NOT treat individual spare parts lines as separate visits. Group all work done during a single visit on a specific date and odometer into ONE consolidated record.
+4. DEALER / SERVICE CENTER NAME:
+   - Identify the real workshop/dealership name and branch (e.g. 'Nandi Toyota / Nandi Banaswadi'). Resolve numeric dealer codes to the actual name.
 
 Return valid JSON format ONLY:
 {
+  "vehicle_reg": "KA03NE6725",
+  "dealer_name": "Dealer or Workshop Name",
+  "coverage_period": "Date range",
+  "max_odometer_km": 98434,
   "summary": "2-3 sentences executive summary of service history",
-  "major_replacements": ["e.g. Turbocharger replacement at 68,000 km", "e.g. Front brake pads replacement"],
-  "recurring_complaints": ["e.g. Recurrent brake shudder reported across multiple visits"],
+  "major_points": ["e.g. Turbocharger replacement at 68,000 km", "e.g. Front brake pads replacement"],
+  "buyer_summary": "Appraisal of vehicle service history",
   "records": [
     {
       "service_date": "YYYY-MM-DD",
       "dealer_name": "Dealer or Workshop Name",
       "odometer_km": 45000,
       "service_type": "free service | periodic | running repair | accidental | warranty | dealer",
-      "description": "Short description of work done or job description",
+      "description": "Consolidated summary of work done",
       "cost": 4500
     }
   ]
@@ -6716,17 +6761,27 @@ window.wzSvcHandleFiles = async function(fileList) {
             if (!wz.draft.service_history) wz.draft.service_history = [];
 
             if (analysis && analysis.records && analysis.records.length > 0) {
-                // Deduplicate incoming records
-                analysis.records.forEach(function(rec) {
-                    var key = (rec.service_date||'') + '|' + (rec.odometer_km||'') + '|' + (rec.description||'').substring(0, 15);
-                    var exists = wz.draft.service_history.some(function(r) {
-                        return ((r.service_date||'') + '|' + (r.odometer_km||'') + '|' + (r.description||'').substring(0, 15)) === key;
+                // Check if existing records in draft had duplicate/stale dates
+                const existingDates = (wz.draft.service_history || []).map(r => r.service_date).filter(Boolean);
+                const hasDuplicateExistingDates = existingDates.length > 3 && new Set(existingDates).size <= 2;
+
+                if (hasDuplicateExistingDates || !wz.draft.service_history || wz.draft.service_history.length === 0) {
+                    // Replace bad duplicate records with clean AI-audited service visit records
+                    wz.draft.service_history = analysis.records;
+                    totalNewCaptured = analysis.records.length;
+                } else {
+                    // Deduplicate incoming records against existing
+                    analysis.records.forEach(function(rec) {
+                        var key = (rec.service_date||'') + '|' + (rec.odometer_km||'') + '|' + (rec.description||'').substring(0, 15);
+                        var exists = wz.draft.service_history.some(function(r) {
+                            return ((r.service_date||'') + '|' + (r.odometer_km||'') + '|' + (r.description||'').substring(0, 15)) === key;
+                        });
+                        if (!exists) {
+                            wz.draft.service_history.push(rec);
+                            totalNewCaptured++;
+                        }
                     });
-                    if (!exists) {
-                        wz.draft.service_history.push(rec);
-                        totalNewCaptured++;
-                    }
-                });
+                }
 
                 // Auto-populate vehicle registration if found
                 if (analysis.vehicle_reg && !wz.draft.vehicle_reg) {
@@ -6820,26 +6875,36 @@ window.wzParseSvcWithGemini = async function(docText) {
     const prompt = `You are InspectCar's senior automotive service history auditor.
 Analyze this entire raw service history document (dealer service record / DSR / invoice booklet / job cards) carefully.
 
-CRITICAL EXTRACTION RULES:
-1. IDENTIFY ACTUAL SERVICE VISITS/INTERVALS:
-   - Do NOT treat individual spare parts lines (e.g. 'BATTERY', 'BOLT', 'GEAR OIL', 'AIRFILTER') as separate visits! Group all work done during a single visit on a specific date and odometer into ONE consolidated record.
-   - The visit date must be the actual service/job date when the car was serviced, NOT the print date or invoice generation date that repeats on every page!
-2. DEALER / SERVICE CENTER NAME:
+CRITICAL SERVICE VISIT DATE RULES:
+1. DO NOT USE DELIVERY DATE OR PRINT DATE:
+   - The vehicle delivery date, invoice delivery date, or bill print date (e.g. 10/02/2022) is NOT the service date!
+   - Every single service visit took place on a totally different date across the lifespan of the car.
+2. CAPTURE ACTUAL SERVICE VISIT DATES:
+   - In dealer DMS systems (Toyota, Maruti, Hyundai, Honda, Mahindra, etc.), the actual visit date is labeled as:
+     * "RO Created Date" / "RO Date" / "Repair Order Date"
+     * "Entry Date" / "Gate In Date" / "Inward Date" / "Arrival Date"
+     * "Service Created Date" / "Job Card Date" / "JC Open Date"
+     * "Visit Date" / "Service Date" / "Opened Date"
+   - Ensure EVERY service visit has its own distinct, chronological date (e.g. 2019-09-10, 2019-09-12, 2019-12-09, 2019-12-13, 2020-01-10, 2021-07-28, 2022-02-26, etc.). The dates must NEVER be identical or repeating!
+3. GROUP PARTS INTO CONSOLIDATED VISITS:
+   - Do NOT treat individual spare parts lines (e.g. 'BATTERY', 'BOLT', 'GEAR OIL', 'AIRFILTER') as separate visits!
+   - Group all work done during a single visit on a specific date and odometer into ONE consolidated record.
+4. DEALER / SERVICE CENTER NAME:
    - Identify the real workshop/dealership name and branch (e.g. 'Nandi Toyota / Nandi Banaswadi', 'Ravindu Toyota', etc.).
    - If a numeric code like '30208' appears, resolve it to the actual dealer name and location shown in the document.
-3. VEHICLE REGISTRATION:
+5. VEHICLE REGISTRATION:
    - Extract the vehicle registration number (e.g. 'KA03NE6725').
-4. SERVICE INTERVALS:
+6. SERVICE INTERVALS:
    For each distinct service visit:
-   - service_date: "YYYY-MM-DD"
+   - service_date: "YYYY-MM-DD" (extracted from RO Created / Entry / Service Date)
    - dealer_name: Real dealer / center name
    - odometer_km: Number (e.g. 5219)
    - service_type: "free service" | "periodic" | "running repair" | "accidental" | "warranty" | "dealer"
    - description: Consolidated summary of key work done (e.g. "5,000 km PMS; brake pad/shoe inspection", "Front RH door outer panel repair/replacement", "Turbocharger-related work; front brake pad")
    - cost: Total visit cost in ₹ (if available, else 0)
-5. MAJOR HISTORY POINTS:
+7. MAJOR HISTORY POINTS:
    - Bullet points of repeated work, major component replacements, or significant repairs (e.g. repeated turbocharger work, emission-control/DPF work, brake pad/disc replacements, body/door repairs, radiator fan, diesel injectors).
-6. SHORT BUYER SUMMARY:
+8. SHORT BUYER SUMMARY:
    - 1-2 paragraph executive summary providing a professional appraisal of the vehicle's maintenance history, consistency of dealer servicing, and specific areas the buyer or inspector should physically inspect.
 
 Return valid JSON ONLY matching this exact structure:
@@ -6851,7 +6916,7 @@ Return valid JSON ONLY matching this exact structure:
   "records": [
     {
       "service_date": "YYYY-MM-DD",
-      "dealer_name": "Dealer or Workshop Name",
+      "dealer_name": "Nandi Toyota / Nandi Banaswadi",
       "odometer_km": 5219,
       "service_type": "free service | periodic | running repair | accidental | warranty",
       "description": "Consolidated summary of key work done",
