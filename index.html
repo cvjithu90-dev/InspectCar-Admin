@@ -6158,13 +6158,17 @@ window.wzUpdateSvcSummary = function(val) {
 window.wzBuildExecutiveSummaryText = function(services, extraInsights) {
     if (!services || !services.length) return '';
     const count = services.length;
-    const dates = services.map(s => s.service_date).filter(Boolean).sort();
+    const dates = services.map(s => String(s.service_date||'').trim()).filter(function(d){
+        return d && !/^<blank>$/i.test(d) && d !== 'null' && d !== '—' && !/^[0\-\/]+$/.test(d);
+    }).sort();
     const odos = services.map(s => Number(s.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>a-b);
     const totalCost = services.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
 
     let summary = `This vehicle has <b>${count} recorded service visit${count > 1 ? 's' : ''}</b> on file`;
-    if (dates.length > 0) {
+    if (dates.length >= 2) {
         summary += ` ranging from <b>${dates[0]}</b> to <b>${dates[dates.length - 1]}</b>`;
+    } else if (dates.length === 1) {
+        summary += ` on <b>${dates[0]}</b>`;
     }
     if (odos.length > 0) {
         summary += `. Odometer readings span from <b>${odos[0].toLocaleString('en-IN')} km</b> up to <b>${odos[odos.length - 1].toLocaleString('en-IN')} km</b>`;
@@ -6458,6 +6462,30 @@ window.wzDownloadKeyServiceSummaryPdf = function() {
     }
 };
 
+window.wzConvertSheetToText = async function(file) {
+    if (typeof XLSX === 'undefined') return '';
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const lines = [];
+        workbook.SheetNames.forEach(sheetName => {
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            if (!rows || rows.length === 0) return;
+            lines.push(`=== SHEET: ${sheetName} ===`);
+            rows.forEach(row => {
+                if (!Array.isArray(row) || row.every(c => c === '')) return;
+                const line = row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',');
+                lines.push(line);
+            });
+        });
+        return lines.join('\n');
+    } catch(e) {
+        console.warn('wzConvertSheetToText error:', e);
+        return '';
+    }
+};
+
 window.wzParseExcelServiceHistory = async function(file) {
     if (typeof XLSX === 'undefined') {
         throw new Error('Excel parser library (SheetJS) is loading, please try again.');
@@ -6467,7 +6495,7 @@ window.wzParseExcelServiceHistory = async function(file) {
     const records = [];
 
     const normExcelDate = function(val) {
-        if (!val) return '';
+        if (!val || val === '<Blank>') return '';
         if (typeof val === 'number') {
             const utc_days = Math.floor(val - 25569);
             const dt = new Date(utc_days * 86400 * 1000);
@@ -6512,21 +6540,47 @@ window.wzParseExcelServiceHistory = async function(file) {
             if (rowStr.includes('date') || rowStr.includes('odo') || rowStr.includes('km') || rowStr.includes('service') || rowStr.includes('dealer')) {
                 headerIdx = r;
                 let datePriority = 0;
+                let dealerPriority = 0;
+
                 row.forEach((cell, cIdx) => {
                     const h = String(cell||'').trim().toLowerCase();
-                    // Prioritize RO Created Date, Entry Date, Service Date over Delivery Date
-                    if (/ro\s*(created|date)|entry\s*date|service\s*(created|date)|jc\s*date|job\s*card\s*date|gate\s*in/i.test(h)) {
+
+                    // Prioritize RO Created Date, Entry Date, Service Date over Delivery/Due Date
+                    if (/ro\s*(?:creation|created|date)|entry\s*date|gate\s*in|job\s*card\s*date|jc\s*date|service\s*(?:creation|created|date)/i.test(h) && !/due|next|delivery|print/i.test(h)) {
+                        colMap.date = cIdx;
+                        datePriority = 3;
+                    } else if (datePriority < 3 && /date|dt|opened|posting|closed/i.test(h) && !/due|next|delivery|print/i.test(h)) {
                         colMap.date = cIdx;
                         datePriority = 2;
-                    } else if ((h.includes('date') || h.includes('dt') || h.includes('opened') || h.includes('entry')) && !h.includes('delivery') && !h.includes('print') && datePriority < 2) {
-                        colMap.date = cIdx;
-                        datePriority = 1;
                     }
-                    if (h.includes('dealer') || h.includes('center') || h.includes('workshop') || h.includes('garage') || h.includes('location')) colMap.dealer = cIdx;
-                    else if (h.includes('odo') || h.includes('km') || h.includes('mileage') || h.includes('reading') || h.includes('meter')) colMap.odometer = cIdx;
-                    else if (h.includes('type') || h.includes('nature') || h.includes('category')) colMap.type = cIdx;
-                    else if (h.includes('desc') || h.includes('work') || h.includes('repair') || h.includes('particular') || h.includes('job') || h.includes('remark')) colMap.desc = cIdx;
-                    else if (h.includes('cost') || h.includes('amount') || h.includes('total') || h.includes('bill') || h.includes('charge') || h.includes('price') || h.includes('₹') || h.includes('rs')) colMap.cost = cIdx;
+
+                    // Prioritize real dealer name over numeric code columns
+                    if (/service\s*dealer\s*name|workshop\s*name|center\s*name|dealership\s*name/i.test(h)) {
+                        colMap.dealer = cIdx;
+                        dealerPriority = 3;
+                    } else if (dealerPriority < 3 && /dealer\s*name|workshop|service\s*center/i.test(h) && !/code/i.test(h)) {
+                        colMap.dealer = cIdx;
+                        dealerPriority = 2;
+                    } else if (dealerPriority < 2 && /dealer|center|workshop/i.test(h) && !/code/i.test(h)) {
+                        colMap.dealer = cIdx;
+                        dealerPriority = 1;
+                    }
+
+                    if (/mileage\s*out|odo\s*out/i.test(h)) {
+                        colMap.odometer = cIdx;
+                    } else if (colMap.odometer === undefined && /odo|km|mileage|reading|meter/i.test(h)) {
+                        colMap.odometer = cIdx;
+                    }
+
+                    if (/ro\s*type|service\s*type|type|category/i.test(h)) colMap.type = cIdx;
+
+                    if (/labor\s*description|work\s*description|complaint/i.test(h)) colMap.laborDesc = cIdx;
+                    if (/customer\s*voice|voice/i.test(h)) colMap.custVoice = cIdx;
+                    if (/part\s*description/i.test(h)) colMap.partDesc = cIdx;
+
+                    if (/amount|total|cost|price|bill|charge/i.test(h) && !/labor|item|gst|vat|tax|discount/i.test(h)) {
+                        colMap.cost = cIdx;
+                    }
                 });
                 break;
             }
@@ -6534,35 +6588,41 @@ window.wzParseExcelServiceHistory = async function(file) {
 
         if (headerIdx === -1) {
             headerIdx = 0;
-            colMap.date = 0; colMap.dealer = 1; colMap.odometer = 2; colMap.type = 3; colMap.desc = 4; colMap.cost = 5;
+            colMap.date = 0; colMap.dealer = 1; colMap.odometer = 2; colMap.type = 3; colMap.laborDesc = 4; colMap.cost = 5;
         }
 
         for (let r = headerIdx + 1; r < rows.length; r++) {
             const row = rows[r];
-            if (!row || !Array.isArray(row) || row.length === 0) continue;
+            if (!row || !Array.isArray(row) || row.every(c => c === '')) continue;
             const rawDate = colMap.date !== undefined ? normExcelDate(row[colMap.date]) : '';
             const rawDealer = colMap.dealer !== undefined ? String(row[colMap.dealer]||'').trim() : '';
             const rawOdo = colMap.odometer !== undefined ? String(row[colMap.odometer]||'').replace(/[^\d.]/g, '').trim() : '';
             let rawType = colMap.type !== undefined ? String(row[colMap.type]||'').trim().toLowerCase() : '';
-            const rawDesc = colMap.desc !== undefined ? String(row[colMap.desc]||'').trim() : '';
+
+            const descParts = [];
+            if (colMap.custVoice !== undefined && row[colMap.custVoice]) descParts.push(String(row[colMap.custVoice]).trim());
+            if (colMap.laborDesc !== undefined && row[colMap.laborDesc]) descParts.push(String(row[colMap.laborDesc]).trim());
+            if (colMap.partDesc !== undefined && row[colMap.partDesc]) descParts.push('Parts: ' + String(row[colMap.partDesc]).trim());
+            const fullDesc = descParts.join(' | ') || 'Scheduled Service';
+
             const rawCost = colMap.cost !== undefined ? String(row[colMap.cost]||'').replace(/[^\d.]/g, '').trim() : '';
 
             if (!rawType) {
-                if (/free/i.test(rawDesc)) rawType = 'free service';
-                else if (/periodic|scheduled/i.test(rawDesc)) rawType = 'periodic';
-                else if (/accident|damage|dent|collision/i.test(rawDesc)) rawType = 'accidental';
-                else if (/warranty|recall/i.test(rawDesc)) rawType = 'warranty';
-                else if (/running|repair|replace|noise/i.test(rawDesc)) rawType = 'running repair';
+                if (/free/i.test(fullDesc)) rawType = 'free service';
+                else if (/periodic|scheduled|maintenance/i.test(fullDesc)) rawType = 'periodic';
+                else if (/accident|damage|dent|collision|bp/i.test(fullDesc)) rawType = 'accidental';
+                else if (/warranty|recall/i.test(fullDesc)) rawType = 'warranty';
+                else if (/running|repair|replace|noise|breakdown/i.test(fullDesc)) rawType = 'running repair';
                 else rawType = 'dealer';
             }
 
-            if (rawDate || rawOdo || rawDesc) {
+            if (rawDate || rawOdo || fullDesc) {
                 records.push({
                     service_date: rawDate,
                     dealer_name: rawDealer || 'Authorized Service Center',
                     odometer_km: rawOdo ? Number(rawOdo) : '',
                     service_type: rawType || 'dealer',
-                    description: rawDesc || 'Scheduled Maintenance / Service',
+                    description: fullDesc,
                     cost: rawCost ? Number(rawCost) : ''
                 });
             }
@@ -6711,29 +6771,29 @@ window.wzSvcHandleFiles = async function(fileList) {
 
             // Route 1: Spreadsheet (Excel / CSV)
             if (['xlsx', 'xls', 'csv'].includes(ext) || file.type.includes('sheet') || file.type.includes('csv')) {
-                if (msgEl) msgEl.textContent = `Parsing spreadsheet ${file.name}…`;
-                const rawSheet = await wzParseExcelServiceHistory(file);
-                // Also pass text summary to Gemini for deep buyer summary & major points
-                if (rawSheet && rawSheet.records && rawSheet.records.length > 0) {
-                    const sampleText = rawSheet.records.map(r => `Date: ${r.service_date} | Dealer: ${r.dealer_name} | Odo: ${r.odometer_km} km | Type: ${r.service_type} | Work: ${r.description} | Cost: ${r.cost}`).join('\n');
+                if (msgEl) msgEl.textContent = `Analyzing spreadsheet ${file.name} with Gemini AI…`;
+                const rawSheetText = await wzConvertSheetToText(file);
+                const localSheet = await wzParseExcelServiceHistory(file);
+
+                if (rawSheetText && rawSheetText.trim().length >= 40) {
                     try {
-                        const aiAnalysis = await wzParseSvcWithGemini(sampleText);
-                        analysis = {
-                            vehicle_reg: aiAnalysis.vehicle_reg || '',
-                            dealer_name: aiAnalysis.dealer_name || rawSheet.records[0].dealer_name,
-                            coverage_period: aiAnalysis.coverage_period || '',
-                            max_odometer_km: aiAnalysis.max_odometer_km || Math.max(...rawSheet.records.map(r => Number(r.odometer_km)||0)),
-                            records: (aiAnalysis.records && aiAnalysis.records.length > 0) ? aiAnalysis.records : rawSheet.records,
-                            major_points: aiAnalysis.major_points || [],
-                            buyer_summary: aiAnalysis.buyer_summary || ''
-                        };
+                        analysis = await wzParseSvcWithGemini(rawSheetText);
                     } catch(aiErr) {
-                        analysis = {
-                            records: rawSheet.records,
-                            major_points: [],
-                            buyer_summary: ''
-                        };
+                        console.warn('Gemini AI failed on sheet, using local excel parser fallback:', aiErr);
                     }
+                }
+
+                if (!analysis || !analysis.records || analysis.records.length === 0) {
+                    const fallbackRecords = (localSheet && localSheet.records) ? localSheet.records : [];
+                    analysis = {
+                        vehicle_reg: (wz && wz.draft && wz.draft.vehicle_reg) || '',
+                        dealer_name: (fallbackRecords[0] && fallbackRecords[0].dealer_name) ? fallbackRecords[0].dealer_name : 'Authorized Service Center',
+                        coverage_period: '',
+                        max_odometer_km: Math.max(0, ...fallbackRecords.map(r => Number(r.odometer_km)||0)),
+                        records: fallbackRecords,
+                        major_points: [],
+                        buyer_summary: ''
+                    };
                 }
             }
             // Route 2: Images (JPG, PNG, WEBP)
@@ -6750,7 +6810,21 @@ window.wzSvcHandleFiles = async function(fileList) {
                 if (rawText && rawText.trim().length >= 80) {
                     // Send entire extracted text directly to Gemini AI for deep analysis
                     if (msgEl) msgEl.textContent = `Deep Gemini AI analysis on ${file.name}… Identifying service intervals & dealer info.`;
-                    analysis = await wzParseSvcWithGemini(rawText);
+                    try {
+                        analysis = await wzParseSvcWithGemini(rawText);
+                    } catch(aiErr) {
+                        console.warn('Gemini AI on PDF text failed, falling back to local PDF parser:', aiErr);
+                        const localRes = wzParseServicePdf(rawText);
+                        analysis = {
+                            vehicle_reg: (wz && wz.draft && wz.draft.vehicle_reg) || '',
+                            dealer_name: (localRes.records && localRes.records[0] ? localRes.records[0].dealer_name : 'Authorized Workshop'),
+                            coverage_period: '',
+                            max_odometer_km: Math.max(0, ...(localRes.records || []).map(r => Number(r.odometer_km)||0)),
+                            records: localRes.records || [],
+                            major_points: [],
+                            buyer_summary: localRes.summary || ''
+                        };
+                    }
                 } else {
                     // Scanned PDF
                     if (msgEl) msgEl.textContent = `Scanned PDF detected. Running Gemini Vision analysis: ${file.name}…`;
@@ -6761,27 +6835,9 @@ window.wzSvcHandleFiles = async function(fileList) {
             if (!wz.draft.service_history) wz.draft.service_history = [];
 
             if (analysis && analysis.records && analysis.records.length > 0) {
-                // Check if existing records in draft had duplicate/stale dates
-                const existingDates = (wz.draft.service_history || []).map(r => r.service_date).filter(Boolean);
-                const hasDuplicateExistingDates = existingDates.length > 3 && new Set(existingDates).size <= 2;
-
-                if (hasDuplicateExistingDates || !wz.draft.service_history || wz.draft.service_history.length === 0) {
-                    // Replace bad duplicate records with clean AI-audited service visit records
-                    wz.draft.service_history = analysis.records;
-                    totalNewCaptured = analysis.records.length;
-                } else {
-                    // Deduplicate incoming records against existing
-                    analysis.records.forEach(function(rec) {
-                        var key = (rec.service_date||'') + '|' + (rec.odometer_km||'') + '|' + (rec.description||'').substring(0, 15);
-                        var exists = wz.draft.service_history.some(function(r) {
-                            return ((r.service_date||'') + '|' + (r.odometer_km||'') + '|' + (r.description||'').substring(0, 15)) === key;
-                        });
-                        if (!exists) {
-                            wz.draft.service_history.push(rec);
-                            totalNewCaptured++;
-                        }
-                    });
-                }
+                // Freshly replace draft records with the newly verified service visits
+                wz.draft.service_history = analysis.records;
+                totalNewCaptured = analysis.records.length;
 
                 // Strictly isolate service history: DO NOT mutate or overwrite vehicle info
                 // (e.g. vehicle_brand, vehicle_model, vehicle_reg, odometer_km) in Step 1.
@@ -6868,22 +6924,23 @@ window.wzParseSvcWithGemini = async function(docText) {
 Analyze this entire raw service history document (dealer service record / DSR / invoice booklet / job cards) carefully.
 
 CRITICAL SERVICE VISIT DATE RULES:
-1. DO NOT USE DELIVERY DATE OR PRINT DATE:
-   - The vehicle delivery date, invoice delivery date, or bill print date (e.g. 10/02/2022) is NOT the service date!
+1. DO NOT USE DELIVERY DATE, PRINT DATE, OR FUTURE DUE DATES:
+   - The vehicle delivery date, invoice delivery date, bill print date, or future next service due date is NOT the service date!
    - Every single service visit took place on a totally different date across the lifespan of the car.
 2. CAPTURE ACTUAL SERVICE VISIT DATES:
-   - In dealer DMS systems (Toyota, Maruti, Hyundai, Honda, Mahindra, etc.), the actual visit date is labeled as:
-     * "RO Created Date" / "RO Date" / "Repair Order Date"
+   - In dealer DMS systems (Toyota, Maruti, Hyundai, Honda, Mahindra, Audi, VW, etc.), the actual visit date is labeled as:
+     * "RO Creation Date" / "RO Date" / "Repair Order Date" / "RO Closed Date"
      * "Entry Date" / "Gate In Date" / "Inward Date" / "Arrival Date"
      * "Service Created Date" / "Job Card Date" / "JC Open Date"
      * "Visit Date" / "Service Date" / "Opened Date"
-   - Ensure EVERY service visit has its own distinct, chronological date (e.g. 2019-09-10, 2019-09-12, 2019-12-09, 2019-12-13, 2020-01-10, 2021-07-28, 2022-02-26, etc.). The dates must NEVER be identical or repeating!
+   - Ensure EVERY service visit has its own distinct, chronological date (e.g. 2019-09-10, 2022-09-26, 2023-02-13, 2024-02-14, 2024-08-26, etc.). The dates must NEVER be identical or repeating or '<Blank>'!
 3. GROUP PARTS INTO CONSOLIDATED VISITS:
    - Do NOT treat individual spare parts lines (e.g. 'BATTERY', 'BOLT', 'GEAR OIL', 'AIRFILTER') as separate visits!
    - Group all work done during a single visit on a specific date and odometer into ONE consolidated record.
 4. DEALER / SERVICE CENTER NAME:
-   - Identify the real workshop/dealership name and branch (e.g. 'Nandi Toyota / Nandi Banaswadi', 'Ravindu Toyota', etc.).
-   - If a numeric code like '30208' appears, resolve it to the actual dealer name and location shown in the document.
+   - Identify the real workshop/dealership name and branch (e.g. 'Audi Bengaluru', 'Audi Mangalore', 'Nandi Toyota / Nandi Banaswadi', 'Ravindu Toyota', etc.).
+   - Look under headers like "Service Dealer Name", "Workshop", "Dealer", "Branch", "Center".
+   - If a numeric code like '30203', '30303', or '30208' appears, DO NOT use bare numeric code names like 'Dealer 30203'! Always extract the actual dealer name and city shown (e.g. 'Audi Bengaluru', 'Audi Mangalore').
 5. VEHICLE REGISTRATION:
    - Extract the vehicle registration number (e.g. 'KA03NE6725').
 6. SERVICE INTERVALS:
