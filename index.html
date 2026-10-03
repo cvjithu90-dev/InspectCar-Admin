@@ -6783,16 +6783,8 @@ window.wzSvcHandleFiles = async function(fileList) {
                     });
                 }
 
-                // Auto-populate vehicle registration if found
-                if (analysis.vehicle_reg && !wz.draft.vehicle_reg) {
-                    wz.draft.vehicle_reg = analysis.vehicle_reg;
-                }
-
-                // Auto-populate latest odometer
-                const validOdos = wz.draft.service_history.map(r => Number(r.odometer_km)).filter(n => !isNaN(n) && n > 0).sort((a,b)=>b-a);
-                if (validOdos.length > 0 && !wz.draft.odometer_km) {
-                    wz.draft.odometer_km = validOdos[0];
-                }
+                // Strictly isolate service history: DO NOT mutate or overwrite vehicle info
+                // (e.g. vehicle_brand, vehicle_model, vehicle_reg, odometer_km) in Step 1.
 
                 // Auto-populate Executive Summary
                 let fullSummaryText = '';
@@ -7041,9 +7033,6 @@ window.wzParseServicePdf = function(rawText) {
     var regMatch = rawText.match(/\b([A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4})\b/i);
     if (regMatch) result.vehicle.reg = regMatch[1].toUpperCase();
 
-    var modelMatch = rawText.match(/([A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4})\s*[•·|\-]\s*([^•·|\n]+)/i);
-    if (modelMatch) result.vehicle.model = modelMatch[2].trim();
-
     // 2. Executive Summary extraction
     var execSummary = '';
     var execMatch = rawText.match(/Executive\s+Summary\s*[\r\n]+([\s\S]*?)(?=Major\s+Red\s+Flags|Extracted\s+Service|Service\s*[\/&]\s*Repair\s+Data|Service\s+Records|Purchase\s+Recommendation|$)/i);
@@ -7164,7 +7153,7 @@ window.wzParseServicePdf = function(rawText) {
 
         result.records.push({
             service_date: dateISO,
-            dealer_name: dealer || (result.vehicle.model ? result.vehicle.model.split(' ')[0] + ' Authorized' : ''),
+            dealer_name: dealer || 'Authorized Workshop',
             odometer_km: odo ? Number(odo) : '',
             service_type: serviceType,
             description: description || serviceType,
@@ -7223,7 +7212,7 @@ window.wzParseServicePdf = function(rawText) {
 
             result.records.push({
                 service_date: gDateISO,
-                dealer_name: gDealer || (result.vehicle.model ? result.vehicle.model.split(' ')[0] + ' Service' : 'Authorized Workshop'),
+                dealer_name: gDealer || 'Authorized Workshop',
                 odometer_km: gOdo ? Number(gOdo) : '',
                 service_type: gType,
                 description: gDesc || gType,
