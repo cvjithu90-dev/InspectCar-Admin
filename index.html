@@ -4721,6 +4721,9 @@ async function loadWzDraft() {
             if (raw) wz.draft = Object.assign({}, wz.draft, JSON.parse(raw));
         } catch(e2) {}
     }
+    if (wz.draft && wz.draft.categories && wz.draft.categories.length > 0) {
+        wz.draft._categoriesChecklistSynced = true;
+    }
 }
 
 function getDefaultCatSummary(name, status) {
@@ -4796,13 +4799,29 @@ function autoPopulateCategories() {
     if (!wz) return;
     const catNames = ['Exterior','Tyres','Brakes','Underbody','Engine Analysis','Interior','Lighting','AC','Suspension','Gear & Transmission','Inspection Info','Vahan Info'];
     const answers = wz.answers || [];
+    const checklist = (wz.draft && wz.draft.checklist) ? wz.draft.checklist : {};
+    const allCheckItems = [];
+    Object.keys(checklist).forEach(function(cat) {
+        (checklist[cat] || []).forEach(function(item) {
+            allCheckItems.push({ cat: cat, answer: (item.answer || '').toLowerCase(), severity: (item.severity || '').toLowerCase(), item_name: (item.item_name || '').toLowerCase() });
+        });
+    });
+    const catKeyMap = { 'Exterior': ['exterior','paint','panel','body'], 'Tyres': ['tyre','tire','wheel'], 'Brakes': ['brake'], 'Underbody': ['underbody','under body','chassis'], 'Engine Analysis': ['engine','oil','coolant','belt'], 'Interior': ['interior','seat','dashboard','cabin'], 'Lighting': ['light','lamp','indicator'], 'AC': ['ac ','a/c','air con'], 'Suspension': ['suspension','shock','strut'], 'Gear & Transmission': ['gear','clutch','transmission'], 'Inspection Info': ['inspection'], 'Vahan Info': ['vahan','registration','rc ','owner'] };
+
     wz.draft.categories = catNames.map(name => {
-        const rel = answers.filter(a => a.category && a.category.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
-        const failCt = rel.filter(a => a.answer === 'Fail' || a.severity === 'high').length;
-        const warnCt = rel.filter(a => a.severity === 'medium' || ['Scratch','Dent','Rust','Worn'].includes(a.answer)).length;
-        const status = failCt > 0 ? 'critical' : warnCt > 0 ? 'attention' : 'good';
+        const keys = catKeyMap[name] || [name.split(' ')[0].toLowerCase()];
+        const relAnswers = answers.filter(a => a.category && keys.some(k => a.category.toLowerCase().includes(k)));
+        const failAns = relAnswers.filter(a => a.answer === 'Fail' || a.severity === 'high').length;
+        const warnAns = relAnswers.filter(a => a.severity === 'medium' || ['Scratch','Dent','Rust','Worn'].includes(a.answer)).length;
+
+        const relCheck = allCheckItems.filter(i => keys.some(k => i.cat.toLowerCase().includes(k) || i.item_name.includes(k)));
+        const failCheck = relCheck.filter(i => i.answer === 'fail' || i.severity === 'high' || i.answer === 'critical').length;
+        const warnCheck = relCheck.filter(i => i.answer === 'warn' || i.answer === 'warning' || i.severity === 'medium' || ['scratch','dent','rust','worn'].includes(i.answer)).length;
+
+        const status = (failAns > 0 || failCheck > 0) ? 'critical' : (warnAns > 0 || warnCheck > 0) ? 'attention' : 'good';
         return { name, status, description: getDefaultCatSummary(name, status), _isAutoDesc: true };
     });
+    wz.draft._categoriesChecklistSynced = true;
 }
 
 // ── Navigation ───────────────────────────────────────────────
@@ -5120,8 +5139,8 @@ function buildStep4() {
         });
     }
 
-    // Sync checklist answers to category statuses
-    if (d.categories && d.categories.length > 0 && d.checklist && Object.keys(d.checklist).length > 0) {
+    // Sync checklist answers to category statuses ONLY IF NOT previously synced
+    if (!d._categoriesChecklistSynced && d.categories && d.categories.length > 0 && d.checklist && Object.keys(d.checklist).length > 0) {
         const allCheckItems = [];
         Object.keys(d.checklist).forEach(function(cat) {
             (d.checklist[cat] || []).forEach(function(item) {
@@ -5130,6 +5149,7 @@ function buildStep4() {
         });
         const catKeyMap = { 'Exterior': ['exterior','paint','panel','body'], 'Tyres': ['tyre','tire','wheel'], 'Brakes': ['brake'], 'Underbody': ['underbody','under body','chassis'], 'Engine Analysis': ['engine','oil','coolant','belt'], 'Interior': ['interior','seat','dashboard','cabin'], 'Lighting': ['light','lamp','indicator'], 'AC': ['ac ','a/c','air con'], 'Suspension': ['suspension','shock','strut'], 'Gear & Transmission': ['gear','clutch','transmission'], 'Inspection Info': ['inspection'], 'Vahan Info': ['vahan','registration','rc ','owner'] };
         d.categories.forEach(function(c) {
+            if (c._manualStatus || c._userModifiedStatus) return; // Never override user's manual change!
             const keys = catKeyMap[c.name] || [];
             const relItems = allCheckItems.filter(function(i) { return keys.some(function(k) { return i.cat.toLowerCase().includes(k) || i.item_name.includes(k); }); });
             if (relItems.length === 0) return;
@@ -5143,6 +5163,7 @@ function buildStep4() {
                 }
             }
         });
+        d._categoriesChecklistSynced = true;
     }
 
     const currentNegs = d.negotiations || [];
@@ -5154,14 +5175,14 @@ function buildStep4() {
             c.description = getDefaultCatSummary(c.name, c.status);
             c._isAutoDesc = true;
         }
-        const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
+        const statusOpts = [{v:'good',l:'🟢 Good'},{v:'attention',l:'🟡 Attention'},{v:'critical',l:'🔴 Critical'}].map(function(o) {
             return '<option value="' + o.v + '"' + (c.status===o.v?' selected':'') + '>' + o.l + '</option>';
         }).join('');
         return '<div class="wz-cat-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
             '<div style="font-weight:700;font-size:13px;">' + escW(c.name) + '</div>' +
-            '<select class="wz-status-select" onchange="wzUpdateCategory(' + i + ',\'status\',this.value)">' + statusOpts + '</select>' +
+            '<select class="wz-status-select" id="wz-cat-status-' + i + '" onchange="wzUpdateCategory(' + i + ',\'status\',this.value)">' + statusOpts + '</select>' +
             '</div>' +
-            '<input type="text" placeholder="Category summary (e.g. No issues found...)" value="' + escW(c.description||'') + '" oninput="wzUpdateCategory(' + i + ',\'description\',this.value)" style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 11px;border-radius:8px;font-size:12px;font-family:inherit;">' +
+            '<input type="text" id="wz-cat-desc-' + i + '" placeholder="Category summary (e.g. No issues found...)" value="' + escW(c.description||'') + '" oninput="wzUpdateCategory(' + i + ',\'description\',this.value)" style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 11px;border-radius:8px;font-size:12px;font-family:inherit;">' +
             '</div>';
     }).join('');
     const negCard = isNewCar ?
@@ -5639,11 +5660,15 @@ window.wzUpdateCategory = function(idx, field, val) {
     if (!wz || !wz.draft || !wz.draft.categories || !wz.draft.categories[idx]) return;
     const cat = wz.draft.categories[idx];
     cat[field] = val;
-    if (field === 'status' && (!cat.description || cat._isAutoDesc)) {
-        cat.description = getDefaultCatSummary(cat.name, val);
-        cat._isAutoDesc = true;
-        goToWzStep(4);
-        return;
+    if (field === 'status') {
+        cat._manualStatus = true;
+        cat._userModifiedStatus = true;
+        if (!cat.description || cat._isAutoDesc) {
+            cat.description = getDefaultCatSummary(cat.name, val);
+            cat._isAutoDesc = true;
+            const descEl = document.getElementById('wz-cat-desc-' + idx);
+            if (descEl) descEl.value = cat.description;
+        }
     }
     if (field === 'description') {
         cat._isAutoDesc = false;
