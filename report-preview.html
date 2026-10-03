@@ -428,7 +428,7 @@ table.cp td.note { color: #8A8296; }
 <div class="page" id="pg-summary">
   <div class="hdr">
     <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
-    <div class="hdr-right">Booking ID <span id="s-booking-ref">—</span><br/>Inspector: <span id="s-inspector">—</span></div>
+    <div class="hdr-right">Booking ID <span id="s-booking-ref">—</span> <span id="s-reg-badge" style="font-weight:700; color:#7C3AED; margin-left:4px;"></span><br/>Inspector: <span id="s-inspector">—</span></div>
   </div>
 
   <div class="pill-purple">Summary</div>
@@ -749,7 +749,8 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('cv-verdict').className       = 'cover-verdict ' + verdictClass(d.verdict);
     document.getElementById('cv-recommendation').textContent = fmt(d.recommendation);
     document.getElementById('cv-booking-ref').textContent = fmt(d.booking_ref);
-    document.getElementById('cv-vehicle').textContent     = [d.vehicle_brand, d.vehicle_model].filter(Boolean).join(' ') || '—';
+    const _vName = [d.vehicle_brand, d.vehicle_model].filter(Boolean).join(' ') || '—';
+    document.getElementById('cv-vehicle').textContent     = d.vehicle_reg ? (_vName + ' (' + d.vehicle_reg + ')') : _vName;
     document.getElementById('cv-date').textContent        = fmt(d.inspection_date);
     document.getElementById('cv-location').textContent    = fmt(d.area, fmt(d.location_type));
     document.getElementById('cv-phone').textContent       = '+91 9900368006';

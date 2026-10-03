@@ -2285,7 +2285,7 @@
                             <div class="flex justify-between items-center py-3 border-b" style="border-color: var(--border-color);">
                                 <div>
                                     <div class="font-bold">${b.customer_name || 'N/A'}</div>
-                                    <div class="text-xs text-secondary">${b.vehicle_brand || ''} ${b.vehicle_model || ''} • ${formatDate(b.inspection_date)} ${insName ? `• <span class="text-accent-light" style="font-weight:600;"><i class="fas fa-user-shield" style="font-size:10px;"></i> ${insName}</span>` : ''}</div>
+                                    <div class="text-xs text-secondary">${b.vehicle_brand || ''} ${b.vehicle_model || ''}${b.vehicle_reg ? ` (${b.vehicle_reg})` : ''} • ${formatDate(b.inspection_date)} ${insName ? `• <span class="text-accent-light" style="font-weight:600;"><i class="fas fa-user-shield" style="font-size:10px;"></i> ${insName}</span>` : ''}</div>
                                 </div>
                                 <span class="badge badge-${b.status}">${b.status.replace('_', ' ')}</span>
                             </div>
@@ -2401,6 +2401,7 @@
                              `customer_phone.ilike.%${term}%`,
                              `vehicle_brand.ilike.%${term}%`,
                              `vehicle_model.ilike.%${term}%`,
+                             `vehicle_reg.ilike.%${term}%`,
                              `area.ilike.%${term}%`,
                              `address.ilike.%${term}%`
                          ];
@@ -2455,7 +2456,16 @@
                                 <div>${b.customer_name || 'N/A'}</div>
                                 <div class="text-xs text-secondary">${b.customer_phone || '—'}</div>
                             </td>
-                            <td>${b.vehicle_brand || ''} ${b.vehicle_model || ''}</td>
+                            <td>
+                                <div style="font-weight:600; color:#fff;">${b.vehicle_brand || ''} ${b.vehicle_model || ''}</div>
+                                ${b.vehicle_reg ? `
+                                    <div style="display:inline-flex; align-items:center; gap:5px; margin-top:3px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.3); color:#c7d2fe; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px;">
+                                        <i class="fas fa-id-card" style="font-size:10px; color:#818cf8;"></i> ${b.vehicle_reg}
+                                    </div>
+                                ` : `
+                                    <div class="text-xs text-secondary" style="font-style:italic; margin-top:2px;">Reg: Pending / New</div>
+                                `}
+                            </td>
                             <td>
                                 <div class="font-medium" style="color: #e5e7eb;">${areaText}</div>
                                 ${fullAddr && fullAddr !== areaText ? `
@@ -4423,7 +4433,16 @@ async function renderReports() {
         <tr style="border-bottom:1px solid var(--border-color);">
             <td style="padding:12px 16px;font-weight:700;color:var(--accent-light);">${b.booking_ref}</td>
             <td style="padding:12px 16px;">${b.customer_name}<div style="font-size:11px;color:var(--text-secondary);">${b.customer_phone}</div></td>
-            <td style="padding:12px 16px;">${b.vehicle_brand||''} ${b.vehicle_model||''}</td>
+            <td style="padding:12px 16px;">
+                <div style="font-weight:600; color:#fff;">${b.vehicle_brand||''} ${b.vehicle_model||''}</div>
+                ${b.vehicle_reg ? `
+                    <div style="display:inline-flex; align-items:center; gap:5px; margin-top:3px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.3); color:#c7d2fe; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px;">
+                        <i class="fas fa-id-card" style="font-size:10px; color:#818cf8;"></i> ${b.vehicle_reg}
+                    </div>
+                ` : `
+                    <div class="text-xs text-secondary" style="font-style:italic; margin-top:2px;">Reg: Pending / New</div>
+                `}
+            </td>
             <td style="padding:12px 16px;">${formatDate(b.inspection_date)}</td>
             <td style="padding:12px 16px;"><span class="badge badge-${b.status}">${(b.report_status||b.status).replace(/_/g,' ')}</span></td>
             <td style="padding:12px 16px;">
@@ -4688,7 +4707,7 @@ async function loadWzBooking() {
             const titleEl = document.getElementById('wz-title-text');
             const subEl   = document.getElementById('wz-subtitle-text');
             if (titleEl) titleEl.textContent = 'Report: ' + data.booking_ref;
-            if (subEl)   subEl.textContent   = (data.vehicle_brand||'') + ' ' + (data.vehicle_model||'') + ' · ' + data.customer_name;
+            if (subEl)   subEl.textContent = (data.vehicle_brand||'') + ' ' + (data.vehicle_model||'') + (data.vehicle_reg ? ' (' + data.vehicle_reg + ')' : '') + ' — ' + (data.customer_name||'');
         }
     } catch(e) { console.warn('loadWzBooking:', e); }
 }
