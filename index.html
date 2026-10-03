@@ -2458,13 +2458,22 @@
                             </td>
                             <td>
                                 <div style="font-weight:600; color:#fff;">${b.vehicle_brand || ''} ${b.vehicle_model || ''}</div>
-                                ${b.vehicle_reg ? `
-                                    <div style="display:inline-flex; align-items:center; gap:5px; margin-top:3px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.3); color:#c7d2fe; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px;">
-                                        <i class="fas fa-id-card" style="font-size:10px; color:#818cf8;"></i> ${b.vehicle_reg}
-                                    </div>
-                                ` : `
-                                    <div class="text-xs text-secondary" style="font-style:italic; margin-top:2px;">Reg: Pending / New</div>
-                                `}
+                                ${(() => {
+                                    const reg = (b.vehicle_reg || '').trim();
+                                    const isRealReg = reg && !['NA', 'N/A', 'NULL', 'NONE', 'BANGALORE', 'PENDING'].includes(reg.toUpperCase()) && !reg.toLowerCase().includes('new');
+                                    const isNewCar = (reg && reg.toLowerCase().includes('new')) || (b.package_name && b.package_name.toLowerCase().includes('pdi'));
+                                    if (isRealReg) {
+                                        return `<div style="display:inline-flex; align-items:center; gap:5px; margin-top:3px; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.35); color:#c7d2fe; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px;">
+                                            <i class="fas fa-id-card" style="font-size:10px; color:#818cf8;"></i> ${reg.toUpperCase()}
+                                        </div>`;
+                                    } else if (isNewCar) {
+                                        return `<div style="display:inline-flex; align-items:center; gap:5px; margin-top:3px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#6ee7b7; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600;">
+                                            <i class="fas fa-certificate" style="font-size:10px;"></i> New Car (PDI)
+                                        </div>`;
+                                    } else {
+                                        return `<div class="text-xs text-secondary" style="font-style:italic; margin-top:2px;">Reg: Pending</div>`;
+                                    }
+                                })()}
                             </td>
                             <td>
                                 <div class="font-medium" style="color: #e5e7eb;">${areaText}</div>
@@ -2589,10 +2598,15 @@
 
             $('#detail-vehicle').textContent = `${b.vehicle_year || ''} ${b.vehicle_brand || ''} ${b.vehicle_model || ''} (${b.vehicle_fuel || 'Petrol'})`;
             if ($('#detail-reg')) {
-                if (b.vehicle_reg) {
-                    $('#detail-reg').innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px; background:rgba(99,102,241,0.18); border:1px solid rgba(99,102,241,0.4); color:#c7d2fe; padding:2px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px;"><i class="fas fa-id-card" style="font-size:11px; color:#818cf8;"></i> ${b.vehicle_reg}</span>`;
+                const reg = (b.vehicle_reg || '').trim();
+                const isRealReg = reg && !['NA', 'N/A', 'NULL', 'NONE', 'BANGALORE', 'PENDING'].includes(reg.toUpperCase()) && !reg.toLowerCase().includes('new');
+                const isNewCar = (reg && reg.toLowerCase().includes('new')) || (b.package_name && b.package_name.toLowerCase().includes('pdi'));
+                if (isRealReg) {
+                    $('#detail-reg').innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px; background:rgba(99,102,241,0.18); border:1px solid rgba(99,102,241,0.4); color:#c7d2fe; padding:2px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px;"><i class="fas fa-id-card" style="font-size:11px; color:#818cf8;"></i> ${reg.toUpperCase()}</span>`;
+                } else if (isNewCar) {
+                    $('#detail-reg').innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.35); color:#6ee7b7; padding:2px 8px; border-radius:4px; font-weight:600;"><i class="fas fa-certificate" style="font-size:11px;"></i> New Car (PDI)</span>`;
                 } else {
-                    $('#detail-reg').innerHTML = `<span class="text-secondary" style="font-style:italic;">Reg: Pending / New</span>`;
+                    $('#detail-reg').innerHTML = `<span class="text-secondary" style="font-style:italic;">Reg: Pending</span>`;
                 }
             }
             $('#detail-package').textContent = b.package_name;
