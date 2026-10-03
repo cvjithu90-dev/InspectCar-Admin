@@ -927,7 +927,46 @@ table.cp td.note { color: #8A8296; }
 
     if (services.length > 0) {
       if (summaryText) {
-        const rawNote = d.service_history_note || '';
+        let rawNote = d.service_history_note || '';
+        // Strip any physical inspection advice / checks from the service history summary
+        rawNote = (function(text) {
+          if (!text) return '';
+          const paragraphs = text.split(/\n\s*\n/);
+          const cleanedParagraphs = [];
+          for (const para of paragraphs) {
+            const pTrim = para.trim();
+            if (/^(for\s+(?:physical\s+)?inspection|during\s+(?:physical\s+)?inspection|in\s+(?:physical\s+)?inspection|at\s+the\s+time\s+of\s+inspection|the\s+(?:buyer|inspector)\s+should|physical\s+inspection\s+recommendations?|prospective\s+buyers?\s+and\s+(?:physical\s+)?inspectors?\s+should|prospective\s+buyers?\s+should|recommend\s+(?:checking|inspecting)|recommended\s+inspection|inspection\s+recommendations?|buyer(?:'s)?\s+advice|inspection\s+advice)\b/i.test(pTrim)) {
+              continue;
+            }
+            if (/\b(?:physical\s+inspection|during\s+inspection|for\s+inspection|pre-purchase\s+inspection|inspector\s+should|buyer\s+should\s+(?:physically\s+)?check)\b/i.test(pTrim)) {
+              const lines = pTrim.split(/\n/);
+              const cleanedLines = [];
+              for (const line of lines) {
+                const lTrim = line.trim();
+                if (/^(for\s+(?:physical\s+)?inspection|during\s+(?:physical\s+)?inspection|the\s+(?:buyer|inspector)\s+should|prospective\s+buyers?|demands?\s+a\s+thorough\s+.*inspection)/i.test(lTrim)) {
+                  continue;
+                }
+                const sentences = lTrim.split(/(?<=[.!?])\s+/);
+                const filteredSentences = sentences.filter(s => {
+                  return !/\b(?:for|during|in|at\s+the\s+time\s+of)\s+(?:the\s+)?(?:physical\s+)?inspection\b/i.test(s) &&
+                         !/\b(?:buyer|inspector|technician)s?\s+(?:are\s+advised\s+to|should|must)\b/i.test(s) &&
+                         !/\b(?:buyer|inspector)\s+should\s+(?:thoroughly\s+)?(?:physically\s+)?(?:check|inspect|verify|evaluate)\b/i.test(s) &&
+                         !/\bprospective\s+buyers?\s+(?:and\s+(?:physical\s+)?inspectors?\s+)?should\b/i.test(s) &&
+                         !/\bshould\s+(?:also\s+)?be\s+(?:physically\s+)?(?:verified|checked|inspected)\b/i.test(s) &&
+                         !/\brequire\s+special\s+attention\s+during\s+physical\s+inspection\b/i.test(s) &&
+                         !/\bdemands?\s+a\s+thorough\s+(?:pre-purchase\s+)?(?:underbody\s+and\s+engine\s+)?inspection\b/i.test(s) &&
+                         !/\brecommend\s+(?:a\s+thorough\s+)?(?:physical\s+)?inspection\b/i.test(s);
+                });
+                if (filteredSentences.length > 0) cleanedLines.push(filteredSentences.join(' '));
+              }
+              if (cleanedLines.length > 0) cleanedParagraphs.push(cleanedLines.join('\n'));
+            } else {
+              cleanedParagraphs.push(para);
+            }
+          }
+          return cleanedParagraphs.join('\n\n').trim();
+        })(rawNote);
+
         const formattedNote = escHtml(rawNote)
           .replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>')
           .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')

@@ -5635,8 +5635,15 @@ function buildStep5() {
             '<span id="svc-pdf-msg" style="font-weight:600;color:#C4B5FD;">Analyzing document with Gemini AI… Please wait a moment while service visits, dealer information, and summary are extracted.</span>' +
         '</div>';
 
-    // Executive Summary Card HTML
-    const currentSummary = (wz && wz.draft && wz.draft.service_history_note) ? wz.draft.service_history_note : '';
+    // Executive Summary Card HTML (Strictly historical only, NO physical inspection advice)
+    let currentSummary = (wz && wz.draft && wz.draft.service_history_note) ? wz.draft.service_history_note : '';
+    if (currentSummary && window.wzStripInspectionAdvice) {
+        const cleaned = window.wzStripInspectionAdvice(currentSummary);
+        if (cleaned !== currentSummary) {
+            currentSummary = cleaned;
+            if (wz && wz.draft) wz.draft.service_history_note = cleaned;
+        }
+    }
     const summaryCard = '<div class="wz-card" style="background:var(--surface-color);border:1px solid rgba(139,92,246,0.35);">' +
         '<div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;color:#A78BFA;margin-bottom:6px;">' +
             '<span><i class="fas fa-bolt" style="color:#F59E0B;margin-right:6px;"></i> Executive Summary</span>' +
@@ -6383,19 +6390,20 @@ window.wzGenerateKeyServiceSummaryPdf = function(data) {
             finalY += 2;
         }
 
-        // 6. Short Buyer Summary
-        if (data.buyer_summary) {
+        // 6. Service History Summary (Strictly historical only, NO inspection advice)
+        const cleanBuyerSummary = data.buyer_summary ? (window.wzStripInspectionAdvice ? window.wzStripInspectionAdvice(data.buyer_summary) : data.buyer_summary) : '';
+        if (cleanBuyerSummary) {
             if (finalY > 255) { doc.addPage(); finalY = 16; }
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(9.5);
             doc.setTextColor(20, 20, 20);
-            doc.text('SHORT BUYER SUMMARY', 14, finalY);
+            doc.text('SERVICE HISTORY SUMMARY', 14, finalY);
             finalY += 4.5;
 
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7.5);
             doc.setTextColor(40, 40, 40);
-            const summaryLines = doc.splitTextToSize(data.buyer_summary, 182);
+            const summaryLines = doc.splitTextToSize(cleanBuyerSummary, 182);
             if (finalY + (summaryLines.length * 3.4) > 280) { doc.addPage(); finalY = 16; }
             doc.text(summaryLines, 14, finalY);
             finalY += (summaryLines.length * 3.4) + 4;
@@ -6656,6 +6664,9 @@ CRITICAL SERVICE DATE EXTRACTION RULES:
    - Do NOT treat individual spare parts lines as separate visits. Group all work done during a single visit on a specific date and odometer into ONE consolidated record.
 4. DEALER / SERVICE CENTER NAME:
    - Identify the real workshop/dealership name and branch (e.g. 'Nandi Toyota / Nandi Banaswadi'). Resolve numeric dealer codes to the actual name.
+5. SERVICE HISTORY SUMMARY (STRICTLY HISTORICAL ONLY - NO INSPECTION ADVICE):
+   - 1-2 professional sentences summarizing purely what is documented in the service history records (maintenance schedule adherence, dealer consistency, timeline, major mechanical or body repairs, parts replacements).
+   - STRICT PROHIBITION: Do NOT mention or suggest anything related to physical inspection, inspector advice, buyer check advice, or inspecting components (e.g. NEVER output 'for physical inspection check...', 'inspector should verify...', or 'inspect X/Y/Z'). Summarize ONLY the historical facts and records documented in the service history file.
 
 Return valid JSON format ONLY:
 {
@@ -6665,7 +6676,7 @@ Return valid JSON format ONLY:
   "max_odometer_km": 98434,
   "summary": "2-3 sentences executive summary of service history",
   "major_points": ["e.g. Turbocharger replacement at 68,000 km", "e.g. Front brake pads replacement"],
-  "buyer_summary": "Appraisal of vehicle service history",
+  "buyer_summary": "Historical appraisal of vehicle service records only without any physical inspection advice",
   "records": [
     {
       "service_date": "YYYY-MM-DD",
@@ -6748,6 +6759,46 @@ Return valid JSON format ONLY:
             recurring_complaints: allRecurring
         }
     };
+};
+
+window.wzStripInspectionAdvice = function(text) {
+    if (!text) return '';
+    const paragraphs = text.split(/\n\s*\n/);
+    const cleanedParagraphs = [];
+    for (const para of paragraphs) {
+        const pTrim = para.trim();
+        // If whole paragraph is inspection advice or buyer inspection recommendations, drop it
+        if (/^(for\s+(?:physical\s+)?inspection|during\s+(?:physical\s+)?inspection|in\s+(?:physical\s+)?inspection|at\s+the\s+time\s+of\s+inspection|the\s+(?:buyer|inspector)\s+should|physical\s+inspection\s+recommendations?|prospective\s+buyers?\s+and\s+(?:physical\s+)?inspectors?\s+should|prospective\s+buyers?\s+should|recommend\s+(?:checking|inspecting)|recommended\s+inspection|inspection\s+recommendations?|buyer(?:'s)?\s+advice|inspection\s+advice)\b/i.test(pTrim)) {
+            continue;
+        }
+        // If paragraph contains inspection advice keywords, filter lines/sentences
+        if (/\b(?:physical\s+inspection|during\s+inspection|for\s+inspection|pre-purchase\s+inspection|inspector\s+should|buyer\s+should\s+(?:physically\s+)?check)\b/i.test(pTrim)) {
+            const lines = pTrim.split(/\n/);
+            const cleanedLines = [];
+            for (const line of lines) {
+                const lTrim = line.trim();
+                if (/^(for\s+(?:physical\s+)?inspection|during\s+(?:physical\s+)?inspection|the\s+(?:buyer|inspector)\s+should|prospective\s+buyers?|demands?\s+a\s+thorough\s+.*inspection)/i.test(lTrim)) {
+                    continue;
+                }
+                const sentences = lTrim.split(/(?<=[.!?])\s+/);
+                const filteredSentences = sentences.filter(s => {
+                    return !/\b(?:for|during|in|at\s+the\s+time\s+of)\s+(?:the\s+)?(?:physical\s+)?inspection\b/i.test(s) &&
+                           !/\b(?:buyer|inspector|technician)s?\s+(?:are\s+advised\s+to|should|must)\b/i.test(s) &&
+                           !/\b(?:buyer|inspector)\s+should\s+(?:thoroughly\s+)?(?:physically\s+)?(?:check|inspect|verify|evaluate)\b/i.test(s) &&
+                           !/\bprospective\s+buyers?\s+(?:and\s+(?:physical\s+)?inspectors?\s+)?should\b/i.test(s) &&
+                           !/\bshould\s+(?:also\s+)?be\s+(?:physically\s+)?(?:verified|checked|inspected)\b/i.test(s) &&
+                           !/\brequire\s+special\s+attention\s+during\s+physical\s+inspection\b/i.test(s) &&
+                           !/\bdemands?\s+a\s+thorough\s+(?:pre-purchase\s+)?(?:underbody\s+and\s+engine\s+)?inspection\b/i.test(s) &&
+                           !/\brecommend\s+(?:a\s+thorough\s+)?(?:physical\s+)?inspection\b/i.test(s);
+                });
+                if (filteredSentences.length > 0) cleanedLines.push(filteredSentences.join(' '));
+            }
+            if (cleanedLines.length > 0) cleanedParagraphs.push(cleanedLines.join('\n'));
+        } else {
+            cleanedParagraphs.push(para);
+        }
+    }
+    return cleanedParagraphs.join('\n\n').trim();
 };
 
 window.wzSvcHandleFiles = async function(fileList) {
@@ -6842,10 +6893,10 @@ window.wzSvcHandleFiles = async function(fileList) {
                 // Strictly isolate service history: DO NOT mutate or overwrite vehicle info
                 // (e.g. vehicle_brand, vehicle_model, vehicle_reg, odometer_km) in Step 1.
 
-                // Auto-populate Executive Summary
+                // Auto-populate Executive Summary (Strictly historical only, NO inspection advice)
                 let fullSummaryText = '';
                 if (analysis.buyer_summary) {
-                    fullSummaryText = analysis.buyer_summary;
+                    fullSummaryText = window.wzStripInspectionAdvice(analysis.buyer_summary);
                 }
                 if (analysis.major_points && analysis.major_points.length > 0) {
                     fullSummaryText += (fullSummaryText ? '\n\n' : '') + '🔴 Major Points & Highlights:\n• ' + analysis.major_points.join('\n• ');
@@ -6853,6 +6904,7 @@ window.wzSvcHandleFiles = async function(fileList) {
                 if (!fullSummaryText) {
                     fullSummaryText = window.wzBuildExecutiveSummaryText(wz.draft.service_history);
                 }
+                fullSummaryText = window.wzStripInspectionAdvice(fullSummaryText);
                 wz.draft.service_history_note = fullSummaryText;
 
                 // Save analysis object for re-downloading
@@ -6953,8 +7005,9 @@ CRITICAL SERVICE VISIT DATE RULES:
    - cost: Total visit cost in ₹ (if available, else 0)
 7. MAJOR HISTORY POINTS:
    - Bullet points of repeated work, major component replacements, or significant repairs (e.g. repeated turbocharger work, emission-control/DPF work, brake pad/disc replacements, body/door repairs, radiator fan, diesel injectors).
-8. SHORT BUYER SUMMARY:
-   - 1-2 paragraph executive summary providing a professional appraisal of the vehicle's maintenance history, consistency of dealer servicing, and specific areas the buyer or inspector should physically inspect.
+8. SERVICE HISTORY SUMMARY (STRICTLY HISTORICAL ONLY - NO INSPECTION ADVICE):
+   - 1-2 professional paragraphs summarizing purely what is documented in the service history records (maintenance schedule adherence, dealer consistency, timeline, major mechanical or body repairs, recurring concerns, parts replacements).
+   - STRICT PROHIBITION: Do NOT mention or suggest anything related to physical inspection, inspector advice, buyer check advice, or inspecting components (e.g. NEVER output 'for physical inspection check...', 'inspector should verify...', or 'inspect X/Y/Z'). Summarize ONLY the historical facts and records documented in the service history file.
 
 Return valid JSON ONLY matching this exact structure:
 {
@@ -6976,7 +7029,7 @@ Return valid JSON ONLY matching this exact structure:
     "Repeated turbocharger-related work around 38,767 km, 53,102 km and 68,589 km.",
     "Repeated emission-control work around 38,767 km, 61,105 km and 98,434 km."
   ],
-  "buyer_summary": "Well-documented Toyota service history, but notable mechanical history involving repeated turbocharger and emission-control work..."
+  "buyer_summary": "Comprehensive authorized service history spanning 2019 to 2026. The maintenance schedule has been consistently followed with periodic servicing, though records document significant early manifold repairs and subsequent body repairs."
 }
 
 Raw Text from Document:
