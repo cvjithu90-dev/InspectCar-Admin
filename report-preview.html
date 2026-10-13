@@ -1098,10 +1098,50 @@ table.cp td.note { color: #8A8296; }
     // Hero Photos & Checkpoint Pages (Dynamically Paginated across multiple A4 pages)
     const heroPhotos = d.hero_photos || {};
     const baselineCat = d.checklist && (d.checklist['Baseline Photos & Docs'] || d.checklist['Baseline Photos & Docs']);
+    const isInteriorUrl = (url) => {
+      if (!url || !d.checklist) return false;
+      const allItems = Object.values(d.checklist).flat();
+      return allItems.some(i => {
+        const n = ((i.item_name || '') + ' ' + (i.category || '')).toLowerCase();
+        return (n.includes('interior') || n.includes('cluster') || n.includes('vin') || n.includes('odometer') || n.includes('warning') || n.includes('engine bay') || n.includes('boot / luggage')) &&
+               Array.isArray(i.photos) && i.photos.includes(url);
+      });
+    };
     const getBaselinePhoto = (slot) => {
+      if (!baselineCat) return null;
+      const matchers = {
+        'front': (name) => name.includes('front') && !name.includes('rear') && !name.includes('interior'),
+        'rear':  (name) => name.includes('rear') && !name.includes('front') && !name.includes('interior'),
+        'left':  (name) => (name.includes('left') || name.includes('driver')) && !name.includes('right') && !name.includes('passenger') && !name.includes('interior'),
+        'right': (name) => (name.includes('right') || name.includes('passenger')) && !name.includes('left') && !name.includes('driver') && !name.includes('interior')
+      };
+      const matcher = matchers[slot];
+      if (matcher) {
+        const item = baselineCat.find(i => {
+          const n = (i.item_name || '').toLowerCase();
+          return n.includes('exterior baseline') && matcher(n);
+        });
+        if (item && item.photos && item.photos[0]) return item.photos[0];
+      }
       const key = 'Exterior Baseline Photos_' + slot;
-      const subItem = baselineCat && baselineCat.find(i => i.item_name === key);
-      return subItem && subItem.photos && subItem.photos[0];
+      const subItem = baselineCat.find(i => i.item_name === key);
+      if (subItem && subItem.photos && subItem.photos[0]) return subItem.photos[0];
+
+      const combined = baselineCat.find(i => (i.item_name || '').toLowerCase().trim() === 'exterior baseline photos');
+      if (combined && Array.isArray(combined.photos) && combined.photos.length > 0) {
+        const idxMap = { 'front': 0, 'rear': 1, 'left': 2, 'right': 3 };
+        const idx = idxMap[slot];
+        if (idx !== undefined && combined.photos[idx]) return combined.photos[idx];
+      }
+      return null;
+    };
+    const getHeroUrl = (slot) => {
+      const explicit = heroPhotos[slot.adminKey];
+      const baseline = getBaselinePhoto(slot.inspKey);
+      if (explicit && !isInteriorUrl(explicit)) {
+        return explicit;
+      }
+      return baseline || (isInteriorUrl(explicit) ? null : explicit);
     };
     const heroSlots = [
       { label: 'Front',           adminKey: 'front',          inspKey: 'front' },
@@ -1114,7 +1154,7 @@ table.cp td.note { color: #8A8296; }
       <div class="section-title">Vehicle Exterior Overview</div>
       <div class="gallery4" id="hero-gallery">
         ${heroSlots.map(slot => {
-          const url = heroPhotos[slot.adminKey] || getBaselinePhoto(slot.inspKey);
+          const url = getHeroUrl(slot);
           const content = url
             ? `<img src="${url}" style="width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #EEE7FB;">`
             : `<div style="height:110px; background:#FAF8FF; border:1px dashed #D6C9F5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#A78BFA; font-size:9px;">${slot.label}</div>`;

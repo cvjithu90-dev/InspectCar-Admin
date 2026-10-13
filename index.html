@@ -4997,33 +4997,102 @@ async function loadWzAnswers() {
 
 function autoPopulateHeroPhotos(photos) {
     if (!wz.draft.hero_photos) wz.draft.hero_photos = {};
-    // First pass: always prioritize actual Exterior Baseline Photos from inspector
-    (photos || []).forEach(p => {
-        const name = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
-        const isBaseline = name.includes('exterior baseline') || (p.category === 'Baseline Photos & Docs' && (name.includes('front') || name.includes('rear') || name.includes('left') || name.includes('right') || name.includes('side')));
-        if (isBaseline) {
-            if (name.includes('front')) {
-                wz.draft.hero_photos.front = p.photo_url;
-            } else if (name.includes('rear')) {
-                wz.draft.hero_photos.rear = p.photo_url;
-            } else if (name.includes('left') || name.includes('driver')) {
-                wz.draft.hero_photos.side_driver = p.photo_url;
-            } else if (name.includes('right') || name.includes('passenger')) {
-                wz.draft.hero_photos.side_passenger = p.photo_url;
+
+    const isInterior = (p) => {
+        const s = ((p.item_name || '') + ' ' + (p.caption || '') + ' ' + (p.category || '')).toLowerCase();
+        return s.includes('interior') || s.includes('cluster') || s.includes('odometer') || s.includes('vin') || s.includes('engine bay') || s.includes('boot / luggage');
+    };
+
+    // If any existing hero photo points to an interior / non-exterior photo, purge it
+    ['front', 'rear', 'side_driver', 'side_passenger'].forEach(slot => {
+        const currentUrl = wz.draft.hero_photos[slot];
+        if (currentUrl) {
+            const matchedP = (photos || []).find(p => p.photo_url === currentUrl);
+            if (matchedP && isInterior(matchedP)) {
+                delete wz.draft.hero_photos[slot];
             }
         }
     });
-    // Second pass: fill any remaining empty slots
-    (photos || []).forEach(p => {
-        const str = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
-        if (str.includes('front') && !wz.draft.hero_photos.front) {
-            wz.draft.hero_photos.front = p.photo_url;
-        } else if (str.includes('rear') && !wz.draft.hero_photos.rear) {
-            wz.draft.hero_photos.rear = p.photo_url;
-        } else if ((str.includes('driver') || str.includes('left')) && !wz.draft.hero_photos.side_driver) {
-            wz.draft.hero_photos.side_driver = p.photo_url;
-        } else if ((str.includes('passenger') || str.includes('right')) && !wz.draft.hero_photos.side_passenger) {
-            wz.draft.hero_photos.side_passenger = p.photo_url;
+
+    const slots = [
+        {
+            key: 'front',
+            match: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return s.includes('exterior baseline') && s.includes('front');
+            },
+            arrIdx: 0,
+            fallbackMatch: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return !isInterior(p) && s.includes('front') && !s.includes('rear') && !s.includes('seat');
+            }
+        },
+        {
+            key: 'rear',
+            match: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return s.includes('exterior baseline') && s.includes('rear');
+            },
+            arrIdx: 1,
+            fallbackMatch: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return !isInterior(p) && s.includes('rear') && !s.includes('front') && !s.includes('seat');
+            }
+        },
+        {
+            key: 'side_driver',
+            match: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return s.includes('exterior baseline') && (s.includes('left') || s.includes('driver'));
+            },
+            arrIdx: 2,
+            fallbackMatch: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return !isInterior(p) && (s.includes('left') || s.includes('driver')) && !s.includes('right') && !s.includes('passenger') && !s.includes('seat');
+            }
+        },
+        {
+            key: 'side_passenger',
+            match: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return s.includes('exterior baseline') && (s.includes('right') || s.includes('passenger'));
+            },
+            arrIdx: 3,
+            fallbackMatch: p => {
+                const s = ((p.item_name || '') + ' ' + (p.caption || '')).toLowerCase();
+                return !isInterior(p) && (s.includes('right') || s.includes('passenger')) && !s.includes('left') && !s.includes('driver') && !s.includes('seat');
+            }
+        }
+    ];
+
+    // Priority 1: Match from photos array where item specifically has "exterior baseline"
+    slots.forEach(slot => {
+        const found = (photos || []).find(p => slot.match(p) && !isInterior(p));
+        if (found) {
+            if (!wz.draft.hero_photos[slot.key] || !wz.draft.hero_photos[slot.key].includes('hero_')) {
+                wz.draft.hero_photos[slot.key] = found.photo_url;
+            }
+        }
+    });
+
+    // Priority 2: Check checklist item 'Exterior Baseline Photos' array [0: front, 1: rear, 2: left, 3: right]
+    const baseItems = (wz.draft.checklist && wz.draft.checklist['Baseline Photos & Docs']) || [];
+    const extBaseItem = baseItems.find(i => (i.item_name || '').toLowerCase().includes('exterior baseline'));
+    if (extBaseItem && Array.isArray(extBaseItem.photos) && extBaseItem.photos.length > 0) {
+        slots.forEach(slot => {
+            if (!wz.draft.hero_photos[slot.key] && extBaseItem.photos[slot.arrIdx]) {
+                wz.draft.hero_photos[slot.key] = extBaseItem.photos[slot.arrIdx];
+            }
+        });
+    }
+
+    // Priority 3: Fill any remaining empty slots from other photos, strictly non-interior
+    slots.forEach(slot => {
+        if (!wz.draft.hero_photos[slot.key]) {
+            const found = (photos || []).find(p => slot.fallbackMatch(p));
+            if (found) {
+                wz.draft.hero_photos[slot.key] = found.photo_url;
+            }
         }
     });
 }
