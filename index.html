@@ -5709,14 +5709,30 @@ function buildStep5() {
     '</div>';
 
     if (d.car_type === 'new') {
-        return '<div class="wz-step-header"><div class="wz-step-title">Service History</div>' +
-            '<div class="wz-step-desc">Not applicable for brand new vehicles.</div></div>' +
-            '<div class="wz-card" style="border:1px solid rgba(16,185,129,0.3);">' +
-            '<div class="wz-card-title" style="color:#10B981;">🆕 Brand New Vehicle — No Service History</div>' +
-            '<div style="background:rgba(16,185,129,0.06);border-radius:10px;padding:16px;font-size:13px;color:var(--text-primary);line-height:1.7;">' +
-            'This is a factory-fresh vehicle with <b>zero prior service records</b>. No service history exists at the time of PDI inspection.<br><br>' +
-            'First service is due as per the manufacturer\'s recommended schedule (typically 1,000–1,500 km break-in service, followed by the first scheduled service at 5,000–10,000 km).<br><br>' +
-            'Advise the customer to retain all dealer service records from the first visit onwards to maintain warranty validity.' +
+        const pdiDefaultNote = 'This is a factory-fresh vehicle with zero prior service records. No service history exists at the time of PDI inspection. First service is due as per the manufacturer\'s recommended schedule (typically 1,000–1,500 km break-in service, followed by the first scheduled service at 5,000–10,000 km). Advise the customer to retain all dealer service records from the first visit onwards to maintain warranty validity.';
+        const activeSvcNote = (d.service_history_note && d.service_history_note.trim().length > 0) ? d.service_history_note : pdiDefaultNote;
+        if (!d.service_history_note) d.service_history_note = activeSvcNote;
+
+        return '<div class="wz-step-header"><div class="wz-step-title">Service History &amp; PDI Notes</div>' +
+            '<div class="wz-step-desc">Brand new vehicle — capture first service schedule, warranty guidelines, or dealer PDI notes below.</div></div>' +
+            '<div class="wz-card" style="border:1px solid rgba(16,185,129,0.35);background:var(--surface-color);">' +
+            '<div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;color:#10B981;margin-bottom:8px;">' +
+                '<span><i class="fas fa-certificate" style="margin-right:6px;"></i> 🆕 Brand New Vehicle — PDI Service History Note</span>' +
+                '<button type="button" class="wz-api-btn" onclick="wzResetNewCarSvcNote()" style="font-size:11px;padding:4px 10px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:#6EE7B7;cursor:pointer;">' +
+                    '<i class="fas fa-undo"></i> Reset Default Note' +
+                '</button>' +
+            '</div>' +
+            '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">' +
+                'This executive note will be prominently highlighted on Page 6 (Service History page) and Page 3 of the final customer PDF report.' +
+            '</div>' +
+            '<textarea id="wz-svc-summary-input" rows="5" oninput="wzUpdateSvcSummary(this.value)" placeholder="Enter PDI service history / warranty notes..." style="width:100%;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-primary);padding:10px 12px;border-radius:8px;font-size:12.5px;font-family:inherit;resize:vertical;line-height:1.6;">' + escW(activeSvcNote) + '</textarea>' +
+            '</div>' +
+            '<div class="wz-card" style="border:1px solid rgba(99,102,241,0.25);">' +
+            '<div class="wz-card-title" style="color:#A78BFA;"><i class="fas fa-info-circle" style="margin-right:6px;"></i> PDI Inspection Guidance</div>' +
+            '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:14px;font-size:12.5px;color:var(--text-primary);line-height:1.7;">' +
+            '• <b>Break-in Service:</b> Typically 1,000–1,500 km or 1 month (whichever comes first) at authorized dealer.<br>' +
+            '• <b>Warranty Records:</b> Advise customer to retain stamped dealer job cards and invoices from visit #1 to ensure full manufacturer warranty protection.<br>' +
+            '• <b>Pre-Delivery Checks:</b> Fluid levels (engine oil, coolant, brake fluid, windshield washer) and tyre manufacturing date codes (DOT) are verified in the Technical Checklist (Step 3).' +
             '</div></div>';
     }
 
@@ -6211,6 +6227,16 @@ window.wzUpdateSvcSummary = function(val) {
     if (!wz || !wz.draft) return;
     wz.draft.service_history_note = val;
     updateWzPreview();
+};
+
+window.wzResetNewCarSvcNote = function() {
+    if (!wz || !wz.draft) return;
+    const defaultNote = 'This is a factory-fresh vehicle with zero prior service records. No service history exists at the time of PDI inspection. First service is due as per the manufacturer\'s recommended schedule (typically 1,000–1,500 km break-in service, followed by the first scheduled service at 5,000–10,000 km). Advise the customer to retain all dealer service records from the first visit onwards to maintain warranty validity.';
+    wz.draft.service_history_note = defaultNote;
+    const el = document.getElementById('wz-svc-summary-input');
+    if (el) el.value = defaultNote;
+    updateWzPreview();
+    showToast('PDI Service History Note reset to default.', 'info');
 };
 
 window.wzBuildExecutiveSummaryText = function(services, extraInsights) {
