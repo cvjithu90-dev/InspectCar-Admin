@@ -4849,7 +4849,13 @@ async function loadWzBooking() {
         const { data } = await client.from('bookings').select('*, profiles(full_name)').eq('id', wz.bookingId).single();
         if (data) {
             wz.booking = data;
+            const isNewCarPkg = (data.package_name && /pdi|new car|quick delivery/i.test(data.package_name)) ||
+                                (data.vehicle_model && /\(new car\)/i.test(data.vehicle_model)) ||
+                                (data.inspection_type === 'new_car_pdi');
+            const detectedCarType = data.car_type || (isNewCarPkg ? 'new' : 'used');
+
             Object.assign(wz.draft, {
+                car_type: wz.draft.car_type || detectedCarType,
                 booking_ref: data.booking_ref, customer_name: data.customer_name,
                 customer_phone: data.customer_phone, vehicle_brand: data.vehicle_brand,
                 vehicle_model: data.vehicle_model, vehicle_year: data.vehicle_year,
@@ -6019,7 +6025,7 @@ function buildStep10() {
         ['AI Score', (d.ai_score||'—') + '/100'],
         ['Verdict', d.verdict||'—'],
         ['Checklist Items', checklistTotal],
-        ['Repair Items', (d.repairs||[]).length]
+        ['Repair Items', (d.car_type === 'new' ? 'N/A (PDI)' : (d.repairs||[]).length)]
     ].map(function(pair) {
         return '<div style="background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;padding:11px;">' +
             '<div style="font-size:9px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:3px;">' + pair[0] + '</div>' +

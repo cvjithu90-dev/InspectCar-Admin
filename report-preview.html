@@ -468,7 +468,7 @@ table.cp td.note { color: #8A8296; }
 <div class="page" id="pg-negotiation">
   <div class="hdr">
     <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
-    <div class="hdr-right">Anomaly Checks &amp; Negotiation<br/>AI-generated from inspection findings</div>
+    <div class="hdr-right" id="n-hdr-right">Anomaly Checks &amp; Negotiation<br/>AI-generated from inspection findings</div>
   </div>
 
   <div class="pill-purple">Anomaly Checks</div>
@@ -480,15 +480,15 @@ table.cp td.note { color: #8A8296; }
     <div class="cat-card"><h4><span class="dot dot-g"></span>Dent / Tamper Check</h4><p id="n-tamper">No VIN plate or registration mismatches found.</p></div>
   </div>
 
-  <div class="pill-purple">Negotiation Tips</div>
-  <div class="section-title">AI Price Negotiation Suggestions</div>
-  <div class="section-sub">Based on detected defects, here is the estimated room for negotiation with the seller.</div>
+  <div class="pill-purple" id="n-pill-neg">Negotiation Tips</div>
+  <div class="section-title" id="n-title-neg">AI Price Negotiation Suggestions</div>
+  <div class="section-sub" id="n-sub-neg">Based on detected defects, here is the estimated room for negotiation with the seller.</div>
 
   <div id="n-negotiation-list">
     <!-- Populated dynamically -->
   </div>
 
-  <div class="neg-total">
+  <div class="neg-total" id="n-neg-total-box">
     <div><div class="t1">Total suggested negotiation room</div></div>
     <div class="t2" id="n-total">&#8377;0</div>
   </div>
@@ -574,12 +574,12 @@ table.cp td.note { color: #8A8296; }
 <div class="page" id="pg-repair">
   <div class="hdr">
     <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
-    <div class="hdr-right">Repair Estimate<br/>Admin-compiled estimate based on inspection findings</div>
+    <div class="hdr-right" id="r-hdr-right">Repair Estimate<br/>Admin-compiled estimate based on inspection findings</div>
   </div>
 
-  <div class="pill-purple">Repair Estimate</div>
-  <div class="section-title">Estimated Repair &amp; Rectification Costs</div>
-  <div class="section-sub">All figures are indicative estimates based on local market rates.</div>
+  <div class="pill-purple" id="r-pill">Repair Estimate</div>
+  <div class="section-title" id="r-section-title">Estimated Repair &amp; Rectification Costs</div>
+  <div class="section-sub" id="r-section-sub">All figures are indicative estimates based on local market rates.</div>
 
   <div class="chip-wrap" id="r-chips">
     <!-- Category chips populated dynamically -->
@@ -589,7 +589,7 @@ table.cp td.note { color: #8A8296; }
     <!-- Tables populated dynamically -->
   </div>
 
-  <div class="grand-total-box">
+  <div class="grand-total-box" id="r-grand-total-box">
     <div><div class="g1">Grand Total Estimated Repair Cost</div></div>
     <div class="g2" id="r-grand-total">&#8377;0</div>
   </div>
@@ -760,6 +760,11 @@ table.cp td.note { color: #8A8296; }
     const fmt = (v, fallback='—') => v || fallback;
     const fmtINR = n => n ? '₹' + Number(n).toLocaleString('en-IN') : '₹0';
 
+    const isNewCar = (d.car_type === 'new') || 
+                     (d.package_name && /pdi|new car|quick delivery/i.test(d.package_name)) || 
+                     (d.vehicle_model && /\(new car\)/i.test(d.vehicle_model)) || 
+                     (d.inspection_type === 'new_car_pdi');
+
     // Cover
     document.getElementById('cv-score').textContent       = fmt(d.ai_score);
     document.getElementById('cv-verdict').textContent     = fmt(d.verdict);
@@ -771,6 +776,13 @@ table.cp td.note { color: #8A8296; }
     document.getElementById('cv-date').textContent        = fmt(d.inspection_date);
     document.getElementById('cv-location').textContent    = fmt(d.area, fmt(d.location_type));
     document.getElementById('cv-phone').textContent       = '+91 9900368006';
+
+    if (isNewCar) {
+      const cvTag = document.querySelector('.cover-tag');
+      if (cvTag) cvTag.textContent = 'Certified Pre-Delivery Inspection (PDI)';
+      const cvSub = document.querySelector('.cover-sub');
+      if (cvSub) cvSub.innerHTML = 'A comprehensive 360&deg; pre-delivery inspection ensuring showroom delivery quality, verified factory build, and zero transit defects.';
+    }
 
     // Summary
     document.getElementById('s-booking-ref').textContent = fmt(d.booking_ref);
@@ -846,79 +858,195 @@ table.cp td.note { color: #8A8296; }
     }
 
     // Anomaly / Negotiation on Page 3
+    if (document.getElementById('n-hdr-right')) {
+      document.getElementById('n-hdr-right').innerHTML = isNewCar 
+        ? 'Pre-Delivery Evaluation &amp; Value Additions<br/>PDI findings and dealership suggestions'
+        : 'Anomaly Checks &amp; Negotiation<br/>AI-generated from inspection findings';
+    }
+    if (document.getElementById('n-pill-neg')) {
+      document.getElementById('n-pill-neg').textContent = isNewCar ? 'Negotiation Tips — New Car' : 'Negotiation Tips';
+    }
+    if (document.getElementById('n-title-neg')) {
+      document.getElementById('n-title-neg').textContent = isNewCar ? 'Dealership Value Additions & Negotiation' : 'AI Price Negotiation Suggestions';
+    }
+    if (document.getElementById('n-sub-neg')) {
+      document.getElementById('n-sub-neg').textContent = isNewCar
+        ? 'Price negotiation is not applicable for new vehicles. Focus on dealership deliverables and value additions before delivery.'
+        : 'Based on detected defects, here is the estimated room for negotiation with the seller.';
+    }
+
     if (document.getElementById('n-insurance')) {
-      document.getElementById('n-insurance').textContent = insValid 
-        ? 'Yes, having a valid insurance till ' + d.insurance_expiry + '.' 
-        : 'Insurance validity not available or expired.';
+      document.getElementById('n-insurance').textContent = isNewCar
+        ? (insValid ? 'Valid till ' + d.insurance_expiry + '.' : 'Dealer-arranged transit/new vehicle policy pending registration.')
+        : (insValid ? 'Yes, having a valid insurance till ' + d.insurance_expiry + '.' : 'Insurance validity not available or expired.');
     }
     if (document.getElementById('n-ownership')) {
-      document.getElementById('n-ownership').textContent = d.owner_count 
-        ? (d.owner_count === 1 ? 'Single owner (individual).' : d.owner_count + ' previous owners.') 
-        : 'Single owner (individual).';
+      document.getElementById('n-ownership').textContent = isNewCar
+        ? 'Brand new vehicle (Unregistered / Pre-Delivery). First registered owner upon delivery.'
+        : (d.owner_count ? (d.owner_count === 1 ? 'Single owner (individual).' : d.owner_count + ' previous owners.') : 'Single owner (individual).');
     }
     if (document.getElementById('n-puc')) {
-      document.getElementById('n-puc').textContent = pucValid 
-        ? 'Valid till ' + d.puc_expiry + '.' 
-        : 'Not available in Parivahan. Check locally.';
+      document.getElementById('n-puc').textContent = isNewCar
+        ? 'Brand new vehicle — Form 22 factory emissions valid for 1 year from registration.'
+        : (pucValid ? 'Valid till ' + d.puc_expiry + '.' : 'Not available in Parivahan. Check locally.');
     }
 
     const negList = d.negotiations || [];
     const negContainer = document.getElementById('n-negotiation-list');
-    if (negList.length > 0) {
-      let total = 0;
-      negContainer.innerHTML = negList.map(n => {
-        total += Number(n.amount) || 0;
-        return `<div class="neg-card">
-          <div class="neg-left">
-            <div class="issue">${escHtml(n.issue)}</div>
-            <div class="desc">${escHtml(n.description || '')}</div>
+    const negTotalBox = document.getElementById('n-neg-total-box');
+
+    if (isNewCar) {
+      if (negTotalBox) negTotalBox.style.display = 'none';
+      if (negContainer) {
+        negContainer.innerHTML = `
+          <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:12px; padding:16px 18px; margin-bottom:14px;">
+            <div style="font-size:12px; font-weight:800; color:#065F46; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+              <span style="font-size:15px;">💡</span> Negotiation Tips — New Car
+            </div>
+            <div style="font-size:13px; font-weight:700; color:#065F46; margin-bottom:10px;">
+              Price negotiation is not applicable for new vehicles.
+            </div>
+            <div style="font-size:12px; color:#047857; line-height:1.7; margin-bottom:12px;">
+              However, you can suggest the following value additions from the dealership before delivery acceptance:
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div style="background:rgba(255,255,255,0.85); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px 14px; font-size:11.5px; color:#065F46; line-height:1.6;">
+                🎁 <b>Free Accessories:</b> Seat covers, floor mats, sunfilm, mud flaps, dashcam
+              </div>
+              <div style="background:rgba(255,255,255,0.85); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px 14px; font-size:11.5px; color:#065F46; line-height:1.6;">
+                🛡️ <b>Warranty Upgrade:</b> Extended warranty upgrade (3 Year / 5 Year coverage)
+              </div>
+              <div style="background:rgba(255,255,255,0.85); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px 14px; font-size:11.5px; color:#065F46; line-height:1.6;">
+                🔧 <b>Service Package:</b> Free first periodic service / dealer labor maintenance voucher
+              </div>
+              <div style="background:rgba(255,255,255,0.85); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px 14px; font-size:11.5px; color:#065F46; line-height:1.6;">
+                📄 <b>Insurance &amp; RTO:</b> Dealer-arranged zero-depreciation insurance, Fastag &amp; registration
+              </div>
+            </div>
           </div>
-          <div class="neg-right">
-            <div class="neg-amt">₹${Number(n.amount||0).toLocaleString('en-IN')}</div>
-            <div class="neg-amt-label">Suggested cut</div>
-          </div>
-        </div>`;
-      }).join('');
-      document.getElementById('n-total').textContent = '₹' + total.toLocaleString('en-IN');
+        `;
+      }
     } else {
-      negContainer.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No negotiation suggestions added yet.</p>';
-      document.getElementById('n-total').textContent = '₹0';
+      if (negTotalBox) negTotalBox.style.display = 'flex';
+      if (negList.length > 0) {
+        let total = 0;
+        negContainer.innerHTML = negList.map(n => {
+          total += Number(n.amount) || 0;
+          return `<div class="neg-card">
+            <div class="neg-left">
+              <div class="issue">${escHtml(n.issue)}</div>
+              <div class="desc">${escHtml(n.description || '')}</div>
+            </div>
+            <div class="neg-right">
+              <div class="neg-amt">₹${Number(n.amount||0).toLocaleString('en-IN')}</div>
+              <div class="neg-amt-label">Suggested cut</div>
+            </div>
+          </div>`;
+        }).join('');
+        document.getElementById('n-total').textContent = '₹' + total.toLocaleString('en-IN');
+      } else {
+        negContainer.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No negotiation suggestions added yet.</p>';
+        document.getElementById('n-total').textContent = '₹0';
+      }
     }
 
     // Additional AI Checks
     if (document.getElementById('n-engine-cal')) document.getElementById('n-engine-cal').textContent = fmt(d.engine_calibration, 'No active or pending diagnostic trouble codes found.');
     if (document.getElementById('n-tyre-analysis')) document.getElementById('n-tyre-analysis').textContent = fmt(d.tyre_analysis_text, 'Tyre condition assessment based on inspection data.');
-    if (document.getElementById('n-service-history-note')) document.getElementById('n-service-history-note').textContent = fmt(d.service_history_note, 'Full service history captured separately — see Service History section.');
-    if (document.getElementById('n-market')) document.getElementById('n-market').textContent = fmt(d.market_price_analysis, 'Market price analysis pending.');
+    if (document.getElementById('n-service-history-note')) {
+      const defaultSvcNote = isNewCar
+        ? 'Not applicable — brand new vehicle with zero prior service visits recorded.'
+        : 'Full service history captured separately — see Service History section.';
+      document.getElementById('n-service-history-note').textContent = fmt(d.service_history_note, defaultSvcNote);
+    }
+    if (document.getElementById('n-market')) {
+      const defaultMarketNote = isNewCar
+        ? 'Not applicable — this is a brand new vehicle. Reference manufacturer ex-showroom price. Suggest free accessories or warranty as value additions.'
+        : 'Market price analysis pending.';
+      document.getElementById('n-market').textContent = fmt(d.market_price_analysis, defaultMarketNote);
+    }
 
-    // Repair Estimates
+    // Repair Estimates (Page 5)
     const repairs = d.repairs || [];
     const chips = document.getElementById('r-chips');
     const tables = document.getElementById('r-estimate-tables');
-    const cats_in_repair = [...new Set(repairs.map(r => r.category))];
-    chips.innerHTML = cats_in_repair.map(c => `<span class="chip">${escHtml(c)}</span>`).join('');
-    let grandTotal = 0;
-    if (repairs.length > 0) {
-      tables.innerHTML = cats_in_repair.map(cat => {
-        const catItems = repairs.filter(r => r.category === cat);
-        const catTotal = catItems.reduce((s, r) => s + (Number(r.est_cost_max)||Number(r.est_cost_min)||0), 0);
-        grandTotal += catTotal;
-        return `<table class="est">
-          <thead><tr><th colspan="3">${escHtml(cat)}</th></tr>
-          <tr><th>Component</th><th>Description</th><th>Est. Cost</th></tr></thead>
-          <tbody>
-            ${catItems.map(r => `<tr>
-              <td>${escHtml(r.component)}</td>
-              <td>${escHtml(r.description||'')}</td>
-              <td>₹${Number(r.est_cost_min||0).toLocaleString('en-IN')}${r.est_cost_max&&r.est_cost_max!==r.est_cost_min?' – ₹'+Number(r.est_cost_max).toLocaleString('en-IN'):''}</td>
-            </tr>`).join('')}
-            <tr class="cat-total"><td colspan="2">Category Total</td><td>₹${catTotal.toLocaleString('en-IN')}</td></tr>
-          </tbody>
-        </table>`;
-      }).join('');
-      document.getElementById('r-grand-total').textContent = '₹' + grandTotal.toLocaleString('en-IN');
+    const grandTotalBox = document.getElementById('r-grand-total-box');
+    const rHdrRight = document.getElementById('r-hdr-right');
+    const rPill = document.getElementById('r-pill');
+    const rSecTitle = document.getElementById('r-section-title');
+    const rSecSub = document.getElementById('r-section-sub');
+
+    if (isNewCar) {
+      if (rHdrRight) rHdrRight.innerHTML = 'PDI Rectification &amp; Dealer Advisory<br/>Pre-delivery defect resolution actions';
+      if (rPill) rPill.textContent = 'PDI Rectification';
+      if (rSecTitle) rSecTitle.textContent = 'Pre-Delivery Rectification & Dealer Action Notes';
+      if (rSecSub) rSecSub.textContent = 'Repair cost estimates are not applicable for new vehicles — all identified defects must be rectified by dealership before delivery.';
+      if (chips) chips.style.display = 'none';
+      if (grandTotalBox) grandTotalBox.style.display = 'none';
+
+      if (tables) {
+        tables.innerHTML = `
+          <div style="background:#FFFBEB; border:1px solid #FDE68A; border-radius:14px; padding:22px 24px;">
+            <div style="font-size:13px; font-weight:800; color:#B45309; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+              <span style="font-size:16px;">🆕</span> New Car PDI — Repair Cost Estimate Not Applicable
+            </div>
+            <div style="font-size:13.5px; font-weight:700; color:#92400E; margin-bottom:12px; line-height:1.6;">
+              Cost estimates are not applicable for new car PDI inspections.
+            </div>
+            <div style="font-size:12.5px; color:#78350F; line-height:1.8; margin-bottom:14px;">
+              If any defect, damage, fitment issue, or quality concern is identified during this Pre-Delivery Inspection, it must be <b>reported to the dealership for rectification before delivery is accepted</b>.
+            </div>
+            <div style="background:#FEF3C7; border:1px solid #F59E0B; border-radius:10px; padding:14px 18px; margin-bottom:18px;">
+              <div style="font-size:12.5px; font-weight:800; color:#B45309; display:flex; align-items:center; gap:6px;">
+                ⚠️ Important Delivery Advisory:
+              </div>
+              <div style="font-size:12px; color:#92400E; margin-top:5px; line-height:1.6;">
+                <b>Do not accept delivery or sign the gate release</b> until all PDI issues identified in this report are resolved and acknowledged in writing by the showroom manager.
+              </div>
+            </div>
+            <div style="background:#FFFFFF; border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:14px 18px; font-size:11.5px; color:#4B5563; line-height:1.7;">
+              <b style="color:#111827;">📌 Customer Pre-Delivery Checklist:</b><br>
+              • Check that all issues noted under the Technical Checklist (Exterior paint, panel gaps, glass, electronics) are rectified.<br>
+              • Ensure physical verification of odometer reading (typically &lt; 50 km for factory transit).<br>
+              • Verify tool kit, spare wheel, jack, 2 sets of original keys, user manual, and warranty booklet before taking delivery.
+            </div>
+          </div>
+        `;
+      }
     } else {
-      tables.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No repair estimates added yet.</p>';
+      if (rHdrRight) rHdrRight.innerHTML = 'Repair Estimate<br/>Admin-compiled estimate based on inspection findings';
+      if (rPill) rPill.textContent = 'Repair Estimate';
+      if (rSecTitle) rSecTitle.textContent = 'Estimated Repair & Rectification Costs';
+      if (rSecSub) rSecSub.textContent = 'All figures are indicative estimates based on local market rates.';
+      if (chips) chips.style.display = 'flex';
+      if (grandTotalBox) grandTotalBox.style.display = 'flex';
+
+      const cats_in_repair = [...new Set(repairs.map(r => r.category))];
+      chips.innerHTML = cats_in_repair.map(c => `<span class="chip">${escHtml(c)}</span>`).join('');
+      let grandTotal = 0;
+      if (repairs.length > 0) {
+        tables.innerHTML = cats_in_repair.map(cat => {
+          const catItems = repairs.filter(r => r.category === cat);
+          const catTotal = catItems.reduce((s, r) => s + (Number(r.est_cost_max)||Number(r.est_cost_min)||0), 0);
+          grandTotal += catTotal;
+          return `<table class="est">
+            <thead><tr><th colspan="3">${escHtml(cat)}</th></tr>
+            <tr><th>Component</th><th>Description</th><th>Est. Cost</th></tr></thead>
+            <tbody>
+              ${catItems.map(r => `<tr>
+                <td>${escHtml(r.component)}</td>
+                <td>${escHtml(r.description||'')}</td>
+                <td>₹${Number(r.est_cost_min||0).toLocaleString('en-IN')}${r.est_cost_max&&r.est_cost_max!==r.est_cost_min?' – ₹'+Number(r.est_cost_max).toLocaleString('en-IN'):''}</td>
+              </tr>`).join('')}
+              <tr class="cat-total"><td colspan="2">Category Total</td><td>₹${catTotal.toLocaleString('en-IN')}</td></tr>
+            </tbody>
+          </table>`;
+        }).join('');
+        document.getElementById('r-grand-total').textContent = '₹' + grandTotal.toLocaleString('en-IN');
+      } else {
+        tables.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No repair estimates added yet.</p>';
+        document.getElementById('r-grand-total').textContent = '₹0';
+      }
     }
 
     // Service History & Supporting Documents (Multi-Page Paginated)
@@ -1066,7 +1194,6 @@ table.cp td.note { color: #8A8296; }
         }
       }
     } else {
-      const isNewCar = (d.car_type === 'new');
       const newCarBox = document.getElementById('new-car-pdi-box');
       const newCarText = document.getElementById('new-car-pdi-text');
       const svcTableMain = document.getElementById('svc-table-main');
