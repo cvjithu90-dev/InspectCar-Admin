@@ -493,7 +493,7 @@ table.cp td.note { color: #8A8296; }
     <div class="t2" id="n-total">&#8377;0</div>
   </div>
 
-  <div class="subhead">Additional AI Checks</div>
+  <div class="subhead" id="n-additional-subhead">Additional AI Checks</div>
   <div class="cat-grid" id="n-additional-checks">
     <div class="cat-card"><h4><span class="dot dot-g"></span>Engine Calibration</h4><p id="n-engine-cal">No active or pending diagnostic trouble codes found.</p></div>
     <div class="cat-card"><h4><span class="dot dot-a"></span>Tyre Analysis</h4><p id="n-tyre-analysis">Tyre condition assessment based on inspection data.</p></div>
@@ -506,6 +506,9 @@ table.cp td.note { color: #8A8296; }
     <div>Page 3</div>
   </div>
 </div>
+
+<!-- Dynamic Continuation Page for Anomaly Checks & Negotiation if > 3 items -->
+<div id="neg-continuation-container"></div>
 
 <!-- ============================================================
      PAGE 4: VAHAN VERIFICATION
@@ -896,7 +899,14 @@ table.cp td.note { color: #8A8296; }
     const negTotalBox = document.getElementById('n-neg-total-box');
 
     if (isNewCar) {
+      const negContContainer = document.getElementById('neg-continuation-container');
+      const addSubhead = document.getElementById('n-additional-subhead');
+      const addChecks = document.getElementById('n-additional-checks');
+      if (negContContainer) negContContainer.innerHTML = '';
       if (negTotalBox) negTotalBox.style.display = 'none';
+      if (addSubhead) addSubhead.style.display = 'block';
+      if (addChecks) addChecks.style.display = 'grid';
+
       if (negContainer) {
         negContainer.innerHTML = `
           <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:12px; padding:16px 18px; margin-bottom:14px;">
@@ -927,26 +937,90 @@ table.cp td.note { color: #8A8296; }
         `;
       }
     } else {
-      if (negTotalBox) negTotalBox.style.display = 'flex';
-      if (negList.length > 0) {
-        let total = 0;
-        negContainer.innerHTML = negList.map(n => {
-          total += Number(n.amount) || 0;
-          return `<div class="neg-card">
-            <div class="neg-left">
-              <div class="issue">${escHtml(n.issue)}</div>
-              <div class="desc">${escHtml(n.description || '')}</div>
+      const negContContainer = document.getElementById('neg-continuation-container');
+      const addSubhead = document.getElementById('n-additional-subhead');
+      const addChecks = document.getElementById('n-additional-checks');
+      let total = 0;
+      negList.forEach(n => { total += Number(n.amount) || 0; });
+
+      const renderNegCard = n => `<div class="neg-card">
+        <div class="neg-left">
+          <div class="issue">${escHtml(n.issue)}</div>
+          <div class="desc">${escHtml(n.description || '')}</div>
+        </div>
+        <div class="neg-right">
+          <div class="neg-amt">₹${Number(n.amount||0).toLocaleString('en-IN')}</div>
+          <div class="neg-amt-label">Suggested cut</div>
+        </div>
+      </div>`;
+
+      const needsCont = (negList.length > 3);
+
+      if (needsCont) {
+        // Page 3 gets first 4 items cleanly without squashing
+        const splitIdx = 4;
+        const page3Items = negList.slice(0, splitIdx);
+        const contItems = negList.slice(splitIdx);
+
+        negContainer.innerHTML = page3Items.map(renderNegCard).join('') + `
+          <div style="margin-top:14px; padding:10px 14px; background:#FAF8FF; border:1px dashed #DDD6FE; border-radius:8px; text-align:center; font-size:11px; color:#6D28D9; font-weight:600;">
+            ⚡ Additional negotiation findings, total calculation &amp; AI diagnostics continued on next page &rarr;
+          </div>
+        `;
+
+        if (negTotalBox) negTotalBox.style.display = 'none';
+        if (addSubhead) addSubhead.style.display = 'none';
+        if (addChecks) addChecks.style.display = 'none';
+
+        if (negContContainer) {
+          negContContainer.innerHTML = `
+            <div class="page" id="pg-negotiation-cont">
+              <div class="hdr">
+                <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+                <div class="hdr-right">Anomaly Checks &amp; Negotiation (Continued)<br/>AI-generated from inspection findings</div>
+              </div>
+
+              <div class="pill-purple">Negotiation Tips (Continued)</div>
+              <div class="section-title">AI Price Negotiation Suggestions (Continued)</div>
+              <div class="section-sub">Remaining detected defects and cumulative suggested negotiation margin.</div>
+
+              <div id="n-negotiation-list-cont" style="margin-bottom:14px;">
+                ${contItems.map(renderNegCard).join('')}
+              </div>
+
+              <div class="neg-total" style="display:flex; margin-top:14px; margin-bottom:20px;">
+                <div><div class="t1">Total suggested negotiation room</div></div>
+                <div class="t2">₹${total.toLocaleString('en-IN')}</div>
+              </div>
+
+              <div class="subhead">Additional AI Checks</div>
+              <div class="cat-grid">
+                <div class="cat-card"><h4><span class="dot dot-g"></span>Engine Calibration</h4><p>${escHtml(fmt(d.engine_calibration, 'No active or pending diagnostic trouble codes found.'))}</p></div>
+                <div class="cat-card"><h4><span class="dot dot-a"></span>Tyre Analysis</h4><p>${escHtml(fmt(d.tyre_analysis_text, 'Tyre condition assessment based on inspection data.'))}</p></div>
+                <div class="cat-card"><h4><span class="dot dot-a"></span>Service History</h4><p>${escHtml(fmt(d.service_history_note, 'Full service history captured separately — see Service History section.'))}</p></div>
+                <div class="cat-card"><h4><span class="dot dot-a"></span>Market Price Analysis</h4><p>${escHtml(fmt(d.market_price_analysis, 'Market price analysis pending.'))}</p></div>
+              </div>
+
+              <div class="footer">
+                <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+                <div>Page 4</div>
+              </div>
             </div>
-            <div class="neg-right">
-              <div class="neg-amt">₹${Number(n.amount||0).toLocaleString('en-IN')}</div>
-              <div class="neg-amt-label">Suggested cut</div>
-            </div>
-          </div>`;
-        }).join('');
-        document.getElementById('n-total').textContent = '₹' + total.toLocaleString('en-IN');
+          `;
+        }
       } else {
-        negContainer.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No negotiation suggestions added yet.</p>';
-        document.getElementById('n-total').textContent = '₹0';
+        if (negContContainer) negContContainer.innerHTML = '';
+        if (negTotalBox) negTotalBox.style.display = 'flex';
+        if (addSubhead) addSubhead.style.display = 'block';
+        if (addChecks) addChecks.style.display = 'grid';
+
+        if (negList.length > 0) {
+          negContainer.innerHTML = negList.map(renderNegCard).join('');
+          document.getElementById('n-total').textContent = '₹' + total.toLocaleString('en-IN');
+        } else {
+          negContainer.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No negotiation suggestions added yet.</p>';
+          document.getElementById('n-total').textContent = '₹0';
+        }
       }
     }
 
@@ -1393,7 +1467,9 @@ table.cp td.note { color: #8A8296; }
       cpPages.push([{ name: 'Diagnostic Checkpoints', items: [] }]);
     }
 
-    const startPageNumber = (services.length > 8) ? 8 : 7;
+    const hasNegCont = (!isNewCar && (d.negotiations || []).length > 3);
+    const hasSvcCont = (!isNewCar && services.length > 8);
+    const startPageNumber = 7 + (hasNegCont ? 1 : 0) + (hasSvcCont ? 1 : 0);
     if (cpContainer) {
       cpContainer.innerHTML = cpPages.map((pageCats, pIdx) => {
         const pageNum = startPageNumber + pIdx;
@@ -1528,6 +1604,15 @@ table.cp td.note { color: #8A8296; }
         </div>`;
     }
     document.getElementById('r-tyre-summary').textContent = fmt(d.tyre_summary, 'No overall tyre assessment added by admin.');
+
+    // Ensure all page footer numbers are strictly sequential
+    const allPages = Array.from(document.querySelectorAll('.page')).filter(p => !p.classList.contains('cover') && !p.classList.contains('back'));
+    allPages.forEach((p, idx) => {
+      const fNum = p.querySelector('.footer > div:last-child');
+      if (fNum) {
+        fNum.textContent = `Page ${idx + 2}`;
+      }
+    });
   }
 
   // ── Helpers ──────────────────────────────────────────────────
