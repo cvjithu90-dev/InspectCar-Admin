@@ -4993,15 +4993,23 @@ async function loadWzAnswers() {
             });
         });
 
-        // Assign photos accurately to matched checklist items
+        // Assign photos accurately to matched checklist items (with cross-category fallback)
         (photos || []).forEach(p => {
+            let targetItem = null;
             if (p.category && wz.draft.checklist[p.category]) {
-                const targetItem = matchChecklistItem(wz.draft.checklist[p.category], p.item_name);
-                if (targetItem) {
-                    if (!targetItem.photos) targetItem.photos = [];
-                    if (!targetItem.photos.includes(p.photo_url)) {
-                        targetItem.photos.push(p.photo_url);
-                    }
+                targetItem = matchChecklistItem(wz.draft.checklist[p.category], p.item_name);
+            }
+            if (!targetItem) {
+                // Fallback search across all checklist categories
+                for (const cat of Object.keys(wz.draft.checklist || {})) {
+                    targetItem = matchChecklistItem(wz.draft.checklist[cat], p.item_name);
+                    if (targetItem) break;
+                }
+            }
+            if (targetItem) {
+                if (!targetItem.photos) targetItem.photos = [];
+                if (!targetItem.photos.includes(p.photo_url)) {
+                    targetItem.photos.push(p.photo_url);
                 }
             }
         });
