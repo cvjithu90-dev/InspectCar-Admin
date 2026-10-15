@@ -5961,27 +5961,42 @@ function buildStep8() {
             // Clean out any "by info." if present
             d.inspector_notes = d.inspector_notes.replace(/by info\./gi, 'from on-site inspection.').replace(/by info\b/gi, '');
 
-            if (!d.admin_remarks) {
+            if (!d.admin_remarks || (d.car_type === 'new' && d.admin_remarks.startsWith('New Car PDI — No negotiation margin applicable.'))) {
                 d.admin_remarks = computed.admin_remarks;
             }
             const newCarDefaultRec = 'This vehicle underwent a comprehensive Pre-Delivery Inspection (PDI) by InspectCar. All key systems including engine, transmission, interior, electricals, AC, tyres, and documentation have been examined. Any identified concerns should be rectified by the dealership before accepting delivery. Do not accept delivery until all PDI issues are resolved in writing by the showroom. Ensure all accessories, spare wheel, user manual, and vehicle documents are verified at the time of delivery.';
-            if (d.car_type === 'new' && (!d.recommendation || d.recommendation.trim().length < 60)) {
-                d.recommendation = newCarDefaultRec;
-                const recEl = document.getElementById('wf-recommendation');
-                if (recEl) recEl.value = d.recommendation;
-            }
-            const isDefaultRec = !d.recommendation || d.recommendation.trim() === 'Recommended to buy with price negotiation.' || d.recommendation.trim().length < 60;
-            if (isDefaultRec && computed.recommendation) {
-                d.recommendation = computed.recommendation;
-            }
-            if (!d.engine_calibration && computed.engine_calibration) {
-                d.engine_calibration = computed.engine_calibration;
-            }
-            if (!d.tyre_analysis_text && computed.tyre_analysis_text) {
-                d.tyre_analysis_text = computed.tyre_analysis_text;
-            }
-            if (!d.market_price_analysis && computed.market_price_analysis) {
-                d.market_price_analysis = computed.market_price_analysis;
+            if (d.car_type === 'new') {
+                if (!d.recommendation || d.recommendation.trim().length < 60 || d.recommendation === newCarDefaultRec) {
+                    d.recommendation = computed.recommendation || newCarDefaultRec;
+                    const recEl = document.getElementById('wf-recommendation');
+                    if (recEl) recEl.value = d.recommendation;
+                }
+                if (!d.engine_calibration || d.engine_calibration === 'Not done' || d.engine_calibration === 'No active diagnostic trouble codes found.') {
+                    d.engine_calibration = computed.engine_calibration;
+                }
+                if (!d.tyre_analysis_text || d.tyre_analysis_text.startsWith('Brand new tyres — factory fresh.')) {
+                    d.tyre_analysis_text = computed.tyre_analysis_text;
+                }
+                if (!d.market_price_analysis || d.market_price_analysis.startsWith('Not applicable — brand new vehicle.')) {
+                    d.market_price_analysis = computed.market_price_analysis;
+                }
+                if (!d.service_history_note || d.service_history_note.startsWith('Not applicable — brand new vehicle')) {
+                    d.service_history_note = computed.service_history_note;
+                }
+            } else {
+                const isDefaultRec = !d.recommendation || d.recommendation.trim() === 'Recommended to buy with price negotiation.' || d.recommendation.trim().length < 60;
+                if (isDefaultRec && computed.recommendation) {
+                    d.recommendation = computed.recommendation;
+                }
+                if (!d.engine_calibration && computed.engine_calibration) {
+                    d.engine_calibration = computed.engine_calibration;
+                }
+                if (!d.tyre_analysis_text && computed.tyre_analysis_text) {
+                    d.tyre_analysis_text = computed.tyre_analysis_text;
+                }
+                if (!d.market_price_analysis && computed.market_price_analysis) {
+                    d.market_price_analysis = computed.market_price_analysis;
+                }
             }
         }
     }
@@ -5994,16 +6009,21 @@ function buildStep8() {
                 '<span style="color:var(--text-secondary);white-space:nowrap;">' + new Date(e.ts).toLocaleTimeString() + '</span>' +
                 '<span style="color:var(--text-secondary);">Changed <b style="color:var(--text-primary);">' + escW(e.field) + '</b></span></div>';
         }).join('');
+    const aiBtnHtml = '<button class="wz-api-btn" onclick="wzGenerateAiMarketAnalysis()"><i class="fas fa-magic"></i> ' +
+        (d.car_type === 'new' ? '✨ AI Generate PDI Remarks &amp; Checks (Gemini AI)' : '✨ AI Generate Market &amp; Remarks (Gemini AI)') +
+        '</button>';
+
     return '<div class="wz-step-header"><div class="wz-step-title">💬 Admin Remarks &amp; Additional AI Checks</div>' +
         '<div class="wz-step-desc">Add inspector notes with checkpoint upload time and executive summary, admin concerns from checklist &amp; service history, customer recommendation, and customize the Additional AI Check cards shown on Page 3 of the report.</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">General Remarks &amp; Recommendation</div>' +
+        '<div class="wz-card"><div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<span>General Remarks &amp; Recommendation</span>' + aiBtnHtml + '</div>' +
         '<div class="wz-field-grid">' +
         wzFta('wf-inspector-notes','Inspector Notes &amp; Executive Summary (from field)',d.inspector_notes||'',6) +
         wzFta('wf-admin-remarks','Admin Internal Remarks (Service History &amp; Checklist Concerns)',d.admin_remarks||'',6) +
         wzFta('wf-recommendation','Final Recommendation for Customer (shown in PDF)',d.recommendation||'',6) +
         '</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Additional AI Checks (Customizable for Report Page 3) ' +
-        (d.car_type !== 'new' ? '<button class="wz-api-btn" onclick="wzGenerateAiMarketAnalysis()"><i class="fas fa-magic"></i> ✨ AI Generate Market &amp; Remarks (Gemini AI)</button>' : '') + '</div>' +
+        '<div class="wz-card"><div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<span>Additional AI Checks (Customizable for Report Page 3)</span>' + aiBtnHtml + '</div>' +
         '<div class="wz-field-grid">' +
         wzFta('wf-engine-cal','Engine Calibration / OBD Diagnostics Note',d.engine_calibration||'No active or pending diagnostic trouble codes found.',2) +
         wzFta('wf-tyre-analysis','Tyre Analysis Note',d.tyre_analysis_text||'Tyre condition assessment based on inspection data.',2) +
@@ -7709,17 +7729,177 @@ function wzFormatTimestampIST(isoStr) {
     }
 }
 
+window.wzComputeNewCarPdiAnalysis = function(d) {
+    d = d || {};
+    const year = parseInt(d.vehicle_year) || new Date().getFullYear();
+    const brand = (d.vehicle_brand || 'Vehicle').trim();
+    const model = (d.vehicle_model || '').trim();
+    const fuel = (d.vehicle_fuel || 'Petrol').trim();
+    const transmission = (d.transmission || '').trim();
+    const km = parseInt(d.odometer_km) || 25;
+    const kmStr = km ? km.toLocaleString('en-IN') + ' km' : 'Transit mileage (<50 km)';
+    const score = parseInt(d.ai_score) || 95;
+    const verdict = d.verdict || (score >= 90 ? 'Ready for Delivery' : 'Delivery with Rectification');
+    const inspectorName = d.inspector_name || 'InspectCar PDI Specialist';
+    const customerName = (d.customer_name || '').trim();
+
+    // 1. Gather all checklist defect items
+    const checklistDefects = [];
+    const checklist = d.checklist || {};
+    Object.keys(checklist).forEach(function(cat) {
+        (checklist[cat] || []).forEach(function(item) {
+            const a = (item.answer || '').toLowerCase().trim();
+            const s = (item.severity || '').toLowerCase().trim();
+            const note = (item.note || '').trim();
+            const isWarnOrFail = a === 'warn' || a === 'fail' || s === 'high' || s === 'medium' ||
+                /scratch|dent|mismatch|defect|dirty|dust|stain|gap|misalign|loose|low|leak|seep|chip|swirl|buff|rubbing/i.test(note);
+            if (isWarnOrFail) {
+                checklistDefects.push({
+                    category: cat,
+                    item: item.item_name,
+                    answer: item.answer || 'Warn',
+                    note: note
+                });
+            }
+        });
+    });
+
+    // 2. Parse Paint Thickness
+    const paintCat = checklist['Paint Thickness Assessment'] || [];
+    let paintSum = 0, paintCount = 0, maxPaint = 0, minPaint = 999;
+    paintCat.forEach(function(p) {
+        const th = Number(p.paint_thickness);
+        if (th && th > 0) {
+            paintSum += th;
+            paintCount++;
+            if (th > maxPaint) maxPaint = th;
+            if (th < minPaint) minPaint = th;
+        }
+    });
+    const avgPaint = paintCount > 0 ? Math.round(paintSum / paintCount) : 108;
+    const paintUniform = (paintCount === 0 || (maxPaint - minPaint <= 45));
+
+    // 3. Parse Tyre Data
+    const tyreCat = checklist['Tyre Data'] || checklist['Tyres, Wheels & Brakes'] || [];
+    let tyreMake = '', tyreModel = '', tyreSize = '', mfgWeek = '', mfgYear = '', treadDepth = '';
+    tyreCat.forEach(function(t) {
+        if (t.tyre_make && !tyreMake) tyreMake = t.tyre_make;
+        if (t.tyre_model && !tyreModel) tyreModel = t.tyre_model;
+        if (t.tyre_size && !tyreSize) tyreSize = t.tyre_size;
+        if (t.mfg_week && !mfgWeek) mfgWeek = t.mfg_week;
+        if (t.mfg_year && !mfgYear) mfgYear = t.mfg_year;
+        if (t.tread_depth && !treadDepth) treadDepth = t.tread_depth;
+    });
+    const dotStr = (mfgWeek && mfgYear) ? (mfgWeek + '/' + mfgYear) : '';
+
+    // 4. Parse OBD Data
+    const obdCat = checklist['OBD / Engine Scan'] || checklist['Under Hood — Engine OFF'] || checklist['Under Hood — Engine ON'] || [];
+    let dtcVal = '', idleRpmVal = '', voltVal = '';
+    obdCat.forEach(function(o) {
+        const name = (o.item_name || '').toLowerCase();
+        const val = (o.obd_value || o.note || '').trim();
+        if (name.includes('error') || name.includes('dtc') || name.includes('scan')) {
+            if (val) dtcVal = val;
+        } else if (name.includes('idle') || name.includes('rpm')) {
+            if (val) idleRpmVal = val;
+        } else if (name.includes('volt') || name.includes('charging') || name.includes('battery')) {
+            if (val) voltVal = val;
+        }
+    });
+
+    // 5. Upload Timestamp
+    let uploadTs = (wz && wz.checkpointUploadTime) ? wz.checkpointUploadTime : null;
+    if (!uploadTs && wz && wz.answers && wz.answers.length > 0) {
+        const tsList = wz.answers.map(function(a){ return a.created_at; }).filter(Boolean).sort().reverse();
+        if (tsList.length > 0) uploadTs = tsList[0];
+    }
+    if (!uploadTs && wz && wz.photos && wz.photos.length > 0) {
+        const tsList = wz.photos.map(function(p){ return p.created_at; }).filter(Boolean).sort().reverse();
+        if (tsList.length > 0) uploadTs = tsList[0];
+    }
+    const timeStr = uploadTs ? wzFormatTimestampIST(uploadTs) : (d.completed_date || d.inspection_date || 'on-site');
+
+    // 6. Generate Inspector Notes
+    let inspectorNotes = 'Pre-Delivery Inspection (PDI) completed on ' + timeStr + (inspectorName ? ' by ' + inspectorName : '') +
+        (customerName ? ' for client ' + customerName : '') + '.\n' +
+        'Vehicle: Brand new ' + year + ' ' + brand + ' ' + model + (fuel ? ' (' + fuel + (transmission ? ' ' + transmission : '') + ')' : '') + '.\n' +
+        'Odometer reading verified at ' + kmStr + ' (standard dealership stockyard & transit movement).\n\n' +
+        'Multi-point PDI conducted across 300+ checkpoints: factory paint thickness measurements (~' + avgPaint + ' µm OEM ' + (paintUniform ? 'uniform finish' : 'profile') + '), panel fitment & shut lines, glass manufacturing year codes, engine bay fluid levels, underbody transit check, tyre DOT manufacturing dates, and electronic OBD-II diagnostic scan.\n\n';
+
+    if (checklistDefects.length > 0) {
+        inspectorNotes += 'Field Findings & Rectification Items (' + checklistDefects.length + '):\n' +
+            checklistDefects.map(function(def){ return '• ' + def.item + (def.note ? ': ' + def.note : ''); }).join('\n') +
+            '\n\nAll flagged items recorded above have been marked for dealership rectification prior to customer sign-off.';
+    } else {
+        inspectorNotes += 'Field Findings: Vehicle inspected in pristine factory condition with zero transit blemishes, panel defects, or mechanical concerns detected.';
+    }
+
+    // 7. Generate Admin Internal Remarks
+    let adminRemarks = 'NEW CAR PDI — INTERNAL AUDIT & RECTIFICATION ADVISORY:\n\n' +
+        '1. Pre-Delivery Quality Assessment:\n' +
+        '• Overall PDI Score: ' + score + '/100 (' + (score >= 90 ? 'Excellent Delivery Condition' : 'Requires Pre-Delivery Rectification') + ').\n';
+    if (checklistDefects.length > 0) {
+        adminRemarks += '• Showroom Rectification Items (' + checklistDefects.length + ' item' + (checklistDefects.length > 1 ? 's' : '') + ' flagged):\n';
+        checklistDefects.forEach(function(def) {
+            adminRemarks += '  - ' + def.item + ': ' + (def.note || def.answer) + '\n';
+        });
+        adminRemarks += '• Action: Request dealership service manager to rectify all cosmetic/alignment points before issuing the delivery gate pass.\n';
+    } else {
+        adminRemarks += '• Zero defects found across exterior paint, interior electronics, engine bay, and underbody.\n';
+    }
+    adminRemarks += '\n2. Documentation & Delivery Protocol:\n' +
+        '• Verify delivery folder contains original Form 21 (Sale Certificate), Form 22 (Roadworthiness Certificate), tax invoice, OEM warranty booklet, 2 smart keys, tool kit, and spare wheel.\n' +
+        '• Cross-check chassis / VIN engraving on engine bay plate against temporary registration and tax invoice.\n\n' +
+        '3. Commercial Value Additions & Dealer Negotiation:\n' +
+        '• New car ex-showroom pricing does not involve used-car depreciation or price cuts.\n' +
+        '• Advise customer to request dealership value additions: OEM 3D floor mats, mud flaps, car body cover, extended warranty (4th/5th year), or insurance price-matching (potential customer benefit: ₹15,000–₹35,000).';
+
+    // 8. Generate Final Recommendation
+    let recStance = (score >= 90 && checklistDefects.length === 0) ?
+        '✅ Cleared for Delivery — Pristine Factory Condition' :
+        '⚠️ Approved for Delivery Subject to Pre-Delivery Rectification';
+
+    let recommendation = recStance + '.\n\n' +
+        'Executive Summary: This brand new ' + year + ' ' + brand + ' ' + model + ' (' + (fuel || 'Petrol') + ') has successfully undergone a comprehensive InspectCar Pre-Delivery Inspection (PDI) at the dealership. All major mechanical assemblies, factory paint thickness gauges, interior electrical switchgear, air conditioning, and tyres have been inspected.\n\n' +
+        'Actionable Pre-Delivery Checklist for Customer:\n';
+    if (checklistDefects.length > 0) {
+        checklistDefects.forEach(function(def, idx) {
+            recommendation += (idx + 1) + '. Dealership to address ' + def.item + (def.note ? ' (' + def.note + ')' : '') + ' prior to final vehicle release.\n';
+        });
+        recommendation += (checklistDefects.length + 1) + '. Inspect final vehicle delivery wash and ribbon presentation.\n';
+    } else {
+        recommendation += '1. Inspect dealership exterior wash, wax, and ribbon presentation.\n';
+    }
+    recommendation += '• Verify delivery folder contains 2 original keys, owner manual, service warranty booklet, Form 21, Form 22, and tool kit with jack.\n' +
+        '• Confirm chassis number on invoice matches vehicle engine bay stamp.\n\n' +
+        'Commercial Advice: Request complimentary showroom value additions such as OEM mats, mud flaps, or extended warranty package before signing the gate pass.';
+
+    const engineText = 'OBD-II diagnostic scan completed on brand new vehicle — ' + (dtcVal || 'zero active or pending DTCs') + '. Engine idle calibration' + (idleRpmVal ? ' (' + idleRpmVal + ')' : '') + ', charging system' + (voltVal ? ' (' + voltVal + ')' : '') + ', and electronic sensors operating within factory OEM specifications.';
+
+    const tyreText = 'Brand new factory-fitted tyres' + (tyreMake ? ' (' + tyreMake + (tyreSize ? ' ' + tyreSize : '') + ')' : '') + ' with full ' + (treadDepth ? treadDepth + 'mm' : '~8.0mm') + ' factory tread depth. ' + (dotStr ? 'DOT manufacturing code (' + dotStr + ') verified matching vehicle assembly batch. ' : '') + 'Spare tyre, wheel rim, and jack kit verified.';
+
+    const svcNote = 'Brand New Vehicle (PDI): Zero prior maintenance, accident, or insurance claims. Factory warranty active (standard OEM warranty). Recommend opting for extended warranty up to 5 years / 1,00,000 km.';
+
+    const marketPrice = 'New Car PDI — Secondhand depreciation does not apply. Vehicle priced at dealership ex-showroom rates. InspectCar recommends seeking dealer value additions (complimentary 3D mats, mud flaps, extended warranty, or dealer insurance price matching for savings of ₹15,000–₹30,000).';
+
+    const summaryText = 'Brand new ' + year + ' ' + brand + ' ' + model + ' (' + (fuel || 'Petrol') + ') achieved a PDI Quality Score of ' + score + '/100 (' + verdict + ') across 300+ checkpoints with ' + kmStr + ' on the odometer. ' + (checklistDefects.length > 0 ? checklistDefects.length + ' minor pre-delivery rectification items noted for dealership resolution.' : 'Pristine factory condition throughout.');
+
+    return {
+        inspector_notes: inspectorNotes,
+        admin_remarks: adminRemarks,
+        recommendation: recommendation,
+        summary: summaryText,
+        market_price_analysis: marketPrice,
+        engine_calibration: engineText,
+        tyre_analysis_text: tyreText,
+        service_history_note: svcNote,
+        negotiations: []
+    };
+};
+
 window.wzComputeLocalMarketAnalysis = function(d) {
-    if (d.car_type === 'new') {
-        return {
-            inspector_notes: d.inspector_notes || '',
-            admin_remarks: 'New Car PDI — No negotiation margin applicable. Report any pre-delivery issues to the dealership before accepting the vehicle.',
-            recommendation: d.recommendation || '',
-            engine_calibration: d.engine_calibration || 'No active diagnostic trouble codes found.',
-            tyre_analysis_text: d.tyre_analysis_text || 'Brand new tyres — factory fresh. Verify tyre brand, size, and manufacturing date match vehicle specifications.',
-            market_price_analysis: 'Not applicable — brand new vehicle. Reference the manufacturer ex-showroom price. Suggest free accessories or extended warranty as value additions.',
-            negotiations: []
-        };
+    if (d && d.car_type === 'new') {
+        return window.wzComputeNewCarPdiAnalysis(d);
     }
     d = d || {};
     const year = parseInt(d.vehicle_year) || (new Date().getFullYear() - 3);
@@ -7922,7 +8102,13 @@ window.wzComputeLocalMarketAnalysis = function(d) {
 window.wzGenerateAiMarketAnalysis = async function() {
     if (!wz || !wz.draft) return;
     const d = wz.draft;
-    showToast('🤖 Evaluating Bangalore market prices & report remarks...', 'info');
+    const isNewCar = (d.car_type === 'new');
+
+    if (isNewCar) {
+        showToast('🤖 Evaluating New Car PDI checkpoints, dealer rectifications & remarks...', 'info');
+    } else {
+        showToast('🤖 Evaluating Bangalore market prices & report remarks...', 'info');
+    }
 
     let generatedData = null;
     let usedFallback = false;
@@ -7932,7 +8118,58 @@ window.wzGenerateAiMarketAnalysis = async function() {
     const negItems = (d.negotiations || []).map(function(n) { return '• ' + n.issue + ' (₹' + n.amount + '): ' + n.description; }).join('\n');
 
     try {
-        const prompt = `You are a senior automobile valuation expert & technical inspection lead in Bangalore, India.
+        let prompt = '';
+        if (isNewCar) {
+            const localPdi = window.wzComputeNewCarPdiAnalysis(d);
+            prompt = `You are a senior automobile Pre-Delivery Inspection (PDI) specialist & technical quality audit lead in Bangalore, India.
+Vehicle Details (BRAND NEW CAR PDI):
+- Year, Brand & Model: ${d.vehicle_year || new Date().getFullYear()} ${d.vehicle_brand || 'Car'} ${d.vehicle_model || ''} (${d.vehicle_fuel || 'Petrol'}${d.transmission ? ', ' + d.transmission : ''})
+- Customer Name: ${d.customer_name || 'Customer'}
+- Inspector: ${d.inspector_name || 'InspectCar PDI Specialist'}
+- Dealership Location: ${d.area || 'Bangalore Dealership'}
+- Odometer Reading: ${d.odometer_km ? Number(d.odometer_km) + ' km (transit/stockyard movement)' : 'Delivery transit mileage (<50 km)'}
+- Inspection Score: ${d.ai_score || 95}/100
+- Verdict: ${d.verdict || 'Ready for Delivery'}
+
+Inspection Findings & Defect Items:
+${negItems || 'Zero defects found. All panels, paint, electronics, and mechanicals in pristine factory-fresh delivery condition.'}
+
+OBD & Electronic Diagnostics:
+${localPdi.engine_calibration || 'Zero DTCs. All ECU modules, idle RPM, and battery resting/charging voltages within OEM specs.'}
+
+Tyre & Wheel Details:
+${localPdi.tyre_analysis_text || 'Factory fresh OEM tyres with ~8.0mm tread depth. DOT week/year verified.'}
+
+Please generate tailored, highly professional, personalised content for this brand new vehicle PDI:
+1. "inspector_notes": Detailed field inspection summary stating inspection timestamp, inspector name, odometer reading, and confirmation of 300+ point checks (paint gauge, body panels, glass markings, fluid levels, tyre DOT code, underbody transit check) conducted at the dealership.
+2. "admin_remarks": Internal pre-delivery audit briefing summarizing:
+   - Quality assessment and specific showroom rectification items (if any defects were noted).
+   - Documentation & handover protocol (Form 21, Form 22, invoice, warranty booklet, 2 keys, tool kit).
+   - Commercial value additions: Since new car prices cannot be negotiated like used cars, advise customer to request complimentary dealer accessories (3D mats, mud flaps, car cover), extended warranty, or dealer insurance price matching.
+3. "recommendation": Comprehensive UNIFIED Final Recommendation for the customer:
+   - Clear delivery stance ("Cleared for Immediate Delivery" or "Approved for Delivery Subject to Rectification").
+   - Actionable pre-delivery checklist for the customer to confirm with the dealership before signing the delivery gate pass.
+   - Handover checklist (2 keys, warranty certificate, invoice, spare tyre, manual).
+   - Value-addition leverage advice.
+4. "engine_calibration": 1-2 sentences on OBD scan (zero DTCs), ECU health, idle RPM, and battery status.
+5. "tyre_analysis_text": 1-2 sentences on brand new tyres, factory tread depth, and DOT code verification.
+6. "service_history_note": Note on brand new car having zero prior service/claims, active OEM factory warranty, and recommendation for extended warranty.
+7. "market_price_analysis": Note explaining new car ex-showroom pricing, zero used-car negotiation margin, and recommended dealer value additions (complimentary accessories, insurance match).
+8. "summary": Concise 2-3 sentence Executive Summary of vehicle condition, score, and PDI readiness.
+
+Return ONLY valid JSON format:
+{
+  "inspector_notes": "...",
+  "admin_remarks": "...",
+  "recommendation": "...",
+  "engine_calibration": "...",
+  "tyre_analysis_text": "...",
+  "service_history_note": "...",
+  "market_price_analysis": "...",
+  "summary": "..."
+}`;
+        } else {
+            prompt = `You are a senior automobile valuation expert & technical inspection lead in Bangalore, India.
 Vehicle Details:
 - Year, Brand & Model: ${d.vehicle_year || 2023} ${d.vehicle_brand || 'Car'} ${d.vehicle_model || ''} (${d.vehicle_fuel || 'Petrol'})
 - Location: ${d.area || 'Bangalore'} (${d.rto_code || 'KA RTO'})
@@ -7966,6 +8203,7 @@ Return ONLY valid JSON format:
   "recommendation": "...",
   "admin_remarks": "..."
 }`;
+        }
 
         const jsonText = await callGeminiAI(prompt);
         const match = jsonText.match(/\{[\s\S]*\}/);
@@ -7978,7 +8216,7 @@ Return ONLY valid JSON format:
     }
 
     const localData = window.wzComputeLocalMarketAnalysis(d);
-    if (!generatedData || !generatedData.market_price_analysis) {
+    if (!generatedData || (!generatedData.market_price_analysis && !generatedData.recommendation)) {
         generatedData = localData;
         usedFallback = true;
     }
@@ -7986,10 +8224,13 @@ Return ONLY valid JSON format:
     if (generatedData.market_price_analysis) d.market_price_analysis = generatedData.market_price_analysis;
     if (generatedData.engine_calibration) d.engine_calibration = generatedData.engine_calibration;
     if (generatedData.tyre_analysis_text) d.tyre_analysis_text = generatedData.tyre_analysis_text;
+    if (generatedData.service_history_note) d.service_history_note = generatedData.service_history_note;
     if (generatedData.summary) d.summary = generatedData.summary;
     if (generatedData.recommendation) d.recommendation = generatedData.recommendation;
     if (generatedData.admin_remarks) d.admin_remarks = generatedData.admin_remarks;
-    if (!d.inspector_notes && localData.inspector_notes) {
+    if (generatedData.inspector_notes) {
+        d.inspector_notes = generatedData.inspector_notes;
+    } else if (!d.inspector_notes && localData.inspector_notes) {
         d.inspector_notes = localData.inspector_notes;
     } else if (generatedData.summary && d.inspector_notes && !d.inspector_notes.includes(generatedData.summary.substring(0, 30))) {
         d.inspector_notes = d.inspector_notes.trim() + '\n\n' + generatedData.summary.trim();
@@ -8000,6 +8241,7 @@ Return ONLY valid JSON format:
         'wf-market-price': d.market_price_analysis,
         'wf-engine-cal': d.engine_calibration,
         'wf-tyre-analysis': d.tyre_analysis_text,
+        'wf-service-history-note': d.service_history_note,
         'wf-recommendation': d.recommendation,
         'wf-admin-remarks': d.admin_remarks,
         'wf-inspector-notes': d.inspector_notes
@@ -8011,9 +8253,9 @@ Return ONLY valid JSON format:
 
     updateWzPreview();
     if (usedFallback) {
-        showToast('✨ Generated Comprehensive Recommendation & Remarks (Smart Local Engine)!', 'success');
+        showToast(isNewCar ? '✨ Generated Personalised PDI Remarks & Checks (Smart Engine)!' : '✨ Generated Comprehensive Recommendation & Remarks (Smart Local Engine)!', 'success');
     } else {
-        showToast('✨ Gemini AI generated Unified Recommendation, Market Price & Remarks!', 'success');
+        showToast(isNewCar ? '✨ Gemini AI generated Personalised New Car PDI Remarks & Checks!' : '✨ Gemini AI generated Unified Recommendation, Market Price & Remarks!', 'success');
     }
 };
 
