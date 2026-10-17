@@ -1040,8 +1040,13 @@ table.cp td.note { color: #8A8296; }
       document.getElementById('n-market').textContent = fmt(d.market_price_analysis, defaultMarketNote);
     }
 
-    // Repair Estimates (Page 5)
-    const repairs = d.repairs || [];
+    // Repair Estimates (Page 5) - Strictly filter out repainted panels / paint thickness (depreciation is captured in negotiations)
+    const repairs = (d.repairs || []).filter(function(r) {
+      const txt = ((r.category||'') + ' ' + (r.component||'') + ' ' + (r.description||'')).toLowerCase();
+      if (txt.includes('paint thickness') || txt.includes('paint gauge') || txt.includes('paint meter') || txt.includes('micron')) return false;
+      if (/repainted\b|repaint\b/i.test(txt) && !/scratch|dent|crack|rust|broken|torn|peel|chip|leak|faded|worn|noise/i.test(txt)) return false;
+      return true;
+    });
     const chips = document.getElementById('r-chips');
     const tables = document.getElementById('r-estimate-tables');
     const grandTotalBox = document.getElementById('r-grand-total-box');

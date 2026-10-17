@@ -5928,9 +5928,12 @@ function buildStep7() {
     }
 
     return '<div class="wz-step-header"><div class="wz-step-title">🔩 Repair Estimate</div>' +
-        '<div class="wz-step-desc">Add estimated repair costs by category. Auto-generate from checklist fails.</div></div>' +
-        '<div class="wz-card"><div class="wz-card-title">Repair Line Items ' +
-        '<button class="wz-api-btn" onclick="wzAutoGenRepairs()"><i class="fas fa-magic"></i> Auto-Generate</button></div>' +
+        '<div class="wz-step-desc">Add estimated repair costs by category. Auto-generate from checklist findings.</div></div>' +
+        '<div class="wz-card"><div class="wz-card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<span>Repair Line Items</span>' +
+        '<button class="wz-api-btn" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;border:none;padding:7px 15px;border-radius:8px;font-weight:700;box-shadow:0 2px 8px rgba(99,102,241,0.3);cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="wzAutoGenRepairs()">' +
+        '<i class="fas fa-magic"></i> ✨ AI Generate Repair Estimate (Gemini AI)</button></div>' +
+        '<div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px 0;">⚡ AI evaluates defect notes &amp; photos to provide low-cost touch-up/buffing (Min ₹) and full repaint/replacement (Max ₹). Repainted panels are excluded (depreciation handled in Negotiations).</div>' +
         '<table class="wz-table"><thead><tr><th>Category</th><th>Component</th><th>Description</th><th>Severity</th><th>Min ₹</th><th>Max ₹</th><th></th></tr></thead>' +
         '<tbody id="repair-table-body">' + rows + '</tbody></table>' +
         '<button class="wz-add-row-btn" onclick="wzAddRepairRow()">+ Add Repair Item</button>' +
@@ -8523,31 +8526,328 @@ window.wzAutoGenNegotiations = async function() {
     showToast(`✨ Generated ${negs.length} negotiation suggestions based on checklist defects!`, 'success');
 };
 
-window.wzAutoGenRepairs = function() {
-    if (!wz || !wz.draft || !wz.draft.checklist) return;
-    var repairs = [];
-    Object.keys(wz.draft.checklist).forEach(function(cat) {
-        wz.draft.checklist[cat].filter(function(i){
-            var a = (i.answer||'').toLowerCase();
-            var s = (i.severity||'').toLowerCase();
-            return a==='fail'||a==='warn'||s==='high'||s==='medium';
+window.wzComputeLocalRepairEstimates = function(checklist, draft) {
+    checklist = checklist || (wz && wz.draft && wz.draft.checklist) || {};
+    draft = draft || (wz && wz.draft) || {};
+
+    const brand = (draft.vehicle_brand || '').trim().toLowerCase();
+    const model = (draft.vehicle_model || '').trim().toLowerCase();
+
+    // Determine vehicle segment & market cost multiplier
+    // Luxury: BMW, Mercedes, Benz, Audi, Jaguar, Land Rover, Range Rover, Porsche, Volvo, Lexus, Mini
+    const isLuxury = /bmw|mercedes|benz|audi|jaguar|land rover|range rover|porsche|volvo|lexus|mini/i.test(brand + ' ' + model);
+    // Mid SUV / Executive: Creta, Seltos, Harrier, Safari, XUV700, XUV500, Scorpio, Compass, City, Verna, Slavia, Virtus, Hector, Thar, Innova, Fortuner, Octavia, Superb, Tucson, Alcazar
+    const isMidSuvSedan = /creta|seltos|harrier|safari|xuv\s*700|xuv\s*500|scorpio|compass|city|verna|slavia|virtus|hector|thar|innova|fortuner|octavia|superb|tucson|alcazar/i.test(model);
+    // Budget hatch: Alto, Kwid, Santro, Eon, WagonR, Celerio, S-Presso, Spresso, Nano
+    const isBudget = /alto|kwid|santro|eon|wagon\s*r|celerio|s-presso|spresso|nano/i.test(model);
+
+    const mult = isLuxury ? 2.6 : (isMidSuvSedan ? 1.4 : (isBudget ? 0.8 : 1.0));
+
+    // Helper: is this purely a repainted panel / paint thickness reading?
+    // User requirement: Repainted panels are ALREADY repaired, so only depreciation applies (captured in negotiations).
+    // Anything related to repainting thickness must NOT come in repair estimate.
+    function isRepaintThicknessItem(item, cat) {
+        const c = (cat || '').toLowerCase();
+        const n = (item.item_name || '').toLowerCase();
+        const nt = (item.note || '').toLowerCase();
+
+        // 1. Any paint thickness category or checkpoint
+        if (c.includes('paint thickness') || c.includes('paint gauge') || c.includes('paint meter')) return true;
+        if (n.includes('paint thickness') || n.includes('paint gauge') || n.includes('paint meter') || n.includes('micron')) return true;
+
+        // 2. Repainted panel notes or names where there is NO active physical damage (scratch, dent, crack, rust, broken, peel, chip)
+        const hasActiveDamage = /scratch|dent|crack|rust|broken|torn|peel|chip|leak|faded|worn|noise|play|seep/i.test(n + ' ' + nt);
+        if (/repainted|repaint\b|non-factory paint|paint coat/i.test(n) && !hasActiveDamage) return true;
+        if (/^repainted\b|non-factory repaint|paint thickness/i.test(nt) && !hasActiveDamage) return true;
+        if (nt.includes('repainted') && !hasActiveDamage) return true;
+
+        return false;
+    }
+
+    const repairs = [];
+
+    Object.keys(checklist).forEach(function(cat) {
+        (checklist[cat] || []).filter(function(i) {
+            const a = (i.answer || '').toLowerCase().trim();
+            const s = (i.severity || '').toLowerCase().trim();
+            const nt = (i.note || '').toLowerCase().trim();
+
+            // Must be flagged as warn/fail/high/medium or have damage remarks
+            const isFlagged = (a === 'fail' || a === 'warn' || a === 'warning' || a === 'critical' || a === 'poor' ||
+                s === 'high' || s === 'critical' || s === 'medium' ||
+                /scratch|dent|crack|broken|leak|seep|faded|worn|noise|vibrat|play|tear|rust/i.test(nt));
+
+            if (!isFlagged) return false;
+
+            // EXCLUDE repainted panels & paint thickness readings
+            if (isRepaintThicknessItem(i, cat)) return false;
+
+            return true;
         }).forEach(function(item) {
-            var a = (item.answer||'').toLowerCase();
-            var s = (item.severity||'').toLowerCase();
-            var isCrit = a==='fail'||s==='high';
+            const catName = cat.split(' ')[0] || 'General';
+            const name = item.item_name || '';
+            const note = (item.note || '').trim();
+            const fullText = (name + ' ' + note).toLowerCase();
+            const isCrit = (item.answer || '').toLowerCase() === 'fail' || (item.severity || '').toLowerCase() === 'high';
+
+            let category = catName;
+            let compName = name.replace(/:\s*Defects/i, '').trim();
+            let desc = '';
+            let minCost = 1500;
+            let maxCost = 3500;
+            let severity = isCrit ? 'high' : 'medium';
+
+            // Clean up Category name
+            if (/exterior|body|panel/i.test(cat)) category = 'Exterior';
+            else if (/light|lamp|fog/i.test(fullText)) category = 'Lighting';
+            else if (/engine|under hood|powertrain/i.test(cat)) category = 'Mechanical';
+            else if (/underbody|exhaust|silencer|chassis/i.test(cat)) category = 'Underbody';
+            else if (/tyre|tire|wheel/i.test(cat)) category = 'Tyres & Wheels';
+            else if (/brake|rotor/i.test(fullText)) category = 'Brakes';
+            else if (/interior|cabin|seat/i.test(cat)) category = 'Interior';
+            else if (/electrical|battery|sensor/i.test(cat)) category = 'Electrical';
+
+            // 1. Scratches / Surface Blemishes / Scuffs
+            if (/scratch|scuff|blemish|mark|swirl/i.test(fullText) && !/broken|crack|dent/i.test(fullText)) {
+                minCost = Math.round(800 * mult / 100) * 100;
+                const isLargePanel = /bumper|bonnet|hood|roof/i.test(compName);
+                const baseRepaint = isLargePanel ? 3500 : 3000;
+                maxCost = Math.round(baseRepaint * mult / 100) * 100;
+                desc = 'Surface scratches: Rubbing/touch-up (₹' + minCost.toLocaleString('en-IN') + ') or complete panel respray (₹' + maxCost.toLocaleString('en-IN') + ')';
+                severity = isCrit ? 'high' : 'medium';
+            }
+            // 2. Dents / Body pressing
+            else if (/dent|pressed|tinkering|ding|crease/i.test(fullText) && !/broken|crack/i.test(fullText)) {
+                minCost = Math.round(1200 * mult / 100) * 100;
+                maxCost = Math.round(3800 * mult / 100) * 100;
+                desc = 'Dent damage: PDR dent pull (₹' + minCost.toLocaleString('en-IN') + ') or body tinkering & panel repaint (₹' + maxCost.toLocaleString('en-IN') + ')';
+                severity = 'medium';
+            }
+            // 3. Faded / Dull / Cloudy (Lamps, Plastics, Trim)
+            else if (/fade|faded|cloudy|hazy|dull|yellowing/i.test(fullText)) {
+                category = 'Lighting';
+                minCost = Math.round(1000 * mult / 100) * 100;
+                const isHeadlamp = /headlamp|headlight/i.test(fullText);
+                const isFog = /fog/i.test(fullText);
+                const baseRepl = isHeadlamp ? 6000 : (isFog ? 3500 : 3000);
+                maxCost = Math.round(baseRepl * mult / 100) * 100;
+                desc = 'Faded lens: Surface restoration & buffing (₹' + minCost.toLocaleString('en-IN') + ') or assembly replacement (₹' + maxCost.toLocaleString('en-IN') + ')';
+                severity = 'medium';
+            }
+            // 4. Broken / Cracked / Torn / Damaged components (Requires replacement or child-part repair)
+            else if (/broken|crack|cracked|torn|damaged|shattered|missing/i.test(fullText)) {
+                severity = 'high';
+                if (/mirror|orvm/i.test(fullText)) {
+                    category = 'Exterior';
+                    minCost = Math.round(1200 * mult / 100) * 100;
+                    maxCost = Math.round(4500 * mult / 100) * 100;
+                    desc = 'Damaged ORVM: Mirror glass/cover repair (₹' + minCost.toLocaleString('en-IN') + ') or full assembly replacement (₹' + maxCost.toLocaleString('en-IN') + ')';
+                } else if (/fog/i.test(fullText)) {
+                    category = 'Lighting';
+                    minCost = Math.round(1200 * mult / 100) * 100;
+                    maxCost = Math.round(3500 * mult / 100) * 100;
+                    desc = 'Damaged fog lamp: Bracket/glass repair (₹' + minCost.toLocaleString('en-IN') + ') or replacement assembly (₹' + maxCost.toLocaleString('en-IN') + ')';
+                } else if (/light|lamp|tail/i.test(fullText)) {
+                    category = 'Lighting';
+                    minCost = Math.round(2000 * mult / 100) * 100;
+                    maxCost = Math.round(7500 * mult / 100) * 100;
+                    desc = 'Cracked lamp: Lens repair (₹' + minCost.toLocaleString('en-IN') + ') or OEM lamp replacement (₹' + maxCost.toLocaleString('en-IN') + ')';
+                } else if (/windshield|glass/i.test(fullText)) {
+                    category = 'Exterior';
+                    minCost = Math.round(2000 * mult / 100) * 100;
+                    maxCost = Math.round(8000 * mult / 100) * 100;
+                    desc = 'Glass chip/crack: Resin repair (₹' + minCost.toLocaleString('en-IN') + ') or windshield replacement (₹' + maxCost.toLocaleString('en-IN') + ')';
+                } else if (/bumper|grill/i.test(fullText)) {
+                    category = 'Exterior';
+                    minCost = Math.round(1800 * mult / 100) * 100;
+                    maxCost = Math.round(6500 * mult / 100) * 100;
+                    desc = 'Bumper damage: Plastic welding & repair (₹' + minCost.toLocaleString('en-IN') + ') or new bumper & paint (₹' + maxCost.toLocaleString('en-IN') + ')';
+                } else {
+                    minCost = Math.round(1500 * mult / 100) * 100;
+                    maxCost = Math.round(5000 * mult / 100) * 100;
+                    desc = (note || compName) + ': Part refurbishment (₹' + minCost.toLocaleString('en-IN') + ') or assembly replacement (₹' + maxCost.toLocaleString('en-IN') + ')';
+                }
+            }
+            // 5. Engine Mounts / Transmission Mounts / Vibration
+            else if (/mount|mounting|engine mount|vibrat/i.test(fullText)) {
+                category = 'Mechanical';
+                minCost = Math.round(2500 * mult / 100) * 100;
+                maxCost = Math.round(6500 * mult / 100) * 100;
+                desc = 'Engine/transmission mount wear: Mount replacement + installation labor';
+                severity = isCrit ? 'high' : 'medium';
+            }
+            // 6. Fluid Leaks / Seepage
+            else if (/leak|leaking|seep|seepage|wetness|tappet|gasket/i.test(fullText)) {
+                category = 'Mechanical';
+                minCost = Math.round(1500 * mult / 100) * 100;
+                maxCost = Math.round(4500 * mult / 100) * 100;
+                desc = 'Fluid seepage: Gasket/O-ring replacement, cleaning & labor';
+                severity = 'medium';
+            }
+            // 7. Brakes (Rotors / Pads / Discs)
+            else if (/brake|pad|rotor|disc|caliper|handbrake|lip|scoring/i.test(fullText)) {
+                category = 'Brakes';
+                if (/lip|scoring|disc|rotor/i.test(fullText)) {
+                    minCost = Math.round(1500 * mult / 100) * 100;
+                    maxCost = Math.round(4500 * mult / 100) * 100;
+                    desc = 'Brake rotor scoring: Disc skimming (₹' + minCost.toLocaleString('en-IN') + ') or new brake discs & pads (₹' + maxCost.toLocaleString('en-IN') + ')';
+                } else {
+                    minCost = Math.round(1200 * mult / 100) * 100;
+                    maxCost = Math.round(3000 * mult / 100) * 100;
+                    desc = 'Brake pad wear: Front brake pads replacement + labor';
+                }
+                severity = isCrit ? 'high' : 'medium';
+            }
+            // 8. Suspension (Struts / Lower Arm / Bush / Link Rod)
+            else if (/suspension|strut|shock|link rod|bush|bushing|arm|steering|ball joint/i.test(fullText)) {
+                category = 'Suspension';
+                minCost = Math.round(2000 * mult / 100) * 100;
+                maxCost = Math.round(7000 * mult / 100) * 100;
+                desc = 'Suspension wear: Bush/link rod replacement (₹' + minCost.toLocaleString('en-IN') + ') or strut overhaul (₹' + maxCost.toLocaleString('en-IN') + ')';
+                severity = 'medium';
+            }
+            // 9. Tyres (Low tread / Sidewall damage)
+            else if (/tyre|tire|tread|bald|sidewall/i.test(fullText)) {
+                category = 'Tyres & Wheels';
+                minCost = Math.round(4000 * mult / 100) * 100;
+                maxCost = Math.round(8000 * mult / 100) * 100;
+                desc = 'Tyre wear: Tyre replacement, balancing & wheel alignment';
+                severity = 'medium';
+            }
+            // 10. Default / Inspection attention item
+            else {
+                minCost = Math.round(1200 * mult / 100) * 100;
+                maxCost = Math.round(3500 * mult / 100) * 100;
+                desc = note ? (note + ' — inspection attention item & workshop service') : 'Workshop inspection & rectification';
+                severity = isCrit ? 'high' : 'medium';
+            }
+
             repairs.push({
-                category: cat.split(' ')[0],
-                component: item.item_name,
-                description: item.note || (isCrit ? 'Immediate repair recommended' : 'Inspection attention item'),
-                severity: isCrit ? 'high' : 'medium',
-                est_cost_min: isCrit ? 3000 : 1500,
-                est_cost_max: isCrit ? 8000 : 4000
+                category: category,
+                component: compName,
+                description: desc,
+                severity: severity,
+                est_cost_min: minCost,
+                est_cost_max: maxCost
             });
         });
     });
-    wz.draft.repairs = repairs;
+
+    return repairs;
+};
+
+window.wzAutoGenRepairs = async function() {
+    if (!wz || !wz.draft) return;
+    const d = wz.draft;
+
+    if (d.car_type === 'new') {
+        showToast('ℹ️ Cost estimates are not applicable for New Car PDI (rectifications handled by dealership).', 'info');
+        return;
+    }
+
+    if (!d.checklist) {
+        showToast('No checklist items found to generate repair estimates.', 'warning');
+        return;
+    }
+
+    // 1. Compute baseline using smart local engine (with strict repaint thickness exclusion)
+    const localRepairs = window.wzComputeLocalRepairEstimates(d.checklist, d);
+    if (!localRepairs || localRepairs.length === 0) {
+        wz.draft.repairs = [];
+        goToWzStep(7);
+        showToast('Zero physical defects requiring repair found in checklist (repainted panels excluded).', 'info');
+        return;
+    }
+
+    showToast('🤖 Analyzing photos, defect notes & vehicle model with Gemini AI...', 'info');
+
+    let generatedRepairs = null;
+    let usedFallback = false;
+
+    // Collect defect summaries for Gemini AI prompt
+    const defectLines = localRepairs.map(function(r, idx) {
+        return (idx + 1) + '. [' + r.category + '] ' + r.component + ': ' + (r.description || 'Defect noted');
+    }).join('\n');
+
+    try {
+        const prompt = `You are a professional automobile collision repair estimator & technical body shop assessor in Bangalore, India.
+Vehicle Details:
+- Year, Brand & Model: ${d.vehicle_year || ''} ${d.vehicle_brand || ''} ${d.vehicle_model || ''} (${d.vehicle_fuel || ''})
+- Segment: ${d.vehicle_brand || 'Standard'} ${d.vehicle_model || ''} (Bangalore workshop market rates)
+
+Defect Items Requiring Estimation from On-Site Inspection:
+${defectLines}
+
+Please generate realistic, vehicle-specific repair and rectification cost estimates in Indian Rupees (INR) for these items.
+Rules:
+1. SCRATCHES / SURFACE BLEMISHES / SCUFFS:
+   - Provide realistic two-tier cost options:
+     * Min ₹: Low-cost detailing option (rubbing compound, machine buffing, touch-up). e.g., ₹800–₹1,500 for mass market; ₹1,800–₹3,000 for luxury.
+     * Max ₹: Standard professional per-panel spray booth repainting for this vehicle segment. e.g., ₹2,500–₹4,000 for mass market; ₹6,000–₹12,000 for luxury.
+   - Description format: "Surface scratches: Rubbing/touch-up (₹<min>) or complete panel respray (₹<max>)".
+2. DENTS / BODY DAMAGE:
+   - Min ₹: Paintless Dent Repair (PDR) or spot tinkering.
+   - Max ₹: Body tinkering, dent pull & full panel repaint.
+   - Description format: "Dent repair: PDR pull (₹<min>) or body tinkering & repaint (₹<max>)".
+3. BROKEN / CRACKED / DAMAGED / FADED / TORN / NON-FUNCTIONAL COMPONENTS:
+   - Broken or damaged parts (lights, mirrors, mounts, mechanicals):
+   - Min ₹: Part refurbishment / lens restoration / child part repair.
+   - Max ₹: OEM-spec or genuine replacement assembly + labor.
+   - Description format: "<Component condition>: <Min repair action> (₹<min>) or <Max replacement action> (₹<max>)".
+4. MECHANICAL / LEAKS / SUSPENSION / BRAKES / MOUNTS:
+   - Engine mounts, suspension bushes, oil leaks, brake wear:
+   - Realistic component replacement / repair + fitment labor costs for this vehicle model.
+5. STRICT EXCLUSION:
+   - Do NOT include repainted panels or paint thickness readings (repainted panels are already repaired in the past and belong under depreciation/negotiations, not repair estimates).
+
+Return ONLY valid JSON matching this schema:
+[
+  {
+    "category": "Exterior" | "Lighting" | "Mechanical" | "Interior" | "Electrical" | "Underbody" | "Brakes",
+    "component": "<Component name>",
+    "description": "<Concise description specifying both low-cost and repaint/replacement options>",
+    "severity": "low" | "medium" | "high" | "critical",
+    "est_cost_min": <number>,
+    "est_cost_max": <number>
+  }
+]`;
+
+        const jsonText = await callGeminiAI(prompt);
+        const match = jsonText.match(/\[[\s\S]*\]/);
+        if (match) {
+            const parsed = JSON.parse(match[0]);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                generatedRepairs = parsed.map(function(item) {
+                    return {
+                        category: item.category || 'Exterior',
+                        component: item.component || 'Component',
+                        description: item.description || '',
+                        severity: item.severity || 'medium',
+                        est_cost_min: Number(item.est_cost_min) || 1000,
+                        est_cost_max: Number(item.est_cost_max) || 3000
+                    };
+                });
+            }
+        }
+    } catch(err) {
+        console.warn('Gemini AI repair estimation error, falling back to smart local pricing engine:', err);
+        usedFallback = true;
+    }
+
+    if (!generatedRepairs || generatedRepairs.length === 0) {
+        generatedRepairs = localRepairs;
+        usedFallback = true;
+    }
+
+    wz.draft.repairs = generatedRepairs;
     goToWzStep(7);
-    showToast(repairs.length + ' repair items generated from checklist findings', 'success');
+    updateWzPreview();
+
+    if (usedFallback) {
+        showToast('✨ Generated ' + generatedRepairs.length + ' repair estimates (Smart Pricing Engine)!', 'success');
+    } else {
+        showToast('✨ Gemini AI generated realistic repair estimates for ' + generatedRepairs.length + ' items!', 'success');
+    }
 };
 
 // ── API placeholders ──────────────────────────────────────────
