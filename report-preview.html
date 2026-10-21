@@ -603,6 +603,9 @@ table.cp td.note { color: #8A8296; }
   </div>
 </div>
 
+<!-- Dynamic Continuation Page(s) for Repair Estimate if > 1 page needed -->
+<div id="repair-continuation-container"></div>
+
 <!-- ============================================================
      PAGE 6: SERVICE HISTORY
 ============================================================ -->
@@ -1041,6 +1044,7 @@ table.cp td.note { color: #8A8296; }
     }
 
     // Repair Estimates (Page 5) - Strictly filter out repainted panels / paint thickness (depreciation is captured in negotiations)
+    let repairPageCount = 1;
     const repairs = (d.repairs || []).filter(function(r) {
       const txt = ((r.category||'') + ' ' + (r.component||'') + ' ' + (r.description||'')).toLowerCase();
       if (txt.includes('paint thickness') || txt.includes('paint gauge') || txt.includes('paint meter') || txt.includes('micron')) return false;
@@ -1050,12 +1054,15 @@ table.cp td.note { color: #8A8296; }
     const chips = document.getElementById('r-chips');
     const tables = document.getElementById('r-estimate-tables');
     const grandTotalBox = document.getElementById('r-grand-total-box');
+    const repairContContainer = document.getElementById('repair-continuation-container');
     const rHdrRight = document.getElementById('r-hdr-right');
     const rPill = document.getElementById('r-pill');
     const rSecTitle = document.getElementById('r-section-title');
     const rSecSub = document.getElementById('r-section-sub');
 
     if (isNewCar) {
+      repairPageCount = 1;
+      if (repairContContainer) repairContContainer.innerHTML = '';
       if (rHdrRight) rHdrRight.innerHTML = 'PDI Rectification &amp; Dealer Advisory<br/>Pre-delivery defect resolution actions';
       if (rPill) rPill.textContent = 'PDI Rectification';
       if (rSecTitle) rSecTitle.textContent = 'Pre-Delivery Rectification & Dealer Action Notes';
@@ -1097,34 +1104,236 @@ table.cp td.note { color: #8A8296; }
       if (rPill) rPill.textContent = 'Repair Estimate';
       if (rSecTitle) rSecTitle.textContent = 'Estimated Repair & Rectification Costs';
       if (rSecSub) rSecSub.textContent = 'All figures are indicative estimates based on local market rates.';
-      if (chips) chips.style.display = 'flex';
-      if (grandTotalBox) grandTotalBox.style.display = 'flex';
 
-      const cats_in_repair = [...new Set(repairs.map(r => r.category))];
-      chips.innerHTML = cats_in_repair.map(c => `<span class="chip">${escHtml(c)}</span>`).join('');
-      let grandTotal = 0;
-      if (repairs.length > 0) {
-        tables.innerHTML = cats_in_repair.map(cat => {
-          const catItems = repairs.filter(r => r.category === cat);
-          const catTotal = catItems.reduce((s, r) => s + (Number(r.est_cost_max)||Number(r.est_cost_min)||0), 0);
+      const cats_in_repair = [...new Set(repairs.map(r => r.category || 'General Repair'))];
+
+      if (repairs.length === 0) {
+        repairPageCount = 1;
+        if (chips) chips.style.display = 'none';
+        if (grandTotalBox) grandTotalBox.style.display = 'flex';
+        if (repairContContainer) repairContContainer.innerHTML = '';
+        tables.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No repair estimates added yet.</p>';
+        document.getElementById('r-grand-total').textContent = '₹0';
+      } else {
+        if (chips) {
+          chips.style.display = 'flex';
+          chips.innerHTML = cats_in_repair.map(c => `<span class="chip">${escHtml(c)}</span>`).join('');
+        }
+
+        let grandTotal = 0;
+        const catGroups = cats_in_repair.map(cat => {
+          const catItems = repairs.filter(r => (r.category || 'General Repair') === cat);
+          const catTotal = catItems.reduce((s, r) => s + (Number(r.est_cost_max) || Number(r.est_cost_min) || 0), 0);
           grandTotal += catTotal;
+          return { name: cat, items: catItems, total: catTotal };
+        });
+        document.getElementById('r-grand-total').textContent = '₹' + grandTotal.toLocaleString('en-IN');
+
+        function getRepairItemCost(r) {
+          const desc = r.description || '';
+          if (desc.length > 90) return 50;
+          if (desc.length > 40) return 36;
+          return 26;
+        }
+
+        const TBL_HDR_COST  = 50;
+        const CAT_TOT_COST  = 28;
+        const TBL_GAP_COST  = 12;
+
+        function renderRepairTableChunk(chunk) {
           return `<table class="est">
-            <thead><tr><th colspan="3">${escHtml(cat)}</th></tr>
-            <tr><th>Component</th><th>Description</th><th>Est. Cost</th></tr></thead>
+            <thead>
+              <tr><th colspan="3">${escHtml(chunk.catName)}</th></tr>
+              <tr><th>Component</th><th>Description</th><th>Est. Cost</th></tr>
+            </thead>
             <tbody>
-              ${catItems.map(r => `<tr>
+              ${chunk.items.map(r => `<tr>
                 <td>${escHtml(r.component)}</td>
                 <td>${escHtml(r.description||'')}</td>
                 <td>₹${Number(r.est_cost_min||0).toLocaleString('en-IN')}${r.est_cost_max&&r.est_cost_max!==r.est_cost_min?' – ₹'+Number(r.est_cost_max).toLocaleString('en-IN'):''}</td>
               </tr>`).join('')}
-              <tr class="cat-total"><td colspan="2">Category Total</td><td>₹${catTotal.toLocaleString('en-IN')}</td></tr>
+              <tr class="cat-total">
+                <td colspan="2">${chunk.isSubtotal ? escHtml(chunk.baseCatName) + ' (Subtotal - This Page)' : 'Category Total'}</td>
+                <td>₹${chunk.catTotal.toLocaleString('en-IN')}</td>
+              </tr>
             </tbody>
           </table>`;
-        }).join('');
-        document.getElementById('r-grand-total').textContent = '₹' + grandTotal.toLocaleString('en-IN');
-      } else {
-        tables.innerHTML = '<p style="color:#9CA3AF; font-size:10px; padding:10px 0;">No repair estimates added yet.</p>';
-        document.getElementById('r-grand-total').textContent = '₹0';
+        }
+
+        let totalAllCost = 0;
+        catGroups.forEach(cg => {
+          totalAllCost += TBL_HDR_COST + TBL_GAP_COST + CAT_TOT_COST;
+          cg.items.forEach(it => totalAllCost += getRepairItemCost(it));
+        });
+
+        const chipsOffset = cats_in_repair.length > 4 ? 20 : 0;
+        const page1SingleBudget = 580 - chipsOffset;
+
+        if (totalAllCost <= page1SingleBudget) {
+          // Fits on Page 1 comfortably
+          repairPageCount = 1;
+          tables.innerHTML = catGroups.map(cg => renderRepairTableChunk({
+            catName: cg.name,
+            baseCatName: cg.name,
+            items: cg.items,
+            catTotal: cg.total,
+            isSubtotal: false
+          })).join('');
+          if (grandTotalBox) grandTotalBox.style.display = 'flex';
+          if (repairContContainer) repairContContainer.innerHTML = '';
+        } else {
+          // Multi-page pagination
+          function getPageBudget(pIdx, isLastPageCandidate) {
+            if (pIdx === 0) {
+              return isLastPageCandidate ? (580 - chipsOffset) : (620 - chipsOffset);
+            } else {
+              return isLastPageCandidate ? 628 : 662;
+            }
+          }
+
+          const repairPages = [];
+          let currentPage = [];
+          let currentBudget = 0;
+
+          catGroups.forEach(cg => {
+            let remainingItems = [...cg.items];
+            let partNum = 1;
+
+            while (remainingItems.length > 0) {
+              const pageIdx = repairPages.length;
+              const pageLimit = getPageBudget(pageIdx, false);
+              const availBudget = pageLimit - currentBudget;
+
+              let wholeCategoryCost = TBL_HDR_COST + TBL_GAP_COST + CAT_TOT_COST;
+              remainingItems.forEach(it => wholeCategoryCost += getRepairItemCost(it));
+
+              if (wholeCategoryCost <= availBudget) {
+                currentPage.push({
+                  catName: partNum > 1 ? `${cg.name} (Continued)` : cg.name,
+                  baseCatName: cg.name,
+                  items: remainingItems,
+                  catTotal: cg.total,
+                  isSubtotal: false
+                });
+                currentBudget += wholeCategoryCost;
+                remainingItems = [];
+                break;
+              }
+
+              if (currentPage.length > 0) {
+                const freshPageLimit = getPageBudget(pageIdx + 1, false);
+                if (wholeCategoryCost <= freshPageLimit) {
+                  repairPages.push(currentPage);
+                  currentPage = [];
+                  currentBudget = 0;
+                  continue;
+                }
+              }
+
+              const baseTableCost = TBL_HDR_COST + TBL_GAP_COST + CAT_TOT_COST;
+              const currentAvail = getPageBudget(repairPages.length, false) - currentBudget;
+
+              let fitCount = 0;
+              let runningChunkCost = baseTableCost;
+
+              for (let i = 0; i < remainingItems.length; i++) {
+                const itCost = getRepairItemCost(remainingItems[i]);
+                if (runningChunkCost + itCost <= currentAvail || (currentPage.length === 0 && fitCount === 0)) {
+                  runningChunkCost += itCost;
+                  fitCount++;
+                } else {
+                  break;
+                }
+              }
+
+              if (fitCount === 0 && currentPage.length > 0) {
+                repairPages.push(currentPage);
+                currentPage = [];
+                currentBudget = 0;
+                continue;
+              }
+
+              const chunkItems = remainingItems.slice(0, fitCount);
+              remainingItems = remainingItems.slice(fitCount);
+
+              const isLastForCat = (remainingItems.length === 0);
+              const chunkSubtotal = chunkItems.reduce((s, r) => s + (Number(r.est_cost_max) || Number(r.est_cost_min) || 0), 0);
+
+              currentPage.push({
+                catName: partNum > 1 ? `${cg.name} (Continued)` : cg.name,
+                baseCatName: cg.name,
+                items: chunkItems,
+                catTotal: isLastForCat ? cg.total : chunkSubtotal,
+                isSubtotal: !isLastForCat
+              });
+
+              currentBudget += runningChunkCost;
+              partNum++;
+
+              if (remainingItems.length > 0) {
+                repairPages.push(currentPage);
+                currentPage = [];
+                currentBudget = 0;
+              }
+            }
+          });
+
+          if (currentPage.length > 0) {
+            repairPages.push(currentPage);
+          }
+
+          repairPageCount = repairPages.length;
+
+          // Render Page 1 (repairPages[0])
+          const page1Chunks = repairPages[0] || [];
+          tables.innerHTML = page1Chunks.map(renderRepairTableChunk).join('') + `
+            <div style="margin-top:14px; padding:10px 14px; background:#FAF8FF; border:1px dashed #DDD6FE; border-radius:8px; text-align:center; font-size:11px; color:#6D28D9; font-weight:600;">
+              ⚡ Remaining repair estimates and cumulative grand total continued on next page &rarr;
+            </div>
+          `;
+          if (grandTotalBox) grandTotalBox.style.display = 'none';
+
+          // Render Continuation Pages (repairPages[1...])
+          if (repairContContainer) {
+            repairContContainer.innerHTML = repairPages.slice(1).map((pChunks, contIdx) => {
+              const isLastPage = (contIdx === repairPages.length - 2);
+              const tablesHtml = pChunks.map(renderRepairTableChunk).join('');
+
+              return `
+                <div class="page" id="pg-repair-cont-${contIdx + 1}">
+                  <div class="hdr">
+                    <div class="hdr-word"><span class="i">Inspect</span><span class="c">Car</span></div>
+                    <div class="hdr-right">Repair Estimate (Continued)<br/>Admin-compiled estimate based on inspection findings</div>
+                  </div>
+
+                  <div class="pill-purple">Repair Estimate</div>
+                  <div class="section-title">Estimated Repair &amp; Rectification Costs (Continued)</div>
+                  <div class="section-sub">Remaining component repair estimates and cumulative grand total.</div>
+
+                  <div class="r-estimate-tables-cont">
+                    ${tablesHtml}
+                  </div>
+
+                  ${isLastPage ? `
+                    <div class="grand-total-box" style="display:flex; margin-top:14px;">
+                      <div><div class="g1">Grand Total Estimated Repair Cost</div></div>
+                      <div class="g2">₹${grandTotal.toLocaleString('en-IN')}</div>
+                    </div>
+                  ` : `
+                    <div style="margin-top:14px; padding:10px 14px; background:#FAF8FF; border:1px dashed #DDD6FE; border-radius:8px; text-align:center; font-size:11px; color:#6D28D9; font-weight:600;">
+                      ⚡ Repair estimate continued on next page &rarr;
+                    </div>
+                  `}
+
+                  <div class="footer">
+                    <div>InspectCar &middot; AI Powered Vehicle Inspection</div>
+                    <div>Page ${6 + contIdx}</div>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
       }
     }
 
@@ -1473,8 +1682,9 @@ table.cp td.note { color: #8A8296; }
     }
 
     const hasNegCont = (!isNewCar && (d.negotiations || []).length > 3);
+    const repairContCount = (!isNewCar && typeof repairPageCount !== 'undefined' && repairPageCount > 1) ? (repairPageCount - 1) : 0;
     const hasSvcCont = (!isNewCar && services.length > 8);
-    const startPageNumber = 7 + (hasNegCont ? 1 : 0) + (hasSvcCont ? 1 : 0);
+    const startPageNumber = 7 + (hasNegCont ? 1 : 0) + repairContCount + (hasSvcCont ? 1 : 0);
     if (cpContainer) {
       cpContainer.innerHTML = cpPages.map((pageCats, pIdx) => {
         const pageNum = startPageNumber + pIdx;
