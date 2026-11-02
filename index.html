@@ -91,6 +91,81 @@
         </div>
     </div>
 
+    <!-- Inspector WhatsApp Sharing Modal -->
+    <div id="modal-share-inspector" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:99999; align-items:center; justify-content:center; padding:16px;">
+        <div style="width:520px; max-width:96vw; max-height:92vh; display:flex; flex-direction:column; background:#161625; border:1px solid rgba(16,185,129,0.4); border-radius:18px; padding:22px; box-shadow:0 24px 60px rgba(0,0,0,0.95); overflow:hidden;">
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:38px; height:38px; border-radius:10px; background:rgba(16,185,129,0.18); display:flex; align-items:center; justify-content:center; color:#10B981; font-size:20px;">
+                        <i class="fab fa-whatsapp"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:16px; font-weight:700; color:#fff;">Share to Inspector WhatsApp</h3>
+                        <div style="font-size:11px; color:#9ca3af; margin-top:2px;">Dispatch customer, location &amp; balance collection details</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeShareInspectorModal()" style="background:rgba(255,255,255,0.08); border:none; color:#ccc; font-size:16px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+
+            <div style="overflow-y:auto; padding-right:4px; flex:1;">
+                <!-- Inspector Picker & Phone -->
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; margin-bottom:12px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
+                        <div>
+                            <label style="display:block; font-size:11px; color:#9ca3af; font-weight:600; margin-bottom:5px;">Select Inspector</label>
+                            <select id="modal-si-inspector-select" class="form-control" style="font-size:12px; padding:7px 10px; background:#0e0e18; color:#fff; border-color:rgba(255,255,255,0.15);">
+                                <option value="">Choose Inspector...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:11px; color:#9ca3af; font-weight:600; margin-bottom:5px;">Inspector WhatsApp Phone *</label>
+                            <div style="position:relative;">
+                                <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:12px; color:#818cf8; font-weight:700;">+91</span>
+                                <input type="tel" id="modal-si-phone-input" class="form-control" placeholder="10-digit mobile number" style="font-size:12px; padding:7px 10px 7px 42px; background:#0e0e18; color:#fff; border-color:rgba(255,255,255,0.15);" />
+                            </div>
+                        </div>
+                    </div>
+                    <div id="modal-si-status-note" style="font-size:11px; color:#6ee7b7; display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-user-check"></i> <span>Inspector assignment</span>
+                    </div>
+                </div>
+
+                <!-- Live Highlight Cards -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+                    <div style="background:#0f172a; border:1px solid rgba(99,102,241,0.25); border-radius:8px; padding:8px 10px;">
+                        <div style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">Customer &amp; Mobile</div>
+                        <div id="modal-si-card-cust" style="font-size:12px; font-weight:700; color:#f8fafc; margin-top:2px;">—</div>
+                    </div>
+                    <div style="background:#0f172a; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:8px 10px;">
+                        <div style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">Balance to Collect</div>
+                        <div id="modal-si-card-bal" style="font-size:13px; font-weight:800; color:#34d399; margin-top:2px;">—</div>
+                    </div>
+                </div>
+
+                <!-- Message Preview -->
+                <div style="margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <label style="font-size:11px; color:#9ca3af; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Message Preview</label>
+                        <button type="button" id="btn-copy-inspector-msg" class="btn btn-secondary text-xs" style="padding:3px 10px; font-size:11px; cursor:pointer;">
+                            <i class="far fa-copy"></i> Copy Text
+                        </button>
+                    </div>
+                    <div id="modal-si-preview-text" style="background:#0b0b14; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; font-size:11.5px; line-height:1.55; color:#e2e8f0; font-family:monospace; white-space:pre-wrap; max-height:200px; overflow-y:auto;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display:flex; gap:10px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08); flex-shrink:0;">
+                <button type="button" onclick="closeShareInspectorModal()" class="btn btn-secondary" style="flex:1; justify-content:center; cursor:pointer;">Cancel</button>
+                <button type="button" id="btn-modal-si-send" class="btn" style="flex:2; justify-content:center; background:#25D366; color:#fff; font-weight:700; font-size:13px; box-shadow:0 2px 12px rgba(37,211,102,0.35); cursor:pointer;">
+                    <i class="fab fa-whatsapp" style="font-size:16px; margin-right:6px;"></i> Send via WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             location.replace('https:' + location.href.substring(location.protocol.length));
@@ -1027,8 +1102,11 @@
                 <div id="detail-created-at" class="text-xs text-secondary"></div>
             </div>
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                <button id="btn-share-whatsapp-booking" style="display:flex; align-items:center; gap:7px; background:#25D366; color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(37,211,102,0.25); transition:opacity 0.2s;" onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">
-                    <i class="fab fa-whatsapp" style="font-size:16px;"></i> Share Booking Details
+                <button id="btn-share-whatsapp-inspector" style="display:flex; align-items:center; gap:7px; background:#10B981; color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(16,185,129,0.3); transition:all 0.2s;" onmouseenter="this.style.opacity='0.9'" onmouseleave="this.style.opacity='1'">
+                    <i class="fab fa-whatsapp" style="font-size:16px;"></i> <i class="fas fa-user-check" style="font-size:11px;"></i> Share to Inspector
+                </button>
+                <button id="btn-share-whatsapp-booking" style="display:flex; align-items:center; gap:7px; background:rgba(37,211,102,0.18); color:#4ade80; border:1px solid rgba(37,211,102,0.4); border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s;" onmouseenter="this.style.background='rgba(37,211,102,0.28)'" onmouseleave="this.style.background='rgba(37,211,102,0.18)'">
+                    <i class="fab fa-whatsapp" style="font-size:16px;"></i> Share to Customer
                 </button>
                 <div id="detail-status-badge"></div>
             </div>
@@ -1282,11 +1360,14 @@
             <div class="grid-3 items-center">
                 <div>
                     <label class="text-secondary text-sm block mb-2">Assign Inspector</label>
-                    <div class="flex gap-2">
-                        <select id="detail-inspector-select" class="form-control">
+                    <div class="flex gap-2" style="flex-wrap:wrap;">
+                        <select id="detail-inspector-select" class="form-control" style="min-width:160px; flex:1;">
                             <option value="">Select Inspector...</option>
                         </select>
-                        <button id="btn-assign" class="btn btn-primary">Assign</button>
+                        <button id="btn-assign" class="btn btn-primary" style="white-space:nowrap;">Assign</button>
+                        <button id="btn-share-assigned-inspector" type="button" class="btn" style="background:#10B981; color:#fff; display:inline-flex; align-items:center; gap:6px; font-weight:700; padding:0 12px; white-space:nowrap; border-radius:8px; box-shadow:0 2px 8px rgba(16,185,129,0.25);" title="Share booking details with inspector on WhatsApp">
+                            <i class="fab fa-whatsapp"></i> Share on WhatsApp
+                        </button>
                     </div>
                 </div>
                 <div>
@@ -1906,6 +1987,272 @@
             if(isNaN(d.getTime())) return '';
             return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
         }
+
+        // ==========================================
+        // Inspector WhatsApp Job Dispatch Controller
+        // ==========================================
+        function escapeHtmlUtil(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function buildInspectorWhatsAppMessage(b) {
+            if (!b) return { text: '', balance: 0, mapUrl: '', displayAddress: '' };
+
+            const vehicle = [b.vehicle_year, b.vehicle_brand, b.vehicle_model].filter(Boolean).join(' ') + 
+                            (b.vehicle_fuel ? ` (${b.vehicle_fuel})` : '');
+            const inspDate = formatDate(b.inspection_date) || 'Date Pending';
+            const inspTime = b.inspection_time || 'Time Pending';
+            
+            // Address & Map Location Parsing
+            const rawAddress = b.address || b.area || 'Bangalore';
+            let mapUrl = '';
+            let cleanAddress = rawAddress;
+            
+            const urlMatch = rawAddress.match(/(https?:\/\/[^\s]+)/i);
+            if (urlMatch) {
+                mapUrl = urlMatch[1];
+                cleanAddress = rawAddress.replace(urlMatch[0], '').replace(/📍\s*Maps:?\s*$/i, '').trim();
+            } else if (b.notes) {
+                const noteMatch = b.notes.match(/(https?:\/\/(?:maps\.google\.com|goo\.gl|maps\.app\.goo\.gl)[^\s]+)/i);
+                if (noteMatch) mapUrl = noteMatch[1];
+            }
+            
+            // If no direct map link, construct search query
+            if (!mapUrl && (cleanAddress || b.area)) {
+                const locQuery = [cleanAddress, b.area, 'Bangalore'].filter(Boolean).join(', ');
+                mapUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(locQuery);
+            }
+            
+            let displayAddress = cleanAddress;
+            if (b.area && !displayAddress.toLowerCase().includes(b.area.toLowerCase())) {
+                displayAddress = displayAddress ? `${displayAddress}, ${b.area}` : b.area;
+            }
+            if (!displayAddress) displayAddress = 'Bangalore';
+
+            // Payment Details & Collectable Balance
+            const total = Number(b.total_price) || 0;
+            let charged = 0;
+            if (b.notes) {
+                const chargedMatch = b.notes.match(/Charged:\s*₹?(\d+)/i);
+                if (chargedMatch) charged = Number(chargedMatch[1]);
+            }
+            if (charged === 0) {
+                if (b.payment_status === 'paid') charged = total;
+                else if (b.payment_status === 'token_paid' || (b.payment_method && (b.payment_method.includes('199') || b.payment_method.includes('299')))) {
+                    charged = b.payment_method && b.payment_method.includes('299') ? 299 : 199;
+                }
+            }
+            const balance = Math.max(0, total - charged);
+            const isPaid = b.payment_status === 'paid' || balance === 0;
+
+            let balanceLine = '';
+            if (isPaid) {
+                balanceLine = '💵 *BALANCE TO COLLECT:* ₹0 (Fully Paid - DO NOT COLLECT) ✅';
+            } else {
+                balanceLine = `💵 *BALANCE TO COLLECT:* ₹${balance.toLocaleString('en-IN')} (Collect at site via Cash/UPI)`;
+            }
+
+            const regDisplay = b.vehicle_reg ? b.vehicle_reg.toUpperCase() : 'N/A';
+
+            const msg = [
+                '🚨 *NEW INSPECTION ASSIGNMENT*',
+                '*InspectCar Inspection Job*',
+                '━━━━━━━━━━━━━━━━━━━━━',
+                '📋 *Booking ID:* ' + (b.booking_ref || '-'),
+                '🚗 *Vehicle:* ' + (vehicle || '-'),
+                '🔢 *Reg No:* ' + regDisplay,
+                '',
+                '📅 *Date:* ' + inspDate,
+                '⏰ *Time:* ' + inspTime,
+                '',
+                '👤 *Customer Name:* ' + (b.customer_name || 'Customer'),
+                '📞 *Customer Mobile:* ' + (b.customer_phone || 'N/A'),
+                '',
+                '📦 *Package:* ' + (b.package_name || '-'),
+                '',
+                '🏠 *Address:* ' + displayAddress,
+                '📍 *Map Location:* ' + (mapUrl || '-'),
+                '',
+                '💰 *PAYMENT & COLLECTION:*',
+                '• Total Package Price: ₹' + total.toLocaleString('en-IN'),
+                '• Advance Paid: ₹' + charged.toLocaleString('en-IN') + (charged > 0 ? ' (Online)' : ''),
+                balanceLine,
+                '━━━━━━━━━━━━━━━━━━━━━',
+                '📌 *Instructions for Inspector:*',
+                '• Please reach the location 10 minutes prior to scheduled time.',
+                '• Open Inspector PWA to record 300+ checkpoint findings.',
+                '📱 *Inspector App:* https://inspector.inspectcar.in',
+                '',
+                '_InspectCar Central Dispatch | +91 9900368006_'
+            ].join('\n');
+
+            return {
+                text: msg,
+                mapUrl: mapUrl,
+                displayAddress: displayAddress,
+                balance: balance,
+                isPaid: isPaid,
+                total: total,
+                charged: charged
+            };
+        }
+
+        window.openShareToInspectorModal = function(booking, inspectorsList) {
+            const b = booking || state.currentBookingData;
+            if (!b) {
+                showToast('Booking details not loaded', 'error');
+                return;
+            }
+
+            const modal = document.getElementById('modal-share-inspector');
+            if (!modal) return;
+
+            const inspectors = inspectorsList || state.inspectors || [];
+            const select = document.getElementById('modal-si-inspector-select');
+            const phoneInput = document.getElementById('modal-si-phone-input');
+            const previewEl = document.getElementById('modal-si-preview-text');
+            const noteEl = document.getElementById('modal-si-status-note');
+            const cardCust = document.getElementById('modal-si-card-cust');
+            const cardBal = document.getElementById('modal-si-card-bal');
+
+            // 1. Determine currently assigned inspector ID
+            const detailSel = document.getElementById('detail-inspector-select');
+            const currentInspectorId = b.inspector_id || (detailSel ? detailSel.value : '');
+
+            // 2. Populate Inspector dropdown
+            if (select) {
+                select.innerHTML = '<option value="">-- Select Inspector --</option>';
+                inspectors.forEach(ins => {
+                    const opt = document.createElement('option');
+                    opt.value = ins.id;
+                    opt.textContent = `${ins.full_name}${ins.phone ? ' (' + ins.phone + ')' : ''}`;
+                    opt.dataset.phone = ins.phone || '';
+                    opt.dataset.name = ins.full_name || '';
+                    select.appendChild(opt);
+                });
+
+                if (currentInspectorId) {
+                    select.value = currentInspectorId;
+                }
+            }
+
+            // Summary cards
+            const msgData = buildInspectorWhatsAppMessage(b);
+            if (cardCust) {
+                cardCust.textContent = `${b.customer_name || 'Customer'} (${b.customer_phone || '-'})`;
+            }
+            if (cardBal) {
+                cardBal.textContent = msgData.isPaid ? '₹0 (Fully Paid)' : `₹${msgData.balance.toLocaleString('en-IN')}`;
+                cardBal.style.color = msgData.isPaid ? '#60a5fa' : '#34d399';
+            }
+
+            function getSelectedInspector() {
+                if (!select) return null;
+                const selId = select.value;
+                if (!selId) return null;
+                return inspectors.find(ins => ins.id === selId) || (b.profiles ? {
+                    id: b.profiles.id || b.inspector_id,
+                    full_name: b.profiles.full_name,
+                    phone: b.profiles.phone
+                } : null);
+            }
+
+            function syncInspectorSelection() {
+                const ins = getSelectedInspector();
+                if (ins && ins.phone && phoneInput) {
+                    phoneInput.value = (ins.phone || '').replace(/\D/g, '').slice(-10);
+                }
+
+                if (noteEl) {
+                    if (ins) {
+                        noteEl.innerHTML = `<i class="fas fa-user-check" style="color:#34d399;"></i> <span>Ready to send to <b>${escapeHtmlUtil(ins.full_name)}</b></span>`;
+                        noteEl.style.color = '#34d399';
+                    } else {
+                        noteEl.innerHTML = `<i class="fas fa-info-circle" style="color:#fbbf24;"></i> <span>Choose inspector or enter WhatsApp number below</span>`;
+                        noteEl.style.color = '#fbbf24';
+                    }
+                }
+
+                if (previewEl) {
+                    previewEl.textContent = msgData.text;
+                }
+            }
+
+            if (select) {
+                select.onchange = function() {
+                    const selOpt = select.options[select.selectedIndex];
+                    if (selOpt && selOpt.dataset.phone && phoneInput) {
+                        phoneInput.value = selOpt.dataset.phone.replace(/\D/g, '').slice(-10);
+                    }
+                    syncInspectorSelection();
+                };
+            }
+
+            syncInspectorSelection();
+
+            // Copy Button
+            const copyBtn = document.getElementById('btn-copy-inspector-msg');
+            if (copyBtn) {
+                copyBtn.onclick = function() {
+                    navigator.clipboard.writeText(msgData.text).then(() => {
+                        showToast('Assignment message copied to clipboard!', 'success');
+                    }).catch(() => {
+                        showToast('Failed to copy', 'error');
+                    });
+                };
+            }
+
+            // Send Button
+            const sendBtn = document.getElementById('btn-modal-si-send');
+            if (sendBtn) {
+                sendBtn.onclick = async function() {
+                    const rawPhone = phoneInput ? (phoneInput.value || '').replace(/\D/g, '') : '';
+                    if (!rawPhone || rawPhone.length < 10) {
+                        showToast('Please enter a valid 10-digit mobile number for the inspector', 'error');
+                        if (phoneInput) phoneInput.focus();
+                        return;
+                    }
+
+                    const waPhone = rawPhone.length === 10 ? ('91' + rawPhone) : rawPhone;
+                    const ins = getSelectedInspector();
+                    const insName = ins ? ins.full_name : 'Inspector';
+
+                    // If an inspector was selected in modal that wasn't assigned in DB yet, update Supabase
+                    if (select && select.value && select.value !== b.inspector_id) {
+                        try {
+                            const client = dbClient || window.supabase;
+                            if (client) {
+                                await client.from('bookings').update({
+                                    inspector_id: select.value,
+                                    status: b.status === 'pending' ? 'assigned' : b.status
+                                }).eq('id', b.id);
+                                b.inspector_id = select.value;
+                                if (document.getElementById('detail-inspector-select')) {
+                                    document.getElementById('detail-inspector-select').value = select.value;
+                                }
+                            }
+                        } catch(e) {
+                            console.warn('Auto-assign update error:', e);
+                        }
+                    }
+
+                    closeShareInspectorModal();
+
+                    openWhatsAppChooser({
+                        phone: waPhone,
+                        text: msgData.text,
+                        title: 'Share Job to Inspector: ' + insName
+                    });
+                };
+            }
+
+            modal.style.display = 'flex';
+        };
+
+        window.closeShareInspectorModal = function() {
+            const modal = document.getElementById('modal-share-inspector');
+            if (modal) modal.style.display = 'none';
+        };
 
         // ==========================================
         // Routing & View Management
@@ -2645,7 +2992,8 @@
             if(!client) return;
 
             const id = state.currentBookingId;
-            const { data: b, error } = await client.from('bookings').select('*, profiles(full_name)').eq('id', id).single();
+            const { data: b, error } = await client.from('bookings').select('*, profiles(id, full_name, phone)').eq('id', id).single();
+            state.currentBookingData = b;
             
             if(error || !b) {
                 showToast("Error loading booking details", "error");
@@ -2840,6 +3188,25 @@
                         text: msg,
                         title: 'Share Booking: ' + (b.booking_ref || '')
                     });
+                };
+            }
+
+            // ── Share Booking to Inspector via WhatsApp ─────────────────────
+            const shareInspectorBtn = $('#btn-share-whatsapp-inspector');
+            if (shareInspectorBtn) {
+                shareInspectorBtn.onclick = function() {
+                    openShareToInspectorModal(b, state.inspectors);
+                };
+            }
+
+            const shareAssignedInspectorBtn = $('#btn-share-assigned-inspector');
+            if (shareAssignedInspectorBtn) {
+                shareAssignedInspectorBtn.onclick = function() {
+                    const sel = $('#detail-inspector-select');
+                    if (sel && sel.value && sel.value !== b.inspector_id) {
+                        b.inspector_id = sel.value;
+                    }
+                    openShareToInspectorModal(b, state.inspectors);
                 };
             }
 
@@ -3197,7 +3564,7 @@
             inspectors.forEach(ins => {
                 const opt = document.createElement('option');
                 opt.value = ins.id;
-                opt.textContent = ins.full_name;
+                opt.textContent = `${ins.full_name}${ins.phone ? ' (' + ins.phone + ')' : ''}`;
                 select.appendChild(opt);
             });
             if(b.inspector_id) select.value = b.inspector_id;
